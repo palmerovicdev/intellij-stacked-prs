@@ -1,0 +1,159 @@
+package com.stacklane.stack
+
+/** Lo que devuelve `gh stack view --json`: la pila de la rama actual. */
+data class StackSnapshot(
+    val trunk: String,
+    val currentBranch: String,
+    /** De abajo (la mas cercana al trunk) arriba, en el orden de gh-stack. */
+    val layers: List<StackLayer>,
+) {
+    /** La capa superior activa. gh-stack salta las fusionadas al navegar, y aqui tambien. */
+    val top: StackLayer? get() = layers.lastOrNull { !it.isMerged }
+
+    val current: StackLayer? get() = layers.firstOrNull { it.isCurrent }
+
+    /** La rama sobre la que se apoya [layer]: la capa activa anterior, o el trunk. */
+    fun parentOf(layer: StackLayer): String {
+        val index = layers.indexOf(layer)
+        return layers.subList(0, index.coerceAtLeast(0)).lastOrNull { !it.isMerged }?.branch ?: trunk
+    }
+}
+
+data class StackLayer(
+    val branch: String,
+    val isCurrent: Boolean,
+    val isMerged: Boolean,
+    val isQueued: Boolean,
+    val needsRebase: Boolean,
+    val pr: PrRef?,
+)
+
+/** El PR tal y como lo guarda gh-stack: sin draft, labels ni CI. Eso lo trae [PrDetails]. */
+data class PrRef(val number: Int, val url: String, val state: String)
+
+/** Datos de un PR que gh-stack no guarda, pedidos a GitHub en una sola consulta. */
+data class PrDetails(
+    val number: Int,
+    val title: String,
+    val url: String,
+    val state: PrState,
+    val isDraft: Boolean,
+    val review: ReviewDecision?,
+    val checks: ChecksState?,
+    val labels: List<PrLabel>,
+    val baseRef: String,
+) {
+    fun hasLabel(name: String): Boolean = labels.any { it.name.equals(name, ignoreCase = true) }
+}
+
+enum class PrState { OPEN, CLOSED, MERGED;
+
+    companion object {
+        fun parse(value: String?): PrState = entries.firstOrNull { it.name == value } ?: OPEN
+    }
+}
+
+enum class ReviewDecision { APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED;
+
+    companion object {
+        fun parse(value: String?): ReviewDecision? = entries.firstOrNull { it.name == value }
+    }
+}
+
+/** El `statusCheckRollup` del ultimo commit, reducido a lo que se pinta. */
+enum class ChecksState { SUCCESS, FAILURE, PENDING;
+
+    companion object {
+        fun parse(value: String?): ChecksState? = when (value) {
+            "SUCCESS" -> SUCCESS
+            "FAILURE", "ERROR" -> FAILURE
+            "PENDING", "EXPECTED" -> PENDING
+            else -> null
+        }
+    }
+}
+
+/** Color en hexadecimal sin `#`, como lo devuelve GitHub. */
+data class PrLabel(val name: String, val color: String)
+
+data class RepoLabel(val name: String, val color: String, val description: String)
+
+/**
+ * Una pila guardada en `.git/gh-stack`. [heads]: el ultimo commit conocido de cada rama; gh-stack
+ * solo lo guarda de las capas publicadas.
+ */
+data class LocalStack(val trunk: String, val branches: List<String>, val heads: Map<String, String> = emptyMap())
+
+/**
+ * Una pila local y lo que queda de sus ramas. Si ya no queda ninguna (se borraron a mano o al
+ * cerrar el PR), gh-stack la sigue registrando: no se puede sacar ni reutilizar sus nombres
+ * hasta olvidarla.
+ */
+data class LocalStackEntry(
+    val stack: LocalStack,
+    /** Ramas de la pila que existen en local, en orden. */
+    val localBranches: List<String>,
+    /** Ramas que solo existen en un remoto. */
+    val remoteOnlyBranches: List<String>,
+) {
+    val isStale: Boolean get() = localBranches.isEmpty() && remoteOnlyBranches.isEmpty()
+
+    /** La capa mas alta que se puede sacar: una local, si no la del remoto. */
+    val checkoutTarget: String? get() = localBranches.lastOrNull() ?: remoteOnlyBranches.lastOrNull()
+
+    /** Las ramas borradas cuyo ultimo commit se conoce: se pueden recuperar. */
+    val restorable: Map<String, String>
+        get() = stack.heads.filterKeys { it !in localBranches && it !in remoteOnlyBranches }
+
+    companion object {
+        fun of(stack: LocalStack, local: Set<String>, remote: Set<String>) = LocalStackEntry(
+            stack = stack,
+            localBranches = stack.branches.filter { it in local },
+            remoteOnlyBranches = stack.branches.filter { it !in local && it in remote },
+        )
+    }
+}
+
+/** Un repositorio de GitHub (o GitHub Enterprise) identificado por host, owner y nombre. */
+data class GitHubRepo(val host: String, val owner: String, val name: String) {
+
+    /** Como lo acepta `--repo` de gh: `HOST/OWNER/REPO` fuera de github.com. */
+    val cliName: String get() = if (host == GITHUB_COM) "$owner/$name" else "$host/$owner/$name"
+
+    /**
+     * Mismo repositorio. Un host sin punto es un alias de `~/.ssh/config`
+     * (`git@github-personal:org/repo`), que no se puede comparar con el host real: en ese
+     * caso bastan owner y nombre.
+     */
+    fun sameAs(other: GitHubRepo): Boolean =
+        owner.equals(other.owner, true) && name.equals(other.name, true) &&
+            (isSshAlias || other.isSshAlias || host.equals(other.host, true))
+
+    val isSshAlias: Boolean get() = '.' !in host && host != "localhost"
+
+    companion object {
+        private const val GITHUB_COM = "github.com"
+
+        private val PULL_REQUEST_URL = Regex("""^https?://([^/]+)/([^/]+)/([^/]+)/pull/(\d+)(?:[/?#].*)?$""")
+
+        // https://host/owner/name(.git), ssh://git@host(:port)/owner/name(.git), git://...
+        private val URL_REMOTE = Regex("""^(?:https?|ssh|git)://(?:[^@/]+@)?([^/:]+)(?::\d+)?/([^/]+)/([^/]+?)(?:\.git)?/?$""")
+
+        // git@host:owner/name(.git)
+        private val SCP_REMOTE = Regex("""^(?:[^@/]+@)?([^:/]+):([^/]+)/([^/]+?)(?:\.git)?/?$""")
+
+        fun fromPullRequestUrl(url: String): GitHubRepo? =
+            PULL_REQUEST_URL.matchEntire(url.trim())?.destructured?.let { (host, owner, name) -> GitHubRepo(host, owner, name) }
+
+        fun pullRequestNumber(url: String): Int? =
+            PULL_REQUEST_URL.matchEntire(url.trim())?.groupValues?.get(4)?.toIntOrNull()
+
+        fun fromRemoteUrl(url: String): GitHubRepo? {
+            val trimmed = url.trim()
+            val match = URL_REMOTE.matchEntire(trimmed) ?: SCP_REMOTE.matchEntire(trimmed) ?: return null
+            val (host, owner, name) = match.destructured
+            // ssh.github.com es el alias por el puerto 443 de github.com.
+            return GitHubRepo(if (host.equals("ssh.github.com", true)) GITHUB_COM else host, owner, name)
+        }
+    }
+}

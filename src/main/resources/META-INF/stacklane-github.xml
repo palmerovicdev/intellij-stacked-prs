@@ -1,0 +1,22 @@
+<idea-plugin>
+    <!-- Se carga solo si el plugin GitHub esta activo.
+
+         Integracion SIN API interna: los grupos se referencian por id (texto en XML, no una
+         clase) y el PR seleccionado se lee con una DataKey propia del mismo nombre que la del
+         plugin GitHub (ver PrTarget). Ninguna clase del plugin GitHub se compila ni se carga
+         desde aqui. Si un dia cambian estos ids, la plataforma registra un aviso y el menu
+         Stack no aparece; el resto del plugin sigue igual. -->
+    <actions resource-bundle="messages.StacklaneBundle">
+        <group id="Stacklane.PullRequest.Menu" popup="true">
+            <reference ref="Stacklane.MarkReady"/>
+            <reference ref="Stacklane.MarkDraft"/>
+            <separator/>
+            <reference ref="Stacklane.EditLabels"/>
+            <reference ref="Stacklane.ToggleFinal"/>
+            <separator/>
+            <action id="Stacklane.CheckoutStackFromPr" class="com.stacklane.actions.CheckoutStackFromPrAction"/>
+            <add-to-group group-id="Github.PullRequest.ToolWindow.List.Popup" anchor="last"/>
+            <add-to-group group-id="Github.PullRequest.Details.Popup" anchor="last"/>
+        </group>
+    </actions>
+</idea-plugin>

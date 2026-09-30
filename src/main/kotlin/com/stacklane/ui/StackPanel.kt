@@ -1,0 +1,350 @@
+package com.stacklane.ui
+
+import com.intellij.ide.BrowserUtil
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.DataSink
+import com.intellij.openapi.actionSystem.UiDataProvider
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.options.ShowSettingsUtil
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.ui.AnimatedIcon
+import com.intellij.ui.CollectionListModel
+import com.intellij.ui.DoubleClickListener
+import com.intellij.ui.EditorNotificationPanel
+import com.intellij.ui.InlineBanner
+import com.intellij.ui.ListSpeedSearch
+import com.intellij.ui.PopupHandler
+import com.intellij.ui.ScrollPaneFactory
+import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.components.ActionLink
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBList
+import com.intellij.ui.components.panels.HorizontalLayout
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
+import com.stacklane.StacklaneBundle.message
+import com.stacklane.actions.LayerSelection
+import com.stacklane.actions.StackDataKeys
+import com.stacklane.actions.StackFlows
+import com.stacklane.settings.StacklaneConfigurable
+import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.StackService
+import com.stacklane.stack.StackState
+import com.stacklane.stack.repo
+import git4idea.repo.GitRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.event.HierarchyEvent
+import java.awt.event.KeyAdapter
+import java.awt.event.KeyEvent
+import java.awt.event.MouseEvent
+import javax.swing.BoxLayout
+import javax.swing.JComponent
+import javax.swing.JPanel
+import javax.swing.ListSelectionModel
+import javax.swing.ToolTipManager
+
+/** La pestana Stack: selector de repositorio, resumen, avisos y la pila. */
+internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(true, true), UiDataProvider, Disposable {
+
+    private val service = StackService.getInstance(project)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.EDT)
+
+    private val model = CollectionListModel<StackRow>()
+    private val list = StackList(model)
+
+    private val repositories = ComboBox<GitRepository>()
+    private var fillingRepositories = false
+    private val repositoryRow = JPanel(BorderLayout(JBUI.scale(8), 0))
+    private val summary = JPanel(HorizontalLayout(JBUI.scale(8)))
+    private val banners = JPanel()
+
+    private var state: StackState = StackState.Loading
+    private var running: String? = null
+
+    init {
+        val actions = ActionManager.getInstance()
+        val toolbar = actions.createActionToolbar(TOOLBAR_PLACE, actions.getAction(TOOLBAR_GROUP) as ActionGroup, true)
+        toolbar.targetComponent = this
+        setToolbar(toolbar.component)
+
+        repositories.renderer = textListCellRenderer("") { it.root.name }
+        repositories.addActionListener {
+            if (!fillingRepositories) (repositories.selectedItem as? GitRepository)?.let(service::selectRepository)
+        }
+        repositoryRow.border = JBUI.Borders.empty(6, 10, 0, 10)
+        repositoryRow.add(JBLabel(message("toolwindow.repository")), BorderLayout.WEST)
+        repositoryRow.add(repositories, BorderLayout.CENTER)
+
+        summary.border = JBUI.Borders.empty(6, 10, 4, 10)
+        banners.layout = BoxLayout(banners, BoxLayout.Y_AXIS)
+        banners.border = JBUI.Borders.empty(0, 8)
+
+        val north = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            listOf(repositoryRow, summary, banners).forEach {
+                it.alignmentX = Component.LEFT_ALIGNMENT
+                it.isOpaque = false
+                add(it)
+            }
+        }
+        val content = JPanel(BorderLayout())
+        content.add(north, BorderLayout.NORTH)
+        content.add(ScrollPaneFactory.createScrollPane(list, true), BorderLayout.CENTER)
+        setContent(content)
+
+        PopupHandler.installPopupMenu(list, POPUP_GROUP, POPUP_PLACE)
+        ListSpeedSearch.installOn(list) { it.searchText }
+        object : DoubleClickListener() {
+            override fun onDoubleClick(event: MouseEvent): Boolean {
+                activateSelection()
+                return true
+            }
+        }.installOn(list)
+        list.addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(e: KeyEvent) {
+                if (e.keyCode == KeyEvent.VK_ENTER && e.modifiersEx == 0) {
+                    activateSelection()
+                    e.consume()
+                }
+            }
+        })
+        // Al volver a la ventana se relee: gh stack pudo usarse en la terminal sin mover
+        // ninguna ref (un init que adopta ramas existentes, por ejemplo).
+        addHierarchyListener { event ->
+            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L && isShowing) service.requestRefresh()
+        }
+
+        scope.launch { service.state.collect(::render) }
+        scope.launch {
+            service.running.collect {
+                running = it
+                renderSummary()
+            }
+        }
+    }
+
+    override fun dispose() {
+        scope.cancel()
+    }
+
+    override fun uiDataSnapshot(sink: DataSink) {
+        val loaded = state as? StackState.Loaded
+        val row = list.selectedValue as? StackRow.Layer
+        sink[StackDataKeys.LAYER] = if (loaded != null && row != null) LayerSelection(loaded, row.layer) else null
+        sink[StackDataKeys.LOCAL_STACK] = (list.selectedValue as? StackRow.Local)?.entry
+    }
+
+    // ---------------------------------------------------------------- pintado
+
+    private fun render(newState: StackState) {
+        val selectedKey = list.selectedValue?.key
+        state = newState
+        renderRepositories()
+        renderSummary()
+        renderBanners()
+        renderEmptyText()
+        model.replaceAll(rows(newState))
+        val index = model.items.indexOfFirst { it.key == selectedKey }
+        if (index >= 0) list.selectedIndex = index
+    }
+
+    private fun rows(state: StackState): List<StackRow> = when (state) {
+        is StackState.Loaded -> {
+            val snapshot = state.snapshot
+            val layers = snapshot.layers.mapIndexed { index, layer ->
+                StackRow.Layer(
+                    layer = layer,
+                    details = state.detailsOf(layer),
+                    parent = snapshot.parentOf(layer),
+                    position = index + 1,
+                    isTop = index == snapshot.layers.lastIndex,
+                    detailsLoading = state.detailsLoading,
+                )
+            }
+            layers.asReversed() + StackRow.Trunk(snapshot.trunk, snapshot.currentBranch == snapshot.trunk)
+        }
+        is StackState.NotInStack -> state.localStacks.map(StackRow::Local)
+        else -> emptyList()
+    }
+
+    private fun renderRepositories() {
+        val all = service.repositories()
+        repositoryRow.isVisible = all.size > 1
+        if (all.size <= 1) return
+        fillingRepositories = true
+        try {
+            repositories.removeAllItems()
+            all.forEach(repositories::addItem)
+            val shown = state.repo?.root
+            repositories.selectedItem = all.firstOrNull { it.root == shown }
+        } finally {
+            fillingRepositories = false
+        }
+    }
+
+    private fun renderSummary() {
+        summary.removeAll()
+        val current = state
+        running?.let { title ->
+            summary.add(JBLabel(message("summary.running", title), AnimatedIcon.Default.INSTANCE, JBLabel.LEFT))
+        }
+        if (running == null) when (current) {
+            is StackState.Loaded -> {
+                val rows = rows(current).filterIsInstance<StackRow.Layer>()
+                val parts = mutableListOf(message("summary.layers", rows.size, current.snapshot.trunk))
+                rows.count { it.status == LayerStatus.DRAFT }.takeIf { it > 0 }?.let { parts += message("summary.drafts", it) }
+                rows.count { it.status == LayerStatus.UNPUBLISHED }.takeIf { it > 0 }?.let { parts += message("summary.unpublished", it) }
+                if (current.detailsLoading) parts += message("summary.loading.details")
+                summary.add(secondary(parts.joinToString(" · ")))
+            }
+            is StackState.NotInStack -> {
+                summary.add(secondary(message("summary.not.in.stack", current.branch ?: "HEAD")))
+                if (current.localStacks.isNotEmpty()) {
+                    summary.add(ActionLink(message("link.start.stack")) { StackFlows.initStack(project) })
+                }
+            }
+            else -> Unit
+        }
+        summary.isVisible = summary.componentCount > 0
+        summary.revalidate()
+        summary.repaint()
+    }
+
+    private fun renderBanners() {
+        banners.removeAll()
+        val current = state
+        val repo = current.repo
+        if (repo?.stackRebaseInProgress == true) {
+            banners.add(
+                banner(message("banner.rebase"), EditorNotificationPanel.Status.Warning)
+                    .addAction(message("action.resolve.conflicts")) { service.resolveConflicts() }
+                    .addAction(message("action.rebase.continue")) { service.continueRebase() }
+                    .addAction(message("action.rebase.abort")) { service.abortRebase() }
+            )
+        }
+        if (current is StackState.Loaded) {
+            current.detailsError?.let { error ->
+                banners.add(
+                    banner(message("banner.details.error", error), EditorNotificationPanel.Status.Warning)
+                        .addAction(message("action.retry")) { service.requestRefresh() }
+                )
+            }
+            if (current.snapshot.layers.any { it.needsRebase } && !repo!!.stackRebaseInProgress) {
+                banners.add(
+                    banner(message("banner.needs.rebase"), EditorNotificationPanel.Status.Info)
+                        .addAction(message("action.rebase.stack")) { service.rebase() }
+                )
+            }
+        }
+        banners.isVisible = banners.componentCount > 0
+        banners.revalidate()
+        banners.repaint()
+    }
+
+    private fun renderEmptyText() {
+        val text = list.emptyText
+        text.clear()
+        when (val current = state) {
+            StackState.Loading -> text.text = message("state.loading")
+            StackState.NoRepository -> text.text = message("state.no.repository")
+            StackState.GhMissing -> {
+                text.appendLine(message("state.gh.missing"))
+                text.appendLine(message("link.install.gh"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    BrowserUtil.browse(GH_INSTALL_URL)
+                }
+                text.appendLine(message("link.configure.gh"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    ShowSettingsUtil.getInstance().showSettingsDialog(project, StacklaneConfigurable::class.java)
+                }
+            }
+            StackState.ExtensionMissing -> {
+                text.appendLine(message("state.extension.missing"))
+                text.appendLine(message("link.install.extension"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    StackFlows.installExtension(project)
+                }
+            }
+            is StackState.NotInStack -> {
+                text.appendLine(message("state.not.in.stack", current.branch ?: "HEAD"))
+                text.appendLine(message("link.start.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    StackFlows.initStack(project)
+                }
+                text.appendLine(message("link.checkout.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    StackFlows.checkoutStackByInput(project)
+                }
+            }
+            is StackState.Failed -> {
+                text.appendLine(current.message.lineSequence().firstOrNull { it.isNotBlank() } ?: message("state.failed"))
+                text.appendLine(message("action.retry"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    service.requestRefresh()
+                }
+                text.appendLine(message("notification.show.log"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    StackToolWindow.showLog(project)
+                }
+            }
+            is StackState.Loaded -> Unit
+        }
+    }
+
+    private fun banner(text: String, status: EditorNotificationPanel.Status): InlineBanner =
+        InlineBanner(text, status).showCloseButton(false).apply { alignmentX = Component.LEFT_ALIGNMENT }
+
+    private fun secondary(text: String): JComponent = JBLabel(text).apply { foreground = UIUtil.getContextHelpForeground() }
+
+    // ---------------------------------------------------------------- acciones de la lista
+
+    private fun activateSelection() {
+        val repository = state.repo?.let(service::repositoryFor) ?: return
+        when (val row = list.selectedValue) {
+            is StackRow.Layer -> if (!row.layer.isCurrent) service.checkout(repository, row.layer.branch)
+            is StackRow.Trunk -> if (!row.isCurrent) service.checkout(repository, row.name)
+            is StackRow.Local -> activateLocal(repository, row.entry)
+            null -> Unit
+        }
+    }
+
+    /**
+     * Una pila local: si queda una rama en local, checkout del IDE; si solo esta en el remoto,
+     * `gh stack checkout`, que la trae; si no queda ninguna, ofrecer limpiarla.
+     */
+    private fun activateLocal(repository: GitRepository, entry: LocalStackEntry) {
+        val target = entry.checkoutTarget
+        when {
+            entry.isStale -> StackFlows.cleanUpStaleStack(project, entry)
+            entry.localBranches.isNotEmpty() && target != null -> service.checkout(repository, target)
+            target != null -> StackFlows.checkoutStack(project, target, repository)
+        }
+    }
+
+    private companion object {
+        const val TOOLBAR_GROUP = "Stacklane.Toolbar"
+        const val TOOLBAR_PLACE = "StacklaneToolbar"
+        const val POPUP_GROUP = "Stacklane.Layer.Popup"
+        const val POPUP_PLACE = "StacklaneLayerPopup"
+        const val GH_INSTALL_URL = "https://cli.github.com"
+    }
+}
+
+private class StackList(model: CollectionListModel<StackRow>) : JBList<StackRow>(model) {
+
+    init {
+        cellRenderer = StackRowRenderer()
+        selectionMode = ListSelectionModel.SINGLE_SELECTION
+        ToolTipManager.sharedInstance().registerComponent(this)
+    }
+
+    override fun getToolTipText(event: MouseEvent): String? {
+        val index = locationToIndex(event.point)
+        if (index < 0 || getCellBounds(index, index)?.contains(event.point) != true) return null
+        return model.getElementAt(index).tooltip()
+    }
+}

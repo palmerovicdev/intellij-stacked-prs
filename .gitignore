@@ -1,0 +1,11 @@
+.gradle/
+.kotlin/
+build/
+out/
+*.iml
+
+# Cache de dependencias del IntelliJ Platform Gradle Plugin.
+.intellijPlatform/
+
+.idea/
+.DS_Store

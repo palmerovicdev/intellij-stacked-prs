@@ -1,0 +1,98 @@
+<idea-plugin>
+    <!-- id, name, version e idea-version los inyecta Gradle desde gradle.properties. -->
+    <vendor email="palmerodev@gmail.com">Victor Palmero</vendor>
+
+    <description><![CDATA[
+        <p>
+            <b>Stacklane</b> puts GitHub stacked pull requests inside the IDE. It is a visual
+            front end for <a href="https://github.com/github/gh-stack">gh stack</a> and
+            <code>gh pr</code>: every button runs the same command you would type in the
+            terminal, so you can switch between the IDE and the terminal at any point.
+        </p>
+        <ul>
+            <li><b>Stacks tool window</b>: the stack as a graph from the top layer down to the
+                trunk, with each layer's pull request, draft or ready state, labels, review
+                decision and CI status.</li>
+            <li><b>Start a stack</b>, <b>add a layer</b> on top (optionally committing your
+                changes), <b>publish as drafts</b> (<code>gh stack submit --auto</code>) or
+                <b>ready for review</b> (<code>--open</code>, after showing which pull requests
+                will change), <b>sync</b> and <b>rebase</b>, with conflict handling.</li>
+            <li><b>Labels</b>, <b>ready / draft</b> and a <b>final-layer label</b>
+                (<code>stack-final</code> by default) from the stack and from the
+                <i>Pull Requests</i> tool window menus.</li>
+            <li>A <b>Log</b> tab with every command and its output.</li>
+        </ul>
+        <p>Requires the <a href="https://cli.github.com">GitHub CLI</a>, signed in with
+            <code>gh auth login</code>, and the <code>gh-stack</code> extension (the plugin
+            offers to install it).</p>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <!-- La pila vive en un repositorio Git: sin Git4Idea no hay nada que mostrar. -->
+    <depends>Git4Idea</depends>
+    <!-- Solo para los menus de la ventana Pull Requests. Sin el plugin GitHub, todo lo demas
+         funciona igual. -->
+    <depends optional="true" config-file="stacklane-github.xml">org.jetbrains.plugins.github</depends>
+
+    <resource-bundle>messages.StacklaneBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Stacklane"
+                    anchor="right"
+                    icon="/icons/stacklane.svg"
+                    factoryClass="com.stacklane.ui.StackToolWindowFactory"/>
+        <notificationGroup id="Stacklane" displayType="BALLOON" key="notification.group"/>
+        <applicationConfigurable parentId="tools"
+                                 id="com.stacklane.settings"
+                                 instance="com.stacklane.settings.StacklaneConfigurable"
+                                 key="settings.title"/>
+    </extensions>
+
+    <projectListeners>
+        <listener class="com.stacklane.stack.GitEvents" topic="git4idea.repo.GitRepositoryChangeListener"/>
+        <listener class="com.stacklane.stack.GitEvents" topic="com.intellij.dvcs.repo.VcsRepositoryMappingListener"/>
+    </projectListeners>
+
+    <actions resource-bundle="messages.StacklaneBundle">
+        <group id="Stacklane.Toolbar">
+            <action id="Stacklane.Refresh" class="com.stacklane.actions.RefreshAction"/>
+            <separator/>
+            <action id="Stacklane.InitStack" class="com.stacklane.actions.InitStackAction"/>
+            <action id="Stacklane.AddLayer" class="com.stacklane.actions.AddLayerAction"/>
+            <separator/>
+            <action id="Stacklane.PublishDraft" class="com.stacklane.actions.PublishDraftAction"/>
+            <action id="Stacklane.PublishReady" class="com.stacklane.actions.PublishReadyAction"/>
+            <separator/>
+            <action id="Stacklane.Sync" class="com.stacklane.actions.SyncAction"/>
+            <action id="Stacklane.Rebase" class="com.stacklane.actions.RebaseAction"/>
+            <separator/>
+            <action id="Stacklane.OpenSettings" class="com.stacklane.actions.OpenSettingsAction"/>
+        </group>
+
+        <!-- Las acciones de PR sirven en los dos sitios: aqui y en los menus de Pull Requests
+             (stacklane-github.xml). Cada una resuelve su PR segun donde se abra el menu. -->
+        <action id="Stacklane.MarkReady" class="com.stacklane.actions.MarkReadyAction"/>
+        <action id="Stacklane.MarkDraft" class="com.stacklane.actions.MarkDraftAction"/>
+        <action id="Stacklane.EditLabels" class="com.stacklane.actions.EditLabelsAction"/>
+        <action id="Stacklane.ToggleFinal" class="com.stacklane.actions.ToggleFinalAction"/>
+
+        <group id="Stacklane.Layer.Popup">
+            <!-- Solo sobre una pila local cuyas ramas ya no existen. -->
+            <action id="Stacklane.RecreateStack" class="com.stacklane.actions.RecreateStackAction"/>
+            <action id="Stacklane.ForgetStack" class="com.stacklane.actions.ForgetStackAction"/>
+            <action id="Stacklane.CheckoutLayer" class="com.stacklane.actions.CheckoutLayerAction"/>
+            <action id="Stacklane.OpenPr" class="com.stacklane.actions.OpenPrAction"/>
+            <action id="Stacklane.CopyPrLink" class="com.stacklane.actions.CopyPrLinkAction"/>
+            <separator/>
+            <reference ref="Stacklane.MarkReady"/>
+            <reference ref="Stacklane.MarkDraft"/>
+            <separator/>
+            <reference ref="Stacklane.EditLabels"/>
+            <reference ref="Stacklane.ToggleFinal"/>
+            <separator/>
+            <reference ref="Stacklane.AddLayer"/>
+            <reference ref="Stacklane.PublishDraft"/>
+            <reference ref="Stacklane.PublishReady"/>
+        </group>
+    </actions>
+</idea-plugin>
