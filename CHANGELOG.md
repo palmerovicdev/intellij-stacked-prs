@@ -3,6 +3,13 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.2.1 — Textos que se ajustan al ancho del diálogo
+
+- *New Stack*: el aviso de que estás en una capa de otra pila y la vista previa de
+  comandos ya no ensanchan el diálogo. Se parten en líneas a su ancho y crecen hacia abajo.
+- La vista previa de comandos hace lo mismo en *Add Layer* y *Labels*. Se sigue pudiendo
+  seleccionar y copiar, y no es una parada de Tab.
+
 ## 0.2.0 — Pilas cuyas ramas ya no existen
 
 Salió de usar el plugin en un repositorio real. Se cerró un PR y se borró su rama, pero

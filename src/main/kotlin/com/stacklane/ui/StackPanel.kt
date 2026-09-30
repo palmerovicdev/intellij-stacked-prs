@@ -44,14 +44,19 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Container
+import java.awt.Cursor
+import java.awt.Point
 import java.awt.event.HierarchyEvent
 import java.awt.event.KeyAdapter
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.ListSelectionModel
+import javax.swing.SwingUtilities
 import javax.swing.ToolTipManager
 
 /** La pestana Stack: selector de repositorio, resumen, avisos y la pila. */
@@ -107,6 +112,8 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         ListSpeedSearch.installOn(list) { it.searchText }
         object : DoubleClickListener() {
             override fun onDoubleClick(event: MouseEvent): Boolean {
+                // Dos clics seguidos sobre el chevron son desplegar, no un checkout.
+                if (list.toggleAt(event.point) != null) return false
                 activateSelection()
                 return true
             }
@@ -334,17 +341,84 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     }
 }
 
-private class StackList(model: CollectionListModel<StackRow>) : JBList<StackRow>(model) {
+/**
+ * La lista de la pila. Sigue el ancho del viewport, sin barra horizontal: el renderer envuelve
+ * cada fila a ese ancho, y cada vez que cambia se vuelven a medir las alturas. Tambien lleva
+ * que filas estan desplegadas y atiende el chevron que las despliega ([ExpandToggle]).
+ */
+private class StackList(private val rows: CollectionListModel<StackRow>) : JBList<StackRow>(rows) {
+
+    /** Las filas desplegadas, por [StackRow.key]. */
+    private val expanded = HashSet<String>()
+
+    /** El ancho con el que se midieron las filas. */
+    private var measuredWidth = -1
 
     init {
-        cellRenderer = StackRowRenderer()
+        cellRenderer = StackRowRenderer { it.key in expanded }
         selectionMode = ListSelectionModel.SINGLE_SELECTION
+        // Las filas ya caben enteras: el popup que ensena la fila recortada sobraria.
+        setExpandableItemsEnabled(false)
         ToolTipManager.sharedInstance().registerComponent(this)
+        val mouse = object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                if (e.clickCount != 1 || !SwingUtilities.isLeftMouseButton(e)) return
+                val row = toggleAt(e.point) ?: return
+                if (!expanded.remove(row.key)) expanded += row.key
+                rows.allContentsChanged()
+                e.consume()
+            }
+
+            override fun mouseMoved(e: MouseEvent) {
+                val hand = toggleAt(e.point) != null
+                if (hand != (cursor.type == Cursor.HAND_CURSOR)) {
+                    cursor = if (hand) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else null
+                }
+            }
+        }
+        addMouseListener(mouse)
+        addMouseMotionListener(mouse)
+    }
+
+    override fun getScrollableTracksViewportWidth(): Boolean = true
+
+    /**
+     * Cambiar de ancho tira las alturas aqui mismo: `JList` las guarda y no se entera de que el
+     * renderer envuelve el texto con otro ancho. Solo el ancho: si cambia el alto no hay nada
+     * que remedir.
+     */
+    override fun setBounds(x: Int, y: Int, width: Int, height: Int) {
+        super.setBounds(x, y, width, height)
+        if (width == measuredWidth) return
+        measuredWidth = width
+        rows.allContentsChanged()
     }
 
     override fun getToolTipText(event: MouseEvent): String? {
+        toggleAt(event.point)?.let { return message(if (it.key in expanded) "tooltip.collapse" else "tooltip.expand") }
         val index = locationToIndex(event.point)
         if (index < 0 || getCellBounds(index, index)?.contains(event.point) != true) return null
         return model.getElementAt(index).tooltip()
+    }
+
+    /**
+     * La fila cuyo chevron esta bajo [point], o null. Se prepara la fila como se pinta, se coloca
+     * en su celda y se busca el componente que queda debajo.
+     */
+    fun toggleAt(point: Point): StackRow? {
+        val index = locationToIndex(point)
+        if (index < 0) return null
+        val bounds = getCellBounds(index, index)?.takeIf { it.contains(point) } ?: return null
+        val row = model.getElementAt(index)
+        val cell = cellRenderer.getListCellRendererComponent(this, row, index, isSelectedIndex(index), false)
+        cell.setBounds(0, 0, bounds.width, bounds.height)
+        layOut(cell)
+        return row.takeIf { SwingUtilities.getDeepestComponentAt(cell, point.x - bounds.x, point.y - bounds.y) is ExpandToggle }
+    }
+
+    private fun layOut(component: Component) {
+        if (component !is Container) return
+        component.doLayout()
+        component.components.forEach(::layOut)
     }
 }

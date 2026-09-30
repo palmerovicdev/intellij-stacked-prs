@@ -1,5 +1,6 @@
 package com.stacklane.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.render.RenderingUtil
 import com.intellij.util.ui.GraphicsUtil
@@ -15,6 +16,7 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dimension
+import java.awt.Font
 import java.awt.Graphics
 import java.awt.Graphics2D
 import javax.swing.Box
@@ -24,15 +26,23 @@ import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.ListCellRenderer
+import javax.swing.SwingConstants
 
 /**
  * Pinta la pila como un grafo vertical: un rail a la izquierda que une las capas con el
  * trunk, y a la derecha rama, PR, estado, titulo, labels, review y CI.
  *
+ * **La fila nunca se sale del ancho de la lista.** La primera linea cede el nombre de la rama,
+ * que se corta con puntos suspensivos; el titulo se envuelve en hasta [MAX_LINES] lineas y, si
+ * se deja algo fuera, un chevron al final lo despliega entero ([isExpanded]); los distintivos
+ * van a la derecha del titulo si caben con el en una linea, y si no, debajo, en tantas filas
+ * como haga falta. Para eso la lista sigue el ancho del viewport y se vuelve a medir cuando
+ * cambia (ver `StackList`).
+ *
  * Se construye un componente nuevo por fila: la lista tiene pocas filas y asi no hay
  * estado que limpiar entre una y otra.
  */
-internal class StackRowRenderer : ListCellRenderer<StackRow> {
+internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) : ListCellRenderer<StackRow> {
 
     override fun getListCellRendererComponent(
         list: JList<out StackRow>,
@@ -46,43 +56,41 @@ internal class StackRowRenderer : ListCellRenderer<StackRow> {
             primary = RenderingUtil.getForeground(list, isSelected),
             secondary = if (isSelected) RenderingUtil.getForeground(list, true) else NamedColorUtil.getInactiveTextColor(),
         )
+        val insets = list.insets
+        val width = graphContentWidth(list.width - insets.left - insets.right)
         return when (value) {
-            is StackRow.Layer -> layerRow(value, colors)
-            is StackRow.Trunk -> trunkRow(value, colors)
-            is StackRow.Local -> localRow(value, colors)
+            is StackRow.Layer -> layerRow(value, colors, width, isExpanded(value))
+            is StackRow.Trunk -> trunkRow(value, colors, width)
+            is StackRow.Local -> localRow(value, colors, width, isExpanded(value))
         }
     }
 
     private class RowColors(val background: Color, val primary: Color, val secondary: Color)
 
-    private fun layerRow(row: StackRow.Layer, colors: RowColors): JComponent {
+    private fun layerRow(row: StackRow.Layer, colors: RowColors, width: Int, expanded: Boolean): JComponent {
         val layer = row.layer
         val status = row.status
 
-        val first = JPanel(BorderLayout()).apply { isOpaque = false }
-        val left = JPanel(HorizontalLayout(JBUI.scale(6))).apply { isOpaque = false }
-        left.add(JLabel(layer.branch).apply {
+        val name = JLabel(layer.branch).apply {
             foreground = if (layer.isMerged) colors.secondary else colors.primary
             font = if (layer.isCurrent) JBFont.label().asBold() else JBFont.label()
-        })
-        layer.pr?.let { pr -> left.add(JLabel("#${pr.number}").apply { foreground = colors.secondary }) }
-        left.add(Chip.status(status.text, status.color))
-        if (layer.needsRebase) left.add(Chip.status(message("layer.needs.rebase"), StackColors.WARNING))
-        first.add(left, BorderLayout.WEST)
-        if (layer.isCurrent) first.add(Chip.status(message("layer.head"), colors.secondary), BorderLayout.EAST)
+        }
+        val badges = listOfNotNull(
+            layer.pr?.let { pr -> JLabel("#${pr.number}").apply { foreground = colors.secondary } },
+            Chip.status(status.text, status.color),
+            if (layer.needsRebase) Chip.status(message("layer.needs.rebase"), StackColors.WARNING) else null,
+        )
+        val head = if (layer.isCurrent) Chip.status(message("layer.head"), colors.secondary) else null
+        val first = headline(name, badges, head, width)
 
-        val second = JPanel(BorderLayout(JBUI.scale(8), 0)).apply { isOpaque = false }
         val title = when {
             layer.pr == null -> message("layer.unpublished")
             row.details != null -> row.details.title
             row.detailsLoading -> message("layer.loading")
             else -> ""
         }
-        second.add(JLabel(title).apply {
-            foreground = colors.secondary
-            font = if (layer.pr == null) JBFont.small().asItalic() else JBFont.small()
-        }, BorderLayout.CENTER)
-        row.details?.let { second.add(badges(it), BorderLayout.EAST) }
+        val titleFont = if (layer.pr == null) JBFont.small().asItalic() else JBFont.small()
+        val second = description(title, titleFont, colors.secondary, row.details?.let(::badges).orEmpty(), width, expanded)
 
         return graphRow(
             first, second, colors.background,
@@ -92,12 +100,12 @@ internal class StackRowRenderer : ListCellRenderer<StackRow> {
         )
     }
 
-    private fun badges(details: PrDetails): JComponent {
-        val panel = JPanel(HorizontalLayout(JBUI.scale(4))).apply { isOpaque = false }
+    private fun badges(details: PrDetails): List<JComponent> {
+        val badges = mutableListOf<JComponent>()
         val visible = details.labels.take(MAX_LABELS)
-        visible.forEach { panel.add(Chip.label(it.name, it.color)) }
+        visible.forEach { badges += Chip.label(it.name, it.color) }
         if (details.labels.size > visible.size) {
-            panel.add(Chip.status("+${details.labels.size - visible.size}", StackColors.DRAFT))
+            badges += Chip.status("+${details.labels.size - visible.size}", StackColors.DRAFT)
         }
         details.review?.let { review ->
             val color = when (review) {
@@ -105,7 +113,7 @@ internal class StackRowRenderer : ListCellRenderer<StackRow> {
                 ReviewDecision.CHANGES_REQUESTED -> StackColors.CLOSED
                 ReviewDecision.REVIEW_REQUIRED -> StackColors.DRAFT
             }
-            panel.add(Chip.status(reviewText(review), color))
+            badges += Chip.status(reviewText(review), color)
         }
         details.checks?.let { checks ->
             val color = when (checks) {
@@ -113,43 +121,175 @@ internal class StackRowRenderer : ListCellRenderer<StackRow> {
                 ChecksState.FAILURE -> StackColors.CLOSED
                 ChecksState.PENDING -> StackColors.QUEUED
             }
-            panel.add(Chip.status(checksText(checks), color))
+            badges += Chip.status(checksText(checks), color)
         }
-        return panel
+        return badges
     }
 
-    private fun trunkRow(row: StackRow.Trunk, colors: RowColors): JComponent {
-        val first = JPanel(HorizontalLayout(JBUI.scale(6))).apply { isOpaque = false }
-        first.add(JLabel(row.name).apply {
+    private fun trunkRow(row: StackRow.Trunk, colors: RowColors, width: Int): JComponent {
+        val name = JLabel(row.name).apply {
             foreground = colors.primary
             font = if (row.isCurrent) JBFont.label().asBold() else JBFont.label()
-        })
-        first.add(Chip.status(message("layer.trunk"), StackColors.DRAFT))
+        }
+        val first = headline(name, listOf(Chip.status(message("layer.trunk"), StackColors.DRAFT)), null, width)
         return graphRow(first, null, colors.background, Rail.Node(Rail.Shape.SQUARE, StackColors.DRAFT), lineAbove = true, lineBelow = false)
     }
 
-    private fun localRow(row: StackRow.Local, colors: RowColors): JComponent {
+    private fun localRow(row: StackRow.Local, colors: RowColors, width: Int, expanded: Boolean): JComponent {
         val entry = row.entry
         val stack = entry.stack
-        val first = JPanel(HorizontalLayout(JBUI.scale(6))).apply { isOpaque = false }
-        first.add(JLabel(stack.branches.last()).apply {
+        val name = JLabel(stack.branches.last()).apply {
             foreground = if (entry.isStale) colors.secondary else colors.primary
-        })
-        first.add(Chip.status(message("local.layers", stack.branches.size), StackColors.DRAFT))
-        when {
-            entry.isStale -> first.add(Chip.status(message("local.stale"), StackColors.WARNING))
-            entry.localBranches.isEmpty() -> first.add(Chip.status(message("local.remote.only"), StackColors.QUEUED))
         }
-        val second = JLabel((listOf(stack.trunk) + stack.branches).joinToString(" ← ")).apply {
-            foreground = colors.secondary
-            font = JBFont.small()
-        }
+        val badges = listOfNotNull(
+            Chip.status(message("local.layers", stack.branches.size), StackColors.DRAFT),
+            when {
+                entry.isStale -> Chip.status(message("local.stale"), StackColors.WARNING)
+                entry.localBranches.isEmpty() -> Chip.status(message("local.remote.only"), StackColors.QUEUED)
+                else -> null
+            },
+        )
+        val first = headline(name, badges, null, width)
+        val chain = (listOf(stack.trunk) + stack.branches).joinToString(" ← ")
+        val second = wrapped(chain, JBFont.small(), colors.secondary, width, expanded)
         val color = if (entry.isStale) StackColors.WARNING else StackColors.DRAFT
         return graphRow(first, second, colors.background, Rail.Node(Rail.Shape.RING, color), lineAbove = false, lineBelow = false)
     }
 
+    /**
+     * La primera linea: [name], detras sus [badges] y [trailing] contra el borde derecho. Si no
+     * cabe todo, cede el nombre, que se corta con puntos suspensivos (el tooltip lo da entero):
+     * los distintivos se ven siempre.
+     */
+    private fun headline(name: JLabel, badges: List<JComponent>, trailing: JComponent?, width: Int): JComponent {
+        val gap = JBUI.scale(6)
+        if (width > 0) {
+            val others = badges.sumOf { it.preferredSize.width + gap } + (trailing?.let { it.preferredSize.width + gap } ?: 0)
+            name.text = TextWrap.fit(name.text, (width - others).coerceAtLeast(1), 1, measurer(name.font)).lines.firstOrNull().orEmpty()
+        }
+        val left = JPanel(HorizontalLayout(gap)).apply {
+            isOpaque = false
+            add(name)
+            badges.forEach(::add)
+        }
+        return JPanel(BorderLayout(gap, 0)).apply {
+            isOpaque = false
+            add(left, BorderLayout.WEST)
+            trailing?.let { add(it, BorderLayout.EAST) }
+        }
+    }
+
+    /**
+     * El titulo y los distintivos. Si caben juntos en una linea, los distintivos van a la
+     * derecha; si no, el titulo se envuelve con todo el ancho y ellos bajan debajo.
+     */
+    private fun description(text: String, font: Font, color: Color, badges: List<JComponent>, width: Int, expanded: Boolean): JComponent? {
+        if (badges.isEmpty()) return if (text.isBlank()) null else wrapped(text, font, color, width, expanded)
+        val gap = JBUI.scale(8)
+        val row = chipRow(badges)
+        if (width <= 0 || measurer(font)(text) + gap + row.preferredSize.width <= width) {
+            return JPanel(BorderLayout(gap, 0)).apply {
+                isOpaque = false
+                add(label(text, font, color), BorderLayout.CENTER)
+                add(row, BorderLayout.EAST)
+            }
+        }
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            if (text.isNotBlank()) {
+                add(wrapped(text, font, color, width, expanded).apply { alignmentX = Component.LEFT_ALIGNMENT })
+                add(Box.createVerticalStrut(JBUI.scale(4)))
+            }
+            add(flow(badges, width).apply { alignmentX = Component.LEFT_ALIGNMENT })
+        }
+    }
+
+    /**
+     * [text] envuelto en [width]. Plegado se queda en [MAX_LINES] lineas; si se deja algo fuera,
+     * un [ExpandToggle] al final lo despliega entero. Desplegado no tiene tope. Si el texto
+     * cabe plegado no hay chevron, este desplegado o no: no habria nada que ensenar ni esconder.
+     */
+    private fun wrapped(text: String, font: Font, color: Color, width: Int, expanded: Boolean): JComponent {
+        val measure = measurer(font)
+        val collapsed = TextWrap.fit(text, width, MAX_LINES, measure)
+        if (!collapsed.clipped) return lines(collapsed.lines, font, color)
+        val gap = JBUI.scale(4)
+        val toggle = ExpandToggle(expanded)
+        val room = (width - toggle.preferredSize.width - gap).coerceAtLeast(1)
+        val fit = TextWrap.fit(text, room, if (expanded) Int.MAX_VALUE else MAX_LINES, measure)
+        return JPanel(BorderLayout(gap, 0)).apply {
+            isOpaque = false
+            add(lines(fit.lines, font, color), BorderLayout.CENTER)
+            add(toggle, BorderLayout.EAST)
+        }
+    }
+
+    private fun lines(lines: List<String>, font: Font, color: Color): JComponent = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        isOpaque = false
+        lines.forEach { add(label(it, font, color).apply { alignmentX = Component.LEFT_ALIGNMENT }) }
+    }
+
+    private fun label(text: String, font: Font, color: Color): JLabel = JLabel(text).apply {
+        this.font = font
+        foreground = color
+    }
+
+    /** Los distintivos repartidos en tantas filas como hagan falta para no salirse de [width]. */
+    private fun flow(chips: List<JComponent>, width: Int): JComponent {
+        val gap = JBUI.scale(CHIP_GAP)
+        val rows = mutableListOf<MutableList<JComponent>>()
+        var used = 0
+        for (chip in chips) {
+            val chipWidth = chip.preferredSize.width
+            if (rows.isEmpty() || used + gap + chipWidth > width) {
+                rows += mutableListOf(chip)
+                used = chipWidth
+            } else {
+                rows.last() += chip
+                used += gap + chipWidth
+            }
+        }
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            rows.forEachIndexed { index, chipsInRow ->
+                if (index > 0) add(Box.createVerticalStrut(JBUI.scale(3)))
+                add(chipRow(chipsInRow).apply { alignmentX = Component.LEFT_ALIGNMENT })
+            }
+        }
+    }
+
+    private fun chipRow(chips: List<JComponent>): JComponent = JPanel(HorizontalLayout(JBUI.scale(CHIP_GAP))).apply {
+        isOpaque = false
+        chips.forEach(::add)
+    }
+
+    /**
+     * Mide con una `JLabel` de la misma fuente y no con `FontMetrics`: es lo que pedira la
+     * etiqueta al pintarse, y si se le da un pixel menos de lo que pide, pone puntos
+     * suspensivos por su cuenta.
+     */
+    private fun measurer(font: Font): (String) -> Int {
+        val probe = JLabel().apply { this.font = font }
+        return { text ->
+            probe.text = text
+            probe.preferredSize.width
+        }
+    }
+
     private companion object {
         const val MAX_LABELS = 3
+        const val MAX_LINES = 2
+        const val CHIP_GAP = 4
+    }
+}
+
+/** El chevron que despliega o pliega el texto de una fila. `StackList` lo encuentra por su clase. */
+internal class ExpandToggle(val expanded: Boolean) : JLabel(if (expanded) AllIcons.General.ChevronUp else AllIcons.General.ChevronDown) {
+    init {
+        verticalAlignment = SwingConstants.BOTTOM
     }
 }
 
@@ -169,7 +309,7 @@ internal fun graphRow(
     val lines = JPanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         isOpaque = false
-        border = JBUI.Borders.empty(6, 0, 6, 10)
+        border = JBUI.Borders.empty(6, 0, 6, LINES_RIGHT)
         first.alignmentX = Component.LEFT_ALIGNMENT
         add(first)
         if (second != null) {
@@ -186,6 +326,13 @@ internal fun graphRow(
     }
 }
 
+/** Lo que le queda al texto de una fila de [total] pixeles, o 0 si aun no se sabe. */
+internal fun graphContentWidth(total: Int): Int =
+    if (total <= 0) 0 else (total - JBUI.scale(RAIL_WIDTH) - JBUI.scale(LINES_RIGHT)).coerceAtLeast(1)
+
+private const val RAIL_WIDTH = 28
+private const val LINES_RIGHT = 10
+
 /** La columna del grafo: una linea continua entre filas y el nodo de la capa. */
 internal class Rail(
     private val node: Node,
@@ -198,7 +345,7 @@ internal class Rail(
 
     class Node(val shape: Shape, val color: Color)
 
-    override fun getPreferredSize(): Dimension = Dimension(JBUI.scale(28), JBUI.scale(16))
+    override fun getPreferredSize(): Dimension = Dimension(JBUI.scale(RAIL_WIDTH), JBUI.scale(16))
 
     override fun paintComponent(g: Graphics) {
         val g2 = g.create() as Graphics2D

@@ -79,6 +79,12 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.2.1</h3>
+            <ul>
+              <li>New Stack: the note about being on a layer of another stack and the command preview
+                wrap to the dialog width instead of widening it. The command preview wraps the same
+                way in Add Layer and Labels.</li>
+            </ul>
             <h3>0.2.0 &mdash; stacks whose branches are gone</h3>
             <ul>
               <li>Local stacks whose branches were deleted (closing the PR, by hand) are marked

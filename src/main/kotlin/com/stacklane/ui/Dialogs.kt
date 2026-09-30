@@ -6,13 +6,13 @@ import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.ui.popup.ListSeparator
-import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.ComboboxSpeedSearch
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.GroupedComboBoxRenderer
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBRadioButton
+import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.components.panels.VerticalLayout
@@ -36,32 +36,109 @@ import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackPlans
 import com.stacklane.stack.StackState
 import git4idea.repo.GitRepository
+import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.Component
+import java.awt.Container
+import java.awt.Dimension
+import java.awt.FocusTraversalPolicy
 import java.awt.Font
+import java.awt.KeyboardFocusManager
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import javax.swing.Icon
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JTextField
+import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
+
+/**
+ * Texto que se parte en lineas al ancho que le deja el dialogo, sin ensancharlo: el ancho lo
+ * marcan los demas campos y el texto crece hacia abajo. Como un JBLabel copiable, se puede
+ * seleccionar y copiar, y no es una parada de Tab.
+ */
+internal open class WrappingText(
+    text: String = "",
+    icon: Icon? = null,
+    textFont: Font = JBFont.label(),
+    textColor: Color = UIUtil.getLabelForeground(),
+) : JPanel(BorderLayout(JBUI.scale(4), 0)) {
+
+    private val area = object : JBTextArea(text) {
+        // Sin ancho propio: la altura es la de las lineas que salen en el ancho que le dan.
+        override fun getPreferredSize(): Dimension = super.getPreferredSize().apply { width = JBUI.scale(MIN_WIDTH) }
+
+        override fun getMinimumSize(): Dimension = preferredSize
+    }
+
+    var text: String
+        get() = area.text
+        set(value) {
+            area.text = value
+        }
+
+    init {
+        isOpaque = false
+        area.apply {
+            lineWrap = true
+            wrapStyleWord = true
+            isEditable = false
+            isOpaque = false
+            border = JBUI.Borders.empty()
+            font = textFont
+            foreground = textColor
+            // Un area de texto se queda el Tab; asi, si tiene el foco, pasa al siguiente campo.
+            setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, null)
+            setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, null)
+            // Otro ancho, otras lineas: si ya no caben, la ventana crece hacia abajo.
+            addComponentListener(object : ComponentAdapter() {
+                override fun componentResized(e: ComponentEvent) = fitWindow()
+            })
+        }
+        icon?.let { add(JLabel(it).apply { verticalAlignment = SwingConstants.TOP }, BorderLayout.WEST) }
+        add(area, BorderLayout.CENTER)
+        // El foco solo llega con el raton, para copiar.
+        isFocusTraversalPolicyProvider = true
+        focusTraversalPolicy = NoTabStops
+    }
+
+    private fun fitWindow() {
+        revalidate()
+        val window = SwingUtilities.getWindowAncestor(this) ?: return
+        val height = window.preferredSize.height
+        if (height > window.height) window.setSize(window.width, height)
+    }
+
+    private object NoTabStops : FocusTraversalPolicy() {
+        override fun getComponentAfter(root: Container, component: Component): Component? = null
+        override fun getComponentBefore(root: Container, component: Component): Component? = null
+        override fun getFirstComponent(root: Container): Component? = null
+        override fun getLastComponent(root: Container): Component? = null
+        override fun getDefaultComponent(root: Container): Component? = null
+    }
+
+    private companion object {
+        const val MIN_WIDTH = 80
+    }
+}
 
 /**
  * La linea `$ gh ...` que acompana a cada dialogo: lo que se va a ejecutar, tal cual, para
  * poder repetirlo en la terminal. Se puede seleccionar y copiar.
  */
-internal class CommandPreview : JBLabel() {
-
-    init {
-        setCopyable(true)
-        foreground = UIUtil.getContextHelpForeground()
-        font = Font(Font.MONOSPACED, Font.PLAIN, JBFont.small().size)
-    }
+internal class CommandPreview : WrappingText(
+    textFont = Font(Font.MONOSPACED, Font.PLAIN, JBFont.small().size),
+    textColor = UIUtil.getContextHelpForeground(),
+) {
 
     fun show(commands: List<List<String>>) = showLines(commands.map(GhCommands::display))
 
     /** Hasta dos comandos en una linea con `&&`; mas, uno por linea, en el orden en que se ejecutan. */
     fun showLines(lines: List<String>) {
-        text = if (lines.size <= 2) lines.joinToString(" && ", prefix = "$ ")
-        else lines.joinToString("<br>", prefix = "<html>", postfix = "</html>") { "$ " + StringUtil.escapeXmlEntities(it) }
+        text = if (lines.size <= 2) lines.joinToString(" && ", prefix = "$ ") else lines.joinToString("\n") { "$ $it" }
     }
 }
 
@@ -171,12 +248,13 @@ internal class InitStackDialog(
         }
         if (leaveLayerFor != null) {
             row {
-                cell(JBLabel(message("init.leave.layer", leaveLayerFor), AllIcons.General.Information, JBLabel.LEFT))
+                cell(WrappingText(message("init.leave.layer", leaveLayerFor), AllIcons.General.Information))
+                    .align(AlignX.FILL).resizableColumn()
             }
         }
         row { cell(staleNote) }
         row { cell(restoreBox) }
-        row { cell(preview) }.topGap(TopGap.SMALL)
+        row { cell(preview).align(AlignX.FILL).resizableColumn() }.topGap(TopGap.SMALL)
     }
 
     override fun getPreferredFocusedComponent(): JComponent = branchesField
@@ -378,7 +456,7 @@ internal class AddLayerDialog(
             }
             row { cell(emptyWarning) }
         }
-        row { cell(preview) }
+        row { cell(preview).align(AlignX.FILL).resizableColumn() }
     }
 
     override fun getPreferredFocusedComponent(): JComponent = branchField

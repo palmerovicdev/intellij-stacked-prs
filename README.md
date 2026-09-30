@@ -149,7 +149,7 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.2.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.2.1**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

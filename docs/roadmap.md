@@ -43,6 +43,7 @@ hecha y el plugin salga al Marketplace (P40).
 | Pila nueva: limpia antes los nombres que retiene una pila sin ramas y recupera sus commits | `0.2.0` |
 | Pila nueva: vista previa de la pila resultante y bases agrupadas en locales y remotas | `0.2.0` |
 | Remotos con alias SSH (`git@github-personal:org/repo`) emparejados con sus PRs | `0.2.0` |
+| Avisos y vista previa de comandos partidos en líneas al ancho del diálogo | `0.2.1` |
 
 ---
 

@@ -9,7 +9,6 @@ import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
-import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.render.RenderingUtil
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
@@ -152,14 +151,16 @@ internal class LabelsDialog(
             cellHasFocus: Boolean,
         ): Component {
             val checkBox = JBCheckBox(null, value.checked).apply { isOpaque = false }
-            val content = JPanel(HorizontalLayout(JBUI.scale(8))).apply {
+            // La descripcion en el centro: si no cabe, acaba en puntos suspensivos en vez de
+            // cortarse contra el borde.
+            val content = JPanel(BorderLayout(JBUI.scale(8), 0)).apply {
                 isOpaque = false
-                add(if (value.label.color.isEmpty()) JLabel(value.label.name) else Chip.label(value.label.name, value.label.color))
+                add(if (value.label.color.isEmpty()) JLabel(value.label.name) else Chip.label(value.label.name, value.label.color), BorderLayout.WEST)
                 if (value.label.description.isNotEmpty()) {
                     add(JLabel(value.label.description).apply {
                         font = JBFont.small()
                         foreground = if (isSelected) RenderingUtil.getForeground(list, true) else NamedColorUtil.getInactiveTextColor()
-                    })
+                    }, BorderLayout.CENTER)
                 }
             }
             return JPanel(BorderLayout(JBUI.scale(4), 0)).apply {
