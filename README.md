@@ -20,6 +20,9 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
   *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
   último commit de cada rama. *New Stack* también limpia antes los nombres que retienen.
+- **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
+  cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
+  que no sea base de otra pila, que es desde donde gh-stack la enseña.
 - Pestaña **Log** con cada comando ejecutado y su salida.
 
 **Menú “Stack” en la ventana Pull Requests** de IntelliJ (lista y detalle): listo / draft,
@@ -29,6 +32,7 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 |---|---|
 | Nueva pila | `gh stack init [--base rama] capas…`: la base puede ser **cualquier rama**, local o solo remota, también una capa de otra pila |
 | Añadir capa | `gh stack add rama` (con `gh stack top` antes si no estás arriba; commit opcional `-A`/`-u` `-m`) |
+| Publicar decidiendo PR a PR | `gh stack submit --auto`, y después `gh pr edit <rama> --title … --body …` por cada PR nuevo y `gh pr ready` (o `--undo`) por cada cambio |
 | Publicar como drafts | `gh stack submit --auto` |
 | Publicar listos | `gh stack submit --auto --open` (antes muestra qué PRs cambian: `--open` también marca listos los drafts existentes) |
 | Listo / draft | `gh pr ready <url>` / `gh pr ready <url> --undo` |
@@ -110,20 +114,25 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 21 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 39 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - En el IDE de prueba con un repositorio de demo: la ventana pinta la pila y las acciones
   se abren. Salieron dos fallos, ya corregidos: una llamada de Git4Idea prohibida en el EDT
   y los radio buttons del diálogo de nueva capa.
 - La salida JSON y los códigos de salida corresponden al código de gh-stack v0.1.1.
 - Pilas con base `develop` y con base en una capa de otra pila, creadas con gh-stack real.
+- Una rama en dos pilas, con gh-stack real: `view --json` sale con 6 en la capa que es base
+  de otra y en un `main` con dos pilas encima, y con 0 en las demás capas de cada una.
+  `init` desde esa capa sale con 5.
 
 **Pendiente de probar**
 
 - Con PRs reales: los menús de Pull Requests (necesitan una cuenta GitHub en el IDE),
   submit, sync y rebase contra GitHub, y el refresco nativo tras escribir.
 - Varios repositorios en un mismo proyecto y remotos múltiples.
-- Una rama que está en dos pilas (capa de una y base de otra): la ventana dice que no
-  está en ninguna. Es la P3 del roadmap.
+- La lista de una rama en varias pilas (`0.3.0`) en el IDE de prueba: los datos se
+  comprobaron con gh-stack real, el pintado todavía no.
+- *Publish Stack…* (`0.4.0`) contra GitHub: los comandos tienen tests, el diálogo y la
+  secuencia real todavía no.
 
 ## Decisiones
 
@@ -131,7 +140,9 @@ del VFS y de Git4Idea al terminar.
   de las otras capas que la tuvieran. Si la label no existe en el repositorio, se ofrece
   crearla.
 - **Publicar listos pide confirmación** y enseña qué PRs cambian. La opción *Publish as
-  Drafts* queda en el mismo diálogo.
+  Drafts* queda en el mismo diálogo. Para elegir PR a PR está *Publish Stack…*.
+- **Las acciones de toda la pila dicen *Stack*** también en el menú de una capa: ahí no
+  actúan sobre esa capa sino sobre la pila entera.
 - **Varios remotos**: si gh-stack no sabe cuál usar, se pregunta una vez y se recuerda por
   proyecto.
 - **La base de una pila nueva es libre.** Se propone la rama actual (como
@@ -149,7 +160,7 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.2.1**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.3.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

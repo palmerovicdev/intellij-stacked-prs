@@ -44,23 +44,25 @@ hecha y el plugin salga al Marketplace (P40).
 | Pila nueva: vista previa de la pila resultante y bases agrupadas en locales y remotas | `0.2.0` |
 | Remotos con alias SSH (`git@github-personal:org/repo`) emparejados con sus PRs | `0.2.0` |
 | Avisos y vista previa de comandos partidos en líneas al ancho del diálogo | `0.2.1` |
+| Una rama en varias pilas: en cuántas está, cuáles, y cada una se abre desde una rama que no sea base de otra (P3) | `0.3.0` |
+| *Publish Stack…*: draft o listo PR a PR, y título y descripción de los PRs nuevos (P8) | `0.4.0` |
+| Menú de la pila: acciones de toda la pila rotuladas *Stack*, iconos en todo y clic derecho sobre la fila bajo el ratón (C8–C10) | `0.4.0` |
 
 ---
 
 ## Orden sugerido
 
 1. **P1** — probar con PRs reales antes de construir encima.
-2. **P3** — el fallo de las ramas que están en dos pilas.
-3. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
+2. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
    a mano, dejó la pila huérfana que motivó la `0.2.0`.
-4. **P44** — lo mismo para una capa suelta cuya rama desaparece dentro de una pila activa.
-5. **P2** — red de seguridad para todo lo que venga.
-6. **P8** — publicar decidiendo PR a PR, lo que `--open` no permite.
-7. **P21 + P22** — base rota, tamaño y conflictos de cada capa; ya llega casi todo en la
+3. **P44** — lo mismo para una capa suelta cuya rama desaparece dentro de una pila activa.
+4. **P2** — red de seguridad para todo lo que venga.
+5. ~~**P8**~~ — hecha en la `0.4.0`.
+6. **P21 + P22** — base rota, tamaño y conflictos de cada capa; ya llega casi todo en la
    consulta que se hace hoy.
-8. **P25** — ver el diff de una capa sola, que es el sentido de trabajar con pilas.
-9. **P10 + P29** — moverse por la pila sin abrir la ventana.
-10. **P9** — merge de la pila.
+7. **P25** — ver el diff de una capa sola, que es el sentido de trabajar con pilas.
+8. **P10 + P29** — moverse por la pila sin abrir la ventana.
+9. **P9** — merge de la pila.
 
 ---
 
@@ -68,7 +70,7 @@ hecha y el plugin salga al Marketplace (P40).
 
 Lo que falta para fiarse de la `0.1.0` tal y como está.
 
-### P1 · Probar con PRs reales, de principio a fin 🟡
+### P1 · Probar con PRs reales, de principio a fin ⏸️
 
 Todo lo probado hasta ahora fue en un repositorio sin remoto: la ventana pinta la pila y
 las acciones abren sus diálogos, pero `submit`, `sync`, `rebase` contra GitHub, los datos
@@ -87,9 +89,10 @@ Primer contacto real (2026-09-30, repositorio `staffMobileApp`): la ventana, el 
 lista de pilas locales funcionaron; el checkout de una pila cuyo PR se había cerrado y
 cuya rama se borró falló. De ahí salió la `0.2.0`.
 
-### P2 · Tests de flujo con un `gh` falso 🟡
+### P2 · Tests de flujo con un `gh` falso ⏸️
 
-Hoy hay 21 tests de funciones puras (JSON, URLs, comandos y los planes de la `0.2.0`). `StackService` —estados,
+Hoy hay 39 tests de funciones puras (JSON, URLs, comandos, los planes de la `0.2.0`, el
+ajuste de texto de la `0.2.1` y las pilas locales de la `0.3.0`). `StackService` —estados,
 reintento con `--remote`, avisos por código de salida, una escritura a la vez— no tiene
 ninguno. `GhCli.locate()` ya da prioridad a la ruta de los ajustes, así que un script
 que apunte los argumentos y conteste con salidas grabadas (códigos 2, 3, 6, 8, 9) sirve
@@ -100,7 +103,7 @@ la plataforma (`testFramework(TestFrameworkType.Platform)`; son unas librerías,
 IDE). Casos mínimos: los estados de la ventana, el reintento tras *multiple remotes*, el
 aviso de conflicto con y sin `gh-stack-rebase-state`, y que una segunda escritura espere.
 
-### P3 · Una rama que está en dos pilas 🟡
+### P3 · Una rama que está en dos pilas ✅ `0.3.0`
 
 Desde que la base puede ser cualquier rama, una capa de la pila A puede ser la base de la
 pila B. Estando en esa rama, `gh stack view --json` sale con código 6 (*belongs to
@@ -109,6 +112,20 @@ multiple stacks*) y `StackService.refreshNow` lo trata igual que el 2: la ventan
 
 Primera entrega: separar el 6 del 2. Con el 6, decir «está en N pilas», listar esas pilas
 (con el fichero local, ver P7) y abrir cada una haciendo checkout de su capa superior.
+
+Hecha en la `0.3.0` (estado `InSeveralStacks`). Lo que salió al probarlo con gh-stack real:
+
+- El 6 también sale en la base de varias pilas (`main` con dos pilas encima), no solo en la
+  capa que es base de otra. Por eso la lista enseña primero las pilas de la rama y debajo
+  el resto de pilas locales, como fuera de una pila.
+- «Su capa superior» no sirve si esa capa es la rama compartida: el checkout no cambia
+  nada. Se abre desde la capa más alta que no sea base de otra pila, y esa regla vale
+  también para la lista de fuera de una pila.
+- Una pila de una sola capa con otra pila encima no se puede ver con gh-stack desde
+  ninguna rama: la fila lo dice en el tooltip. Verla sin checkout es P28; pedir a gh-stack
+  que elija pila, P6.
+- *New Stack* desde la rama compartida hace checkout de la base de su pila: `init` desde
+  una capa sale con 5 aunque la capa también sea base de otra.
 
 ### P4 · Comprobar el entorno e iniciar sesión 🟡
 
@@ -144,6 +161,9 @@ interactivo:
 - listar las pilas locales (hoy se lee `.git/gh-stack`, ver P7);
 - `isDraft` en el JSON;
 - reordenar, insertar, renombrar o plegar capas sin la interfaz de `gh stack modify`;
+- elegir pila en `view --json` (por número o por su rama superior): en una rama que está en
+  varias sale con 6 y no hay forma de ver una pila de una sola capa que es base de otra
+  (P3);
 - olvidar una pila local cuyas ramas ya no existen: `unstack --local` solo actúa sobre la
   pila de la rama actual o sobre un número de pila de GitHub, y una pila de un solo PR no
   lo tiene. La `0.2.0` lo resuelve con cinco comandos (`StackPlans.forget`); un
@@ -156,7 +176,8 @@ concreto en un IDE. Se apunta aquí qué se aceptó para quitar los rodeos del p
 
 `StackService.localStacks` lee `.git/gh-stack` para listar pilas cuando la rama actual no
 está en ninguna y, desde la `0.2.0`, para saber cuáles se quedaron sin ramas y cuál era
-el último commit de cada una (`head`), que es lo que permite recuperarlas. Es estado
+el último commit de cada una (`head`), que es lo que permite recuperarlas. Desde la `0.3.0`
+también dice en qué pilas está una rama que está en varias (P3). Es estado
 interno de gh-stack: se lee solo el esquema 1, sin escribirlo nunca, pero puede cambiar en
 cualquier versión.
 
@@ -168,7 +189,7 @@ gh-stack y un aviso en el Log si el esquema es otro. Se sustituye en cuanto P6 c
 
 ## Ronda del 2026-09-30 · El flujo de la pila
 
-### P8 · Publicar decidiendo PR a PR 🟡
+### P8 · Publicar decidiendo PR a PR ✅ `0.4.0`
 
 `gh stack submit --auto` crea los PRs nuevos como draft con títulos generados, y `--open`
 marca listos **todos** los PRs de la pila, también los drafts que ya existían. La
@@ -181,6 +202,17 @@ nuevas (propuestos a partir de sus commits, editables) y un interruptor draft/li
 todas. Se ejecuta `gh stack submit --auto` y, después, un `gh pr edit --title --body` por
 PR nuevo y un `gh pr ready` o `--undo` por cada cambio. El Log enseña la secuencia entera.
 Las dos acciones de hoy quedan como atajos.
+
+Hecha en la `0.4.0` (`PublishDialog`, `PublishPlans`):
+
+- Una fila por capa activa, con el grafo de la ventana. Las nuevas empiezan como draft,
+  como las crea `--auto`; las demás, como están. *All ready* / *All drafts* para todas.
+- Título y descripción de las nuevas: con un commit, su asunto y su cuerpo; con varios, el
+  asunto del primero y la lista de todos (`git log --reverse --no-merges padre..rama`).
+- Los PRs nuevos se nombran por su rama con `--repo` (su URL no existe hasta que acaba el
+  submit); los que ya existían, por su URL.
+- Un PR cerrado, en la cola de merge o sin datos de GitHub no se toca, y la fila dice por qué.
+- Desde el menú de una capa, el diálogo abre con el foco en ella.
 
 ### P9 · Merge de la pila 🟡
 
@@ -559,3 +591,6 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 | 🟡 C5 | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra | `StackPanel.renderBanners` |
 | 🟡 C6 | La página de ajustes está en *Tools*; encaja mejor en *Version Control* | `plugin.xml` |
 | ✅ C7 | La caché de build de Gradle devolvía clases de test compiladas contra firmas viejas (fallos falsos, incluso tras `clean`): desactivada `0.2.0` | `gradle.properties` |
+| ✅ C8 | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0` | `StacklaneBundle` |
+| ✅ C9 | *Mark Ready*, *Convert to Draft*, *Labels…* y *Mark as Final Layer* no tenían icono `0.4.0` | `Actions` |
+| ✅ C10 | El clic derecho enseñaba el menú de la fila seleccionada, no el de la fila bajo el ratón; fuera de las filas, igual. Ahora selecciona esa fila, o quita la selección `0.4.0` | `StackPanel` |

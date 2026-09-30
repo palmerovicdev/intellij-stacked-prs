@@ -82,7 +82,18 @@ data class RepoLabel(val name: String, val color: String, val description: Strin
  * Una pila guardada en `.git/gh-stack`. [heads]: el ultimo commit conocido de cada rama; gh-stack
  * solo lo guarda de las capas publicadas.
  */
-data class LocalStack(val trunk: String, val branches: List<String>, val heads: Map<String, String> = emptyMap())
+data class LocalStack(val trunk: String, val branches: List<String>, val heads: Map<String, String> = emptyMap()) {
+
+    /** Como `Stack.Contains` de gh-stack: el trunk cuenta. */
+    fun contains(branch: String): Boolean = branch == trunk || branch in branches
+
+    /** 0 si [branch] es el trunk, 1 la capa de abajo, [branches].size la de arriba; null si no esta. */
+    fun positionOf(branch: String): Int? = when (branch) {
+        trunk -> 0
+        in branches -> branches.indexOf(branch) + 1
+        else -> null
+    }
+}
 
 /**
  * Una pila local y lo que queda de sus ramas. Si ya no queda ninguna (se borraron a mano o al
@@ -95,22 +106,50 @@ data class LocalStackEntry(
     val localBranches: List<String>,
     /** Ramas que solo existen en un remoto. */
     val remoteOnlyBranches: List<String>,
+    /**
+     * Ramas de la pila que tambien son la base de otra. Desde ellas gh-stack no sabe que pila
+     * ensenar (`view` sale con 6), asi que no sirven para abrir esta.
+     */
+    val sharedBranches: Set<String> = emptySet(),
 ) {
     val isStale: Boolean get() = localBranches.isEmpty() && remoteOnlyBranches.isEmpty()
 
-    /** La capa mas alta que se puede sacar: una local, si no la del remoto. */
-    val checkoutTarget: String? get() = localBranches.lastOrNull() ?: remoteOnlyBranches.lastOrNull()
+    /**
+     * La capa mas alta desde la que gh-stack ensena esta pila: una local, si no la del remoto,
+     * saltando las [sharedBranches]. Si todas lo son, la mas alta que quede: lleva a la lista
+     * de pilas de esa rama, que al menos explica por que.
+     */
+    val checkoutTarget: String?
+        get() = localBranches.lastOrNull { it !in sharedBranches }
+            ?: remoteOnlyBranches.lastOrNull { it !in sharedBranches }
+            ?: localBranches.lastOrNull()
+            ?: remoteOnlyBranches.lastOrNull()
+
+    /** [checkoutTarget] se queda por debajo de alguna capa porque esa es base de otra pila. */
+    val targetSkipsShared: Boolean
+        get() {
+            val target = checkoutTarget ?: return false
+            return stack.branches.drop(stack.branches.indexOf(target) + 1).any { it in sharedBranches }
+        }
 
     /** Las ramas borradas cuyo ultimo commit se conoce: se pueden recuperar. */
     val restorable: Map<String, String>
         get() = stack.heads.filterKeys { it !in localBranches && it !in remoteOnlyBranches }
 
     companion object {
-        fun of(stack: LocalStack, local: Set<String>, remote: Set<String>) = LocalStackEntry(
+        /** [trunks]: las bases de todas las pilas locales. Una capa no puede ser la base de su propia pila. */
+        fun of(stack: LocalStack, local: Set<String>, remote: Set<String>, trunks: Set<String> = emptySet()) = LocalStackEntry(
             stack = stack,
             localBranches = stack.branches.filter { it in local },
             remoteOnlyBranches = stack.branches.filter { it !in local && it in remote },
+            sharedBranches = stack.branches.filterTo(LinkedHashSet()) { it in trunks },
         )
+
+        /** Todas las pilas de `.git/gh-stack`, cada una sabiendo cuales de sus ramas son base de otra. */
+        fun all(stacks: List<LocalStack>, local: Set<String>, remote: Set<String>): List<LocalStackEntry> {
+            val trunks = stacks.mapTo(HashSet()) { it.trunk }
+            return stacks.map { of(it, local, remote, trunks) }
+        }
     }
 }
 

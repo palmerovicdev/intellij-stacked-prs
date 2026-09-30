@@ -58,14 +58,31 @@ internal sealed interface StackRow {
         override fun tooltip(): String = message("tooltip.trunk", name)
     }
 
-    /** Una pila guardada en local, cuando la rama actual no esta en ninguna. */
-    data class Local(val entry: LocalStackEntry) : StackRow {
+    /**
+     * Una pila guardada en local, cuando la rama actual no esta en ninguna o esta en varias.
+     * [head]: la rama actual, si es de esta pila.
+     */
+    data class Local(val entry: LocalStackEntry, val head: String? = null) : StackRow {
         override val key: String get() = "local:${entry.stack.branches.last()}"
         override val searchText: String get() = entry.stack.branches.joinToString(" ")
-        override fun tooltip(): String = when {
-            entry.isStale -> message("tooltip.local.stale")
-            entry.localBranches.isEmpty() -> message("tooltip.local.remote", entry.checkoutTarget.orEmpty())
-            else -> message("tooltip.local.stack", entry.checkoutTarget.orEmpty())
+
+        override fun tooltip(): String {
+            val action = action()
+            val position = head?.let(entry.stack::positionOf) ?: return action
+            val where = if (position == 0) message("tooltip.local.base", head)
+            else message("tooltip.local.layer", head, position, entry.stack.branches.size)
+            return "<html>${escape(where)}<br>${escape(action)}</html>"
+        }
+
+        private fun action(): String {
+            val target = entry.checkoutTarget.orEmpty()
+            return when {
+                entry.isStale -> message("tooltip.local.stale")
+                target == head -> message("tooltip.local.blocked")
+                target !in entry.localBranches -> message("tooltip.local.remote", target)
+                entry.targetSkipsShared -> message("tooltip.local.shared", target)
+                else -> message("tooltip.local.stack", target)
+            }
         }
     }
 }

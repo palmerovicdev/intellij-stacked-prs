@@ -108,7 +108,16 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         content.add(ScrollPaneFactory.createScrollPane(list, true), BorderLayout.CENTER)
         setContent(content)
 
-        PopupHandler.installPopupMenu(list, POPUP_GROUP, POPUP_PLACE)
+        // El menu es el de la fila bajo el raton, no el de la que estuviera seleccionada: se
+        // selecciona antes de abrirlo, y fuera de las filas se quita la seleccion (menu de la pila).
+        list.addMouseListener(object : PopupHandler() {
+            override fun invokePopup(comp: Component, x: Int, y: Int) {
+                list.selectAt(Point(x, y))
+                val popup = actions.createActionPopupMenu(POPUP_PLACE, actions.getAction(POPUP_GROUP) as ActionGroup)
+                popup.setTargetComponent(list)
+                popup.component.show(comp, x, y)
+            }
+        })
         ListSpeedSearch.installOn(list) { it.searchText }
         object : DoubleClickListener() {
             override fun onDoubleClick(event: MouseEvent): Boolean {
@@ -181,7 +190,12 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             }
             layers.asReversed() + StackRow.Trunk(snapshot.trunk, snapshot.currentBranch == snapshot.trunk)
         }
-        is StackState.NotInStack -> state.localStacks.map(StackRow::Local)
+        is StackState.NotInStack -> state.localStacks.map { StackRow.Local(it) }
+        // Primero las pilas de la rama actual; despues el resto, como fuera de una pila.
+        is StackState.InSeveralStacks -> {
+            val (ofBranch, others) = state.localStacks.partition { it.stack.contains(state.branch) }
+            ofBranch.map { StackRow.Local(it, head = state.branch) } + others.map { StackRow.Local(it) }
+        }
         else -> emptyList()
     }
 
@@ -217,6 +231,16 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             }
             is StackState.NotInStack -> {
                 summary.add(secondary(message("summary.not.in.stack", current.branch ?: "HEAD")))
+                if (current.localStacks.isNotEmpty()) {
+                    summary.add(ActionLink(message("link.start.stack")) { StackFlows.initStack(project) })
+                }
+            }
+            is StackState.InSeveralStacks -> {
+                val count = current.stacksOfBranch.size
+                // gh-stack ya dijo que son varias; si el fichero local no las da, no se inventa el numero.
+                val text = if (count > 1) message("summary.several.stacks", current.branch, count)
+                else message("summary.several.stacks.unknown", current.branch)
+                summary.add(secondary(text))
                 if (current.localStacks.isNotEmpty()) {
                     summary.add(ActionLink(message("link.start.stack")) { StackFlows.initStack(project) })
                 }
@@ -289,6 +313,16 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                     StackFlows.checkoutStackByInput(project)
                 }
             }
+            // Solo si no se pudo leer `.git/gh-stack`: con pilas, la lista no esta vacia.
+            is StackState.InSeveralStacks -> {
+                text.appendLine(message("state.several.stacks", current.branch))
+                text.appendLine(message("link.start.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    StackFlows.initStack(project)
+                }
+                text.appendLine(message("link.checkout.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                    StackFlows.checkoutStackByInput(project)
+                }
+            }
             is StackState.Failed -> {
                 text.appendLine(current.message.lineSequence().firstOrNull { it.isNotBlank() } ?: message("state.failed"))
                 text.appendLine(message("action.retry"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
@@ -320,15 +354,17 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     }
 
     /**
-     * Una pila local: si queda una rama en local, checkout del IDE; si solo esta en el remoto,
-     * `gh stack checkout`, que la trae; si no queda ninguna, ofrecer limpiarla.
+     * Una pila local: si la rama a sacar esta en local, checkout del IDE; si solo esta en el
+     * remoto, `gh stack checkout`, que la trae; si no queda ninguna, ofrecer limpiarla. Si es
+     * la rama actual no hay nada que hacer: el tooltip explica por que.
      */
     private fun activateLocal(repository: GitRepository, entry: LocalStackEntry) {
         val target = entry.checkoutTarget
         when {
             entry.isStale -> StackFlows.cleanUpStaleStack(project, entry)
-            entry.localBranches.isNotEmpty() && target != null -> service.checkout(repository, target)
-            target != null -> StackFlows.checkoutStack(project, target, repository)
+            target == null || target == repository.currentBranchName -> Unit
+            target in entry.localBranches -> service.checkout(repository, target)
+            else -> StackFlows.checkoutStack(project, target, repository)
         }
     }
 
@@ -381,6 +417,15 @@ private class StackList(private val rows: CollectionListModel<StackRow>) : JBLis
     }
 
     override fun getScrollableTracksViewportWidth(): Boolean = true
+
+    /**
+     * Selecciona la fila bajo [point] o, si no hay ninguna, quita la seleccion. El menu por
+     * teclado se abre dentro de la fila seleccionada, asi que ahi no cambia nada.
+     */
+    fun selectAt(point: Point) {
+        val index = locationToIndex(point)
+        if (index >= 0 && getCellBounds(index, index)?.contains(point) == true) selectedIndex = index else clearSelection()
+    }
 
     /**
      * Cambiar de ancho tira las alturas aqui mismo: `JList` las guarda y no se entera de que el

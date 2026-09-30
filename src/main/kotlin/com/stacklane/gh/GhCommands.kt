@@ -67,9 +67,21 @@ object GhCommands {
 
     fun installExtension(): List<String> = listOf("extension", "install", "github/gh-stack")
 
-    fun markReady(prUrl: String): List<String> = listOf("pr", "ready", prUrl)
+    /** [pr]: numero, URL o rama, como lo acepta `gh pr`. Ver [prSelector]. */
+    fun markReady(pr: String, repo: GitHubRepo? = null): List<String> = listOf("pr", "ready") + prSelector(pr, repo)
 
-    fun markDraft(prUrl: String): List<String> = listOf("pr", "ready", prUrl, "--undo")
+    fun markDraft(pr: String, repo: GitHubRepo? = null): List<String> = listOf("pr", "ready") + prSelector(pr, repo) + "--undo"
+
+    /** Titulo y descripcion de un PR. [pr] como en [markReady]. */
+    fun editPr(pr: String, repo: GitHubRepo?, title: String, body: String): List<String> =
+        listOf("pr", "edit") + prSelector(pr, repo) + listOf("--title", title, "--body", body)
+
+    /**
+     * Un PR por rama es el que acaba de crear `gh stack submit`, que aun no tiene URL conocida.
+     * Con `--repo` gh no tiene que adivinar el repositorio cuando hay varios remotos.
+     */
+    private fun prSelector(pr: String, repo: GitHubRepo?): List<String> =
+        if (repo == null) listOf(pr) else listOf(pr, "--repo", repo.cliName)
 
     fun editLabels(prUrl: String, toAdd: Collection<String>, toRemove: Collection<String>): List<String> = buildList {
         add("pr")

@@ -149,11 +149,14 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
                 else -> null
             },
         )
-        val first = headline(name, badges, null, width)
+        // La rama actual esta en esta pila (y en otra): como la capa actual, nodo relleno y HEAD.
+        val head = if (row.head != null) Chip.status(message("layer.head"), colors.secondary) else null
+        val first = headline(name, badges, head, width)
         val chain = (listOf(stack.trunk) + stack.branches).joinToString(" ← ")
         val second = wrapped(chain, JBFont.small(), colors.secondary, width, expanded)
         val color = if (entry.isStale) StackColors.WARNING else StackColors.DRAFT
-        return graphRow(first, second, colors.background, Rail.Node(Rail.Shape.RING, color), lineAbove = false, lineBelow = false)
+        val shape = if (row.head != null) Rail.Shape.FILLED else Rail.Shape.RING
+        return graphRow(first, second, colors.background, Rail.Node(shape, color), lineAbove = false, lineBelow = false)
     }
 
     /**

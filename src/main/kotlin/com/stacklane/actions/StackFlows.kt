@@ -12,6 +12,8 @@ import com.stacklane.gh.GhCli
 import com.stacklane.gh.GhCommands
 import com.stacklane.gh.GhNotFoundException
 import com.stacklane.gh.GhResult
+import com.stacklane.gh.GitCommands
+import com.stacklane.gh.Tool
 import com.stacklane.settings.StacklaneSettings
 import com.stacklane.stack.GhCall
 import com.stacklane.stack.GitHubRepo
@@ -19,6 +21,7 @@ import com.stacklane.stack.LocalStack
 import com.stacklane.stack.LocalStackEntry
 import com.stacklane.stack.Operation
 import com.stacklane.stack.Position
+import com.stacklane.stack.PublishPlans
 import com.stacklane.stack.StackJson
 import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackPlans
@@ -28,6 +31,7 @@ import com.stacklane.stack.repo
 import com.stacklane.ui.AddLayerDialog
 import com.stacklane.ui.InitStackDialog
 import com.stacklane.ui.LabelsDialog
+import com.stacklane.ui.PublishDialog
 import com.stacklane.ui.StackToolWindow
 import git4idea.repo.GitRepository
 import kotlinx.coroutines.Dispatchers
@@ -56,10 +60,14 @@ internal object StackFlows {
         val state = service.state.value
         val repository = state.repo?.let(service::repositoryFor) ?: service.repository() ?: return
         val current = repository.currentBranchName
-        val stack = (state as? StackState.Loaded)?.snapshot
 
-        // gh-stack no inicia una pila desde una capa de otra: antes se vuelve a su trunk.
-        val leaveLayerFor = stack?.trunk?.takeIf { current != null && current != it && stack.layers.any { l -> l.branch == current } }
+        // gh-stack no inicia una pila desde una capa de otra, aunque tambien sea la base de
+        // alguna: antes se vuelve a su trunk.
+        val leaveLayerFor = when (state) {
+            is StackState.Loaded -> state.snapshot.trunk.takeIf { current != null && current != it && state.snapshot.layers.any { l -> l.branch == current } }
+            is StackState.InSeveralStacks -> state.layerOf?.stack?.trunk?.takeIf { state.branch == current }
+            else -> null
+        }
         // En una rama suelta con trabajo, lo normal es convertirla en la primera capa (base: la
         // rama por defecto). En cualquier otro caso, la base propuesta es la rama actual.
         val adopt = current?.takeIf { state is StackState.NotInStack && it !in TRUNK_NAMES }
@@ -152,6 +160,56 @@ internal object StackFlows {
             add(GhCall(GhCommands.add(dialog.branch, dialog.commit)))
         }
         service.execute(Operation(message("op.add"), calls, repository, successMessage = message("op.add.done", dialog.branch)))
+    }
+
+    /**
+     * *Publish Stack…*: capa a capa, cual queda lista para review y con que titulo y
+     * descripcion salen las nuevas. Antes de abrir el dialogo se leen los commits de las capas
+     * nuevas para proponerlos. [focus]: la capa desde cuyo menu se abrio.
+     */
+    fun publishStack(project: Project, focus: String? = null) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        // Donde gh-stack crea los PRs. Un alias de ~/.ssh/config no es un host que gh entienda.
+        val github = snapshot.layers.firstNotNullOfOrNull { layer -> layer.pr?.url?.let(GitHubRepo::fromPullRequestUrl) }
+            ?: state.repo.github?.takeUnless { it.isSshAlias }
+        val fresh = snapshot.layers.filter { !it.isMerged && it.pr == null }
+        service.launch {
+            val proposals = try {
+                withBackgroundProgress(project, message("publish.reading")) {
+                    fresh.associate { layer ->
+                        val log = GitCommands.log(gitRef(repository, snapshot.parentOf(layer)), layer.branch)
+                        val result = GhCli.run(repository.root.toNioPath(), log, tool = Tool.GIT)
+                        // Sin commits legibles se propone el nombre de la rama: el dialogo deja cambiarlo.
+                        val commits = if (result.ok) PublishPlans.parseLog(result.stdout) else emptyList()
+                        layer.branch to PublishPlans.proposal(layer.branch, commits)
+                    }
+                }
+            } catch (_: GhNotFoundException) {
+                emptyMap()
+            }
+            val layers = withContext(Dispatchers.EDT) {
+                val dialog = PublishDialog(project, state, proposals, github, focus)
+                if (dialog.showAndGet()) dialog.layers() else null
+            } ?: return@launch
+            service.execute(
+                Operation(
+                    title = message("op.publish"),
+                    calls = PublishPlans.calls(layers, github),
+                    repository = repository,
+                    successMessage = message("op.publish.done"),
+                )
+            )
+        }
+    }
+
+    /** Una rama como la entiende git: la local o, si solo esta en un remoto, `remoto/rama`. */
+    private fun gitRef(repository: GitRepository, branch: String): String {
+        val branches = repository.branches
+        if (branches.findLocalBranch(branch) != null) return branch
+        return branches.remoteBranches.firstOrNull { it.nameForRemoteOperations == branch }?.name ?: branch
     }
 
     fun publish(project: Project, ready: Boolean) {

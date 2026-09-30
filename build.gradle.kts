@@ -79,6 +79,16 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.3.0 &mdash; a branch in two stacks</h3>
+            <ul>
+              <li>A branch that is a layer of one stack and the base of another (or the base of several
+                stacks) is no longer shown as “not part of a stack”. The window says how many stacks it
+                is in and lists them first, marked HEAD.</li>
+              <li>Opening one of them checks out its highest layer that is not also the base of another
+                stack, so gh stack can show it.</li>
+              <li>New Stack from such a branch checks out the base of its stack first, as it already did
+                from any other layer.</li>
+            </ul>
             <h3>0.2.1</h3>
             <ul>
               <li>New Stack: the note about being on a layer of another stack and the command preview

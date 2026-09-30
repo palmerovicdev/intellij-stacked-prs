@@ -72,6 +72,15 @@ internal class AddLayerAction : ToolbarAction(AllIcons.Vcs.Branch) {
     }
 }
 
+/** Desde el menu de una capa, el dialogo pone el foco en ella. */
+internal class PublishStackAction : ToolbarAction(AllIcons.Actions.Upload) {
+    override fun isEnabled(state: StackState): Boolean = hasActiveLayers(state)
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        StackFlows.publishStack(project, focus = e.getData(StackDataKeys.LAYER)?.layer?.branch)
+    }
+}
+
 internal class PublishDraftAction : ToolbarAction(AllIcons.Vcs.Push) {
     override fun isEnabled(state: StackState): Boolean = hasActiveLayers(state)
     override fun actionPerformed(e: AnActionEvent) {
@@ -197,21 +206,21 @@ internal class CopyPrLinkAction : PrAction(AllIcons.Actions.Copy) {
     override fun perform(project: Project, target: PrTarget) = CopyPasteManager.getInstance().setContents(StringSelection(target.url))
 }
 
-internal class MarkReadyAction : PrAction() {
+internal class MarkReadyAction : PrAction(AllIcons.Actions.Checked) {
     override fun isVisible(target: PrTarget): Boolean = isOpen(target) && target.details?.isDraft != false
     override fun perform(project: Project, target: PrTarget) = StackFlows.setDraft(project, target, draft = false)
 }
 
-internal class MarkDraftAction : PrAction() {
+internal class MarkDraftAction : PrAction(AllIcons.Actions.Undo) {
     override fun isVisible(target: PrTarget): Boolean = isOpen(target) && target.details?.isDraft != true
     override fun perform(project: Project, target: PrTarget) = StackFlows.setDraft(project, target, draft = true)
 }
 
-internal class EditLabelsAction : PrAction() {
+internal class EditLabelsAction : PrAction(AllIcons.Nodes.Tag) {
     override fun perform(project: Project, target: PrTarget) = StackFlows.editLabels(project, target)
 }
 
-internal class ToggleFinalAction : PrAction() {
+internal class ToggleFinalAction : PrAction(AllIcons.Nodes.Target) {
 
     override fun updateText(e: AnActionEvent, target: PrTarget) {
         val label = StacklaneSettings.getInstance().finalLabel

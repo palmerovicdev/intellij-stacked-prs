@@ -190,10 +190,14 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         val ref = repoRef(repository)
         try {
             val result = GhCli.run(ref.root.toNioPath(), GhCommands.view())
+            val branch = repository.currentBranchName
             when {
                 result.ok -> showSnapshot(ref, StackJson.parseView(result.stdout))
+                // En `view --json` el 6 solo significa «la rama esta en varias pilas» (view.go de la v0.1.1).
+                result.exitCode == GhExit.DISAMBIGUATE && branch != null ->
+                    _state.value = StackState.InSeveralStacks(ref, branch, localStacks(repository))
                 result.exitCode == GhExit.NOT_IN_STACK || result.exitCode == GhExit.DISAMBIGUATE ->
-                    _state.value = StackState.NotInStack(ref, repository.currentBranchName, localStacks(repository))
+                    _state.value = StackState.NotInStack(ref, branch, localStacks(repository))
                 result.isMissingExtension -> _state.value = StackState.ExtensionMissing
                 else -> _state.value = StackState.Failed(ref, result.errorText.ifEmpty { "exit code ${result.exitCode}" })
             }
@@ -264,7 +268,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         val branches = repository.branches
         val local = branches.localBranches.mapTo(HashSet()) { it.name }
         val remote = branches.remoteBranches.mapTo(HashSet()) { it.nameForRemoteOperations }
-        return stacks.map { LocalStackEntry.of(it, local, remote) }
+        return LocalStackEntry.all(stacks, local, remote)
     }
 
     // En un worktree `.git` es un fichero que apunta al directorio real.

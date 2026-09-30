@@ -3,6 +3,44 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.4.0 — Publicar decidiendo PR a PR
+
+`gh stack submit --auto` crea los PRs nuevos como draft con títulos generados, y `--open`
+marca listos todos los de la pila, también los drafts que ya existían. Para dejar listo uno
+solo había que publicar como draft y marcarlo después.
+
+- **Publish Stack…**: una fila por capa, con el grafo de la ventana. En cada una, si queda
+  lista para review o como draft; en las nuevas, además, el título y la descripción del PR,
+  propuestos a partir de sus commits. Se ejecuta `gh stack submit --auto` y después un
+  `gh pr edit` por PR nuevo y un `gh pr ready` (o `--undo`) por cada cambio. La vista previa
+  y el Log enseñan la secuencia entera.
+- Las acciones de toda la pila dicen *Stack*: *Add Layer on Top of Stack…*, *Publish Stack
+  as Drafts* y *Publish Stack Ready for Review…*. En el menú de una capa parecía que solo
+  actuaban sobre ella.
+- Todas las acciones del menú de una capa tienen icono, también en el menú *Stack* de la
+  ventana Pull Requests.
+- El clic derecho abre el menú de la fila que está bajo el ratón (la selecciona) y, fuera
+  de las filas, el de la pila (quita la selección). Antes enseñaba el de la fila que
+  estuviera seleccionada.
+
+## 0.3.0 — Una rama que está en dos pilas
+
+Desde que la base puede ser cualquier rama, una capa de una pila puede ser la base de otra.
+En esa rama `gh stack view --json` sale con código 6 (*belongs to multiple stacks*) y la
+ventana decía que no estaba en ninguna pila. Pasa lo mismo en la base de varias pilas, como
+`main` con dos pilas encima.
+
+- La ventana dice en cuántas pilas está la rama y las lista primero, con nodo relleno y
+  *HEAD*. El tooltip dice si la rama es su base o qué capa es. Debajo siguen las demás pilas
+  locales.
+- Abrir una la saca desde su capa más alta que no sea también base de otra pila, que es
+  desde donde gh-stack la puede enseñar. Si no le queda ninguna (una pila de una sola capa
+  con otra pila encima), el tooltip lo explica.
+- La lista de pilas fuera de una pila aplica la misma regla: antes, abrir una pila cuya cima
+  era base de otra llevaba a una rama en la que gh-stack no enseñaba nada.
+- *New Stack* desde una rama así hace antes checkout de la base de su pila, como desde
+  cualquier otra capa: gh-stack no deja empezar una pila desde una capa (código 5).
+
 ## 0.2.1 — Textos que se ajustan al ancho del diálogo
 
 - *New Stack*: el aviso de que estás en una capa de otra pila y la vista previa de

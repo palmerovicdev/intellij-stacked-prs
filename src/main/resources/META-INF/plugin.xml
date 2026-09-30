@@ -14,9 +14,11 @@
                 trunk, with each layer's pull request, draft or ready state, labels, review
                 decision and CI status.</li>
             <li><b>Start a stack</b>, <b>add a layer</b> on top (optionally committing your
-                changes), <b>publish as drafts</b> (<code>gh stack submit --auto</code>) or
-                <b>ready for review</b> (<code>--open</code>, after showing which pull requests
-                will change), <b>sync</b> and <b>rebase</b>, with conflict handling.</li>
+                changes), <b>publish</b> choosing layer by layer which pull requests are ready for
+                review and the title of the new ones, or in one go as <b>drafts</b>
+                (<code>gh stack submit --auto</code>) or <b>ready for review</b>
+                (<code>--open</code>, after showing which pull requests will change),
+                <b>sync</b> and <b>rebase</b>, with conflict handling.</li>
             <li><b>Labels</b>, <b>ready / draft</b> and a <b>final-layer label</b>
                 (<code>stack-final</code> by default) from the stack and from the
                 <i>Pull Requests</i> tool window menus.</li>
@@ -60,6 +62,7 @@
             <action id="Stacklane.InitStack" class="com.stacklane.actions.InitStackAction"/>
             <action id="Stacklane.AddLayer" class="com.stacklane.actions.AddLayerAction"/>
             <separator/>
+            <action id="Stacklane.Publish" class="com.stacklane.actions.PublishStackAction"/>
             <action id="Stacklane.PublishDraft" class="com.stacklane.actions.PublishDraftAction"/>
             <action id="Stacklane.PublishReady" class="com.stacklane.actions.PublishReadyAction"/>
             <separator/>
@@ -89,8 +92,10 @@
             <separator/>
             <reference ref="Stacklane.EditLabels"/>
             <reference ref="Stacklane.ToggleFinal"/>
+            <!-- De la pila entera, no de la capa: por eso sus textos dicen «Stack». -->
             <separator/>
             <reference ref="Stacklane.AddLayer"/>
+            <reference ref="Stacklane.Publish"/>
             <reference ref="Stacklane.PublishDraft"/>
             <reference ref="Stacklane.PublishReady"/>
         </group>
