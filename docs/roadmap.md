@@ -39,6 +39,10 @@ hecha y el plugin salga al Marketplace (P40).
 | Listo/draft, labels y `stack-final` desde la pila y desde los menús de Pull Requests | `0.1.0` |
 | Pestaña Log con cada comando y el comando en vivo en cada diálogo | `0.1.0` |
 | Base libre al crear una pila: cualquier rama local o remota, también desde otra pila | `0.1.0` |
+| Pilas locales sin ramas: se marcan, *Forget Stack* y *Recreate on Another Base…* | `0.2.0` |
+| Pila nueva: limpia antes los nombres que retiene una pila sin ramas y recupera sus commits | `0.2.0` |
+| Pila nueva: vista previa de la pila resultante y bases agrupadas en locales y remotas | `0.2.0` |
+| Remotos con alias SSH (`git@github-personal:org/repo`) emparejados con sus PRs | `0.2.0` |
 
 ---
 
@@ -46,13 +50,16 @@ hecha y el plugin salga al Marketplace (P40).
 
 1. **P1** — probar con PRs reales antes de construir encima.
 2. **P3** — el fallo de las ramas que están en dos pilas.
-3. **P2** — red de seguridad para todo lo que venga.
-4. **P8** — publicar decidiendo PR a PR, lo que `--open` no permite.
-5. **P21 + P22** — base rota, tamaño y conflictos de cada capa; ya llega casi todo en la
+3. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
+   a mano, dejó la pila huérfana que motivó la `0.2.0`.
+4. **P44** — lo mismo para una capa suelta cuya rama desaparece dentro de una pila activa.
+5. **P2** — red de seguridad para todo lo que venga.
+6. **P8** — publicar decidiendo PR a PR, lo que `--open` no permite.
+7. **P21 + P22** — base rota, tamaño y conflictos de cada capa; ya llega casi todo en la
    consulta que se hace hoy.
-6. **P25** — ver el diff de una capa sola, que es el sentido de trabajar con pilas.
-7. **P10 + P29** — moverse por la pila sin abrir la ventana.
-8. **P9** — merge de la pila.
+8. **P25** — ver el diff de una capa sola, que es el sentido de trabajar con pilas.
+9. **P10 + P29** — moverse por la pila sin abrir la ventana.
+10. **P9** — merge de la pila.
 
 ---
 
@@ -75,9 +82,13 @@ en `docs/` (crear pila, dos capas, publicar como drafts, listo por PR, labels,
 refresco de la lista). El resultado de cada paso se copia al README. Lo que falle entra
 como `C` o como `P`.
 
+Primer contacto real (2026-09-30, repositorio `staffMobileApp`): la ventana, el Log y la
+lista de pilas locales funcionaron; el checkout de una pila cuyo PR se había cerrado y
+cuya rama se borró falló. De ahí salió la `0.2.0`.
+
 ### P2 · Tests de flujo con un `gh` falso 🟡
 
-Hoy hay 15 tests de funciones puras (JSON, URLs, comandos). `StackService` —estados,
+Hoy hay 21 tests de funciones puras (JSON, URLs, comandos y los planes de la `0.2.0`). `StackService` —estados,
 reintento con `--remote`, avisos por código de salida, una escritura a la vez— no tiene
 ninguno. `GhCli.locate()` ya da prioridad a la ruta de los ajustes, así que un script
 que apunte los argumentos y conteste con salidas grabadas (códigos 2, 3, 6, 8, 9) sirve
@@ -131,7 +142,11 @@ interactivo:
 - el número de la pila en `view --json`, que `view --short` sí imprime;
 - listar las pilas locales (hoy se lee `.git/gh-stack`, ver P7);
 - `isDraft` en el JSON;
-- reordenar, insertar, renombrar o plegar capas sin la interfaz de `gh stack modify`.
+- reordenar, insertar, renombrar o plegar capas sin la interfaz de `gh stack modify`;
+- olvidar una pila local cuyas ramas ya no existen: `unstack --local` solo actúa sobre la
+  pila de la rama actual o sobre un número de pila de GitHub, y una pila de un solo PR no
+  lo tiene. La `0.2.0` lo resuelve con cinco comandos (`StackPlans.forget`); un
+  `gh stack unstack --local <rama>` los sustituiría.
 
 Primera entrega: abrir issues (o PRs pequeños) en `github/gh-stack` con cada caso y el uso
 concreto en un IDE. Se apunta aquí qué se aceptó para quitar los rodeos del plugin.
@@ -139,8 +154,10 @@ concreto en un IDE. Se apunta aquí qué se aceptó para quitar los rodeos del p
 ### P7 · El estado interno de gh-stack, solo como último recurso 🟡
 
 `StackService.localStacks` lee `.git/gh-stack` para listar pilas cuando la rama actual no
-está en ninguna. Es estado interno de gh-stack: se lee solo el esquema 1, sin escribirlo
-nunca, pero puede cambiar en cualquier versión.
+está en ninguna y, desde la `0.2.0`, para saber cuáles se quedaron sin ramas y cuál era
+el último commit de cada una (`head`), que es lo que permite recuperarlas. Es estado
+interno de gh-stack: se lee solo el esquema 1, sin escribirlo nunca, pero puede cambiar en
+cualquier versión.
 
 Primera entrega: aislar esa lectura en una clase con un test por versión conocida de
 gh-stack y un aviso en el Log si el esquema es otro. Se sustituye en cuanto P6 consiga un
@@ -225,13 +242,28 @@ Primera entrega: un diálogo con los PRs abiertos (`gh pr list --json`), elegido
 ordenados de abajo arriba, con la base opcional. También *Add to Stack…* desde el menú de
 Pull Requests, con la misma clave de URL que ya se usa.
 
-### P15 · Deshacer una pila 🟡
+### P15 · Cerrar una pila entera: la pila, sus PRs y sus ramas 🟡
 
-`gh stack unstack` deshace la pila en GitHub y en local; con `--local`, solo deja de
-seguirla en local. No hay forma de hacerlo desde el plugin.
+Lo que hay, leído del código de gh-stack v0.1.1 y de `gh`:
 
-Primera entrega: *Unstack…* con las dos opciones explicadas y confirmación. Hay que
-avisar de que GitHub deja apiladas las PRs en cola o con auto-merge.
+- `gh stack unstack` deshace la pila en GitHub y deja de seguirla en local; con `--local`,
+  solo lo segundo. **No cierra PRs ni borra ramas.** GitHub deja apiladas las PRs en cola
+  o con auto-merge.
+- Un PR **no se puede borrar** en GitHub, solo cerrar: `gh pr close <url> --comment …
+  --delete-branch`, que además borra la rama local y la remota. Se puede reabrir mientras
+  la rama exista (o se restaure desde el PR).
+- **El orden importa.** Si se borran las ramas antes de deshacer la pila, gh-stack la
+  sigue registrando sin ramas: es exactamente lo que pasó con el PR #1020 y lo que la
+  `0.2.0` tiene que limpiar después. Y cerrando de abajo arriba, las capas de encima se
+  quedan con un PR cuya base desaparece.
+- Las capas fusionadas se limpian con `gh stack sync --prune`.
+
+Primera entrega: *Close Stack…* con casillas —deshacer la pila en GitHub, cerrar los PRs
+abiertos (con comentario opcional), borrar ramas remotas, borrar ramas locales— y la lista
+de cada PR y rama que se va a tocar. Se ejecuta en orden seguro: `unstack` primero, con
+las ramas aún vivas, y después `gh pr close` de la cima hacia abajo. Confirmación
+obligatoria y todo en el Log. Cerrar una sola capa de la cima entra aquí; una intermedia
+necesita reestructurar la pila (P16).
 
 ### P16 · Reordenar, insertar, renombrar y plegar capas 🟡
 
@@ -289,7 +321,8 @@ plantilla y deja editar el resultado.
 
 La consulta GraphQL ya trae `baseRefName` y no se usa. Si la base de un PR no es la capa
 de debajo (`StackSnapshot.parentOf`), la pila en GitHub está rota: alguien cambió la base
-a mano o un merge la movió.
+a mano o un merge la movió. Caso real visto: una pila local con base `main` cuyo PR
+apuntaba a `dev`.
 
 Primera entrega: una pastilla *Base mismatch* en la capa, con el detalle en el tooltip, y
 *Fix* que ejecuta `gh stack submit --auto` (actualiza las bases). Sale casi gratis.
@@ -484,6 +517,34 @@ el Log.
 
 ---
 
+## Ronda del 2026-09-30 (segunda) · Lo que enseñó la `0.2.0`
+
+### P43 · Pilas y worktrees de git 🟡
+
+Al probar la `0.2.0` se vio que gh-stack guarda su estado en el directorio git **del
+worktree** (`.git/worktrees/<nombre>/`), no en el del repositorio: desde un worktree no se
+ven las pilas del checkout principal, ni al revés. El plugin lee `.git/gh-stack` del
+checkout donde está abierto el proyecto, así que en un worktree la lista de pilas locales
+sale vacía o distinta.
+
+Primera entrega: comprobarlo con los comandos de escritura (init, add, submit) desde un
+worktree, documentar el comportamiento en el README y hacer que el plugin lea el fichero
+del mismo directorio git que usa gh-stack (`git rev-parse --git-dir`). Si hace falta
+compartir pilas entre worktrees, pasa a P6.
+
+### P44 · Una capa cuya rama desaparece dentro de una pila activa 🟡
+
+La `0.2.0` resuelve la pila a la que no le queda ninguna rama. Queda el caso a medias:
+se cierra el PR de una capa y se borra su rama, pero las demás siguen. No se ha visto
+todavía qué devuelve `gh stack view --json` con una capa sin rama, ni si `sync` o
+`rebase` la saltan.
+
+Primera entrega: probarlo sobre una copia y pintar esa capa como *Branch deleted*, con
+*Remove From Stack* (lo que permita gh-stack, o `modify` en la terminal, P16) y
+*Restore Branch*, que la recrea en su último commit conocido, igual que la `0.2.0`.
+
+---
+
 ## Cambios pequeños a lo que ya existe (`0.1.x`)
 
 Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
@@ -496,3 +557,4 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 | 🟡 C4 | `StackRow.Layer.position` no se usa: enseñar `2/3` en el tooltip o en la fila | `StackRows` |
 | 🟡 C5 | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra | `StackPanel.renderBanners` |
 | 🟡 C6 | La página de ajustes está en *Tools*; encaja mejor en *Version Control* | `plugin.xml` |
+| ✅ C7 | La caché de build de Gradle devolvía clases de test compiladas contra firmas viejas (fallos falsos, incluso tras `clean`): desactivada `0.2.0` | `gradle.properties` |

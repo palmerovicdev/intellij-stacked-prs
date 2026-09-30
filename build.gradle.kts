@@ -79,6 +79,22 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.2.0 &mdash; stacks whose branches are gone</h3>
+            <ul>
+              <li>Local stacks whose branches were deleted (closing the PR, by hand) are marked
+                <i>Branches deleted</i> instead of failing on checkout.</li>
+              <li><b>Forget Stack</b> stops tracking such a stack locally without touching GitHub or
+                your working tree; <b>Recreate on Another Base</b> starts the same layers again on
+                any base, restoring their last commits.</li>
+              <li>New Stack detects layer names still held by a stack without branches and cleans it
+                up first; names taken by an active stack are rejected before running anything.</li>
+              <li>New Stack shows the resulting stack as a graph, with the base grouped by local and
+                remote-only branches.</li>
+              <li>Remote-only stacks are fetched with <code>gh stack checkout</code>; local ones use the
+                IDE checkout.</li>
+              <li>Fixed: repositories whose remote uses an SSH alias
+                (<code>git@github-personal:org/repo</code>) are now matched to their pull requests.</li>
+            </ul>
             <h3>0.1.0</h3>
             <ul>
               <li>Stacks tool window: layers, pull requests, draft/ready state, labels, review and CI.</li>

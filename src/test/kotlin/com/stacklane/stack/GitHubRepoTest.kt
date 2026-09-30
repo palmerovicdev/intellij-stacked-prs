@@ -1,6 +1,7 @@
 package com.stacklane.stack
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +27,15 @@ class GitHubRepoTest {
         assertEquals(shop, GitHubRepo.fromPullRequestUrl("https://github.com/acme/shop/pull/42"))
         assertEquals(42, GitHubRepo.pullRequestNumber("https://github.com/acme/shop/pull/42/files"))
         assertNull(GitHubRepo.pullRequestNumber("https://github.com/acme/shop/issues/42"))
+    }
+
+    @Test
+    fun `an ssh alias from ~ssh-config matches the real host by owner and name`() {
+        val alias = GitHubRepo.fromRemoteUrl("git@github-personal:boostibeauty-lab/staffMobileApp.git")!!
+        assertEquals("github-personal", alias.host)
+        assertTrue(alias.isSshAlias)
+        assertTrue(alias.sameAs(GitHubRepo("github.com", "boostibeauty-lab", "staffMobileApp")))
+        assertFalse(GitHubRepo("github.com", "a", "b").sameAs(GitHubRepo("ghe.acme.io", "a", "b")))
     }
 
     @Test

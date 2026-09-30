@@ -116,6 +116,13 @@ class StackJsonTest {
                "branches":[{"branch":"feat/a","base":"6ef805d5"},{"branch":"feat/b","base":"d36d7ca0"}]}]}
         """.trimIndent()
         assertEquals(listOf(LocalStack("main", listOf("feat/a", "feat/b"))), StackJson.parseLocalStacks(file))
+        // Tras publicar, gh-stack guarda tambien el ultimo commit de cada rama (fichero real).
+        val published = """
+            {"schemaVersion":1,"repository":"","stacks":[{"trunk":{"branch":"main","head":"c5dbe3db"},
+             "branches":[{"branch":"feat/website-editor","head":"488d11fa","base":"a019ddbf",
+                          "pullRequest":{"number":1020,"url":"https://github.com/boostibeauty-lab/staffMobileApp/pull/1020"}}]}]}
+        """.trimIndent()
+        assertEquals(mapOf("feat/website-editor" to "488d11fa"), StackJson.parseLocalStacks(published).single().heads)
         assertTrue(StackJson.parseLocalStacks(file.replace("\"schemaVersion\":1", "\"schemaVersion\":2")).isEmpty())
         assertTrue(StackJson.parseLocalStacks("not json").isEmpty())
     }

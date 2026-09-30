@@ -17,6 +17,9 @@ puede alternar entre IDE y terminal en cualquier momento.
 - Menú de cada capa: checkout, abrir o copiar el PR, **marcar listo / volver a draft**,
   **labels…** y **marcar como capa final** (`stack-final`).
 - Aviso de rebase parado con *Resolver conflictos*, *Continuar* y *Abortar*.
+- **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
+  *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
+  último commit de cada rama. *New Stack* también limpia antes los nombres que retienen.
 - Pestaña **Log** con cada comando ejecutado y su salida.
 
 **Menú “Stack” en la ventana Pull Requests** de IntelliJ (lista y detalle): listo / draft,
@@ -82,7 +85,7 @@ Todo corre contra la IDEA instalada en `/Applications/IntelliJ IDEA.app` (2026.2
 ./gradlew test                  # tests unitarios
 ./gradlew verifyPlugin          # Plugin Verifier estricto contra la IDEA local
 ./gradlew runIde -PrunIdeProject=/ruta/a/un/repo   # IDE de prueba con ese proyecto
-./gradlew buildPlugin           # build/distributions/stacklane-0.1.0.zip
+./gradlew buildPlugin           # build/distributions/stacklane-<versión>.zip
 ```
 
 Para probarlo en el IDE de trabajo: *Settings → Plugins → ⚙ → Install Plugin from Disk…* y
@@ -107,7 +110,7 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 15 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 21 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - En el IDE de prueba con un repositorio de demo: la ventana pinta la pila y las acciones
   se abren. Salieron dos fallos, ya corregidos: una llamada de Git4Idea prohibida en el EDT
   y los radio buttons del diálogo de nueva capa.
@@ -135,8 +138,18 @@ del VFS y de Git4Idea al terminar.
   `git checkout -b`), salvo cuando se adopta una rama suelta como primera capa. Si estás
   en una capa de otra pila, primero se hace checkout de su base, porque gh-stack no deja
   empezar una pila desde una capa.
+- **Olvidar una pila sin ramas** sin tocar nada más. gh-stack 0.1.1 solo deja de seguir
+  una pila desde una de sus ramas o por su número en GitHub, que una pila de un solo PR no
+  tiene. El plugin recrea una de sus ramas **en el commit actual**, cambia a ella (mismo
+  commit: no cambia ningún fichero ni se pierden cambios locales), ejecuta
+  `gh stack unstack --local`, vuelve y la borra. Si algo falla a medias, deshace solo lo que
+  hizo. Todo aparece en el Log y en la vista previa del diálogo.
 - **Checkout** con el de Git4Idea (smart checkout y diálogo de cambios locales), no con
   `gh stack checkout`, salvo al traer una pila que solo existe en GitHub.
+
+## Versiones
+
+Versión actual: **0.2.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 
