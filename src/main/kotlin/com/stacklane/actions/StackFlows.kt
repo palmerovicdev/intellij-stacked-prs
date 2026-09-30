@@ -387,12 +387,7 @@ internal object StackFlows {
                 return@launch
             }
 
-            val others = target.selection?.state?.let { stack ->
-                stack.snapshot.layers.filter { layer ->
-                    val pr = layer.pr
-                    pr != null && pr.number != target.number && stack.detailsOf(layer)?.hasLabel(label) == true
-                }
-            }.orEmpty()
+            val others = otherFinalLayers(target, label)
             val calls = listOf(GhCall(GhCommands.editLabels(target.url, listOf(label), emptyList()))) +
                 others.map { GhCall(GhCommands.editLabels(urlOf(it, target.github), emptyList(), listOf(label))) }
             val success = if (others.isEmpty()) message("op.final.added", label, target.number)
@@ -412,6 +407,14 @@ internal object StackFlows {
             })
         }
     }
+
+    /** Las otras capas de la pila con la label de capa final: al ponerla en [target], se les quita. */
+    fun otherFinalLayers(target: PrTarget, label: String): List<StackLayer> = target.selection?.state?.let { stack ->
+        stack.snapshot.layers.filter { layer ->
+            val pr = layer.pr
+            pr != null && pr.number != target.number && stack.detailsOf(layer)?.hasLabel(label) == true
+        }
+    }.orEmpty()
 
     fun checkoutFromPullRequest(project: Project, target: PrTarget) {
         val repository = StackService.getInstance(project).repositoryFor(target.github)
@@ -450,7 +453,7 @@ internal object StackFlows {
         (target.selection?.state?.repo?.root ?: service.repositoryFor(target.github)?.root ?: service.repository()?.root)
             ?.toNioPath() ?: Path.of(System.getProperty("user.home"))
 
-    private fun urlOf(layer: StackLayer, github: GitHubRepo): String {
+    fun urlOf(layer: StackLayer, github: GitHubRepo): String {
         val pr = requireNotNull(layer.pr)
         return pr.url.ifEmpty { "https://${github.host}/${github.owner}/${github.name}/pull/${pr.number}" }
     }

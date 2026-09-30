@@ -14,7 +14,10 @@ internal object RemoteChooser {
     fun choose(project: Project, repository: GitRepository): String? {
         val names = repository.remotes.map { it.name }.sorted()
         if (names.isEmpty()) return null
-        val combo = ComboBox(names.toTypedArray()).apply { selectedItem = names.firstOrNull { it == "origin" } ?: names.first() }
+        val combo = ComboBox(names.toTypedArray()).apply {
+            selectedItem = names.firstOrNull { it == "origin" } ?: names.first()
+            showHelp(Help(message("help.remote"), listOf("--remote REMOTE")))
+        }
         val dialog = object : DialogWrapper(project) {
             init {
                 title = message("remote.title")

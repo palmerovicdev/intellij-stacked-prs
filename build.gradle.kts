@@ -79,6 +79,15 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.6.0 &mdash; what each option does, and what comes next</h3>
+            <ul>
+              <li>Every toolbar button, menu item, banner button and dialog option explains on hover what it
+                does and the exact command it runs, with the real branch or pull request.</li>
+              <li>A layer's right-click menu holds only that layer's actions. Whole-stack actions (Add Layer,
+                Publish Stack) are in the toolbar and in the right-click outside the rows.</li>
+              <li>After a rebase, a banner offers <b>Push Stack</b> (<code>gh stack push</code>) until the
+                branches are pushed, from the IDE or the terminal.</li>
+            </ul>
             <h3>0.5.0 &mdash; carry a change up without the trunk</h3>
             <ul>
               <li><b>Rebase Upstack</b> (<code>gh stack rebase --upstack --no-trunk</code>) carries a lower

@@ -99,6 +99,14 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
     /** Titulo de la escritura en curso, o null. Nunca hay dos a la vez. */
     val running: StateFlow<String?> = _running.asStateFlow()
 
+    private val _pushPending = MutableStateFlow<Map<VirtualFile, Set<String>>>(emptyMap())
+
+    /**
+     * Por raiz de repositorio, las capas que se rebasaron desde el plugin y aun no se subieron.
+     * La ventana ofrece *Push Stack* mientras alguna siga distinta de su rama remota.
+     */
+    val pushPending: StateFlow<Map<VirtualFile, Set<String>>> = _pushPending.asStateFlow()
+
     val log = StackLog()
 
     // CONFLATED: cien eventos seguidos de git se quedan en un refresco.
@@ -322,6 +330,9 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 }
             }
             if (failure == null) {
+                if (repository != null && operation.calls.any { it.tool == Tool.GH && GhCommands.pushesStack(it.args) }) {
+                    _pushPending.update { it - repository.root }
+                }
                 operation.successMessage?.let { Notifier.info(project, it) }
                 operation.onSuccess?.invoke()
             } else if (operation.onFailure?.invoke(failure) != true) {
@@ -461,8 +472,38 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         )
     )
 
+    /** Tras un rebase, las ramas solo cambiaron en local: lo siguiente es subirlas. */
     private fun rebased(repository: GitRepository) {
+        val layers = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == repository.root }
+            ?.snapshot?.layers?.filter { !it.isMerged }?.map { it.branch }.orEmpty()
+        if (layers.isNotEmpty()) _pushPending.update { it + (repository.root to layers.toSet()) }
         Notifier.info(project, message("op.rebase.done"), Notifier.action(message("action.push.stack")) { push(repository) })
+    }
+
+    /**
+     * Las capas de [state] que se rebasaron aqui y siguen sin subir. Si ya coinciden con su rama
+     * remota (un `gh stack push` en la terminal, por ejemplo) no cuentan.
+     */
+    fun unpushedLayers(state: StackState.Loaded): List<String> {
+        val pending = _pushPending.value[state.repo.root] ?: return emptyList()
+        val repository = repositoryFor(state.repo) ?: return emptyList()
+        return state.snapshot.layers
+            .filter { !it.isMerged && it.branch in pending && differsFromRemote(repository, it.branch) }
+            .map { it.branch }
+    }
+
+    /**
+     * La rama remota es la de seguimiento o, si no la hay, la del mismo nombre (primero en el
+     * remoto elegido). Sin ninguna, no se subio nunca: tambien hay que subirla.
+     */
+    private fun differsFromRemote(repository: GitRepository, branch: String): Boolean {
+        val branches = repository.branches
+        val local = branches.findLocalBranch(branch) ?: return false
+        val preferred = preferredRemote(repository) ?: "origin"
+        val remote = repository.getBranchTrackInfo(branch)?.remoteBranch
+            ?: branches.remoteBranches.filter { it.nameForRemoteOperations == branch }.minByOrNull { if (it.remote.name == preferred) 0 else 1 }
+            ?: return true
+        return branches.getHash(local) != branches.getHash(remote)
     }
 
     private fun rebaseTitle(scope: RebaseScope): @Nls String = when (scope) {

@@ -81,6 +81,9 @@ object GhCommands {
 
     fun top(): List<String> = listOf("stack", "top")
 
+    /** Sube las ramas de la pila al remoto: tras uno de estos no queda nada rebasado sin subir. */
+    fun pushesStack(args: List<String>): Boolean = args.take(2).let { it == push() || it == sync() || it == listOf("stack", "submit") }
+
     /** Deja de seguir en local la pila de la rama actual; GitHub no se toca. */
     fun unstackLocal(): List<String> = listOf("stack", "unstack", "--local")
 

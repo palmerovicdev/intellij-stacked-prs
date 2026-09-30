@@ -228,6 +228,8 @@ internal class InitStackDialog(
         baseCombo.setMinimumAndPreferredWidth(branchesField.preferredSize.width)
         ComboboxSpeedSearch.installSpeedSearch(baseCombo) { it.branch ?: message("init.base.default") }
         baseCombo.selectedItem = options.firstOrNull { it.branch == baseSuggestion } ?: options.first()
+        baseCombo.showHelp(Help(message("help.init.base"), listOf("--base BASE")))
+        restoreBox.showHelp(Help(message("help.init.restore"), listOf("git branch BRANCH COMMIT")))
         branchesField.onChange(::updatePreview)
         baseCombo.addActionListener { updatePreview() }
         restoreBox.addActionListener { updatePreview() }
@@ -426,6 +428,10 @@ internal class AddLayerDialog(
         messageField.onChange(::update)
         commitBox.addActionListener { update() }
         listOf(stagingAll, stagingTracked, stagingStaged).forEach { it.addActionListener { update() } }
+        commitBox.showHelp(Help(message("help.add.commit"), listOf("gh stack add -m MESSAGE BRANCH")))
+        stagingAll.showHelp(Help(message("help.add.staging.all"), listOfNotNull(Staging.ALL.flag)))
+        stagingTracked.showHelp(Help(message("help.add.staging.tracked"), listOfNotNull(Staging.TRACKED.flag)))
+        stagingStaged.showHelp(Help(message("help.add.staging.staged"), listOfNotNull(Staging.STAGED.flag)))
         init()
         update()
     }

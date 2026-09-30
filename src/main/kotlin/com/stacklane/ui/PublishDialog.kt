@@ -20,6 +20,7 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.NamedColorUtil
 import com.stacklane.StacklaneBundle.message
+import com.stacklane.gh.GhCommands
 import com.stacklane.stack.GitHubRepo
 import com.stacklane.stack.PrRef
 import com.stacklane.stack.PrText
@@ -69,6 +70,7 @@ internal class PublishDialog(
         title = message("publish.title")
         setOKButtonText(message("publish.ok"))
         rows.forEach { it.onChange(::update) }
+        rows.forEach { it.readyBox.showHelp(readyHelp(it)) }
         init()
         update()
     }
@@ -80,8 +82,8 @@ internal class PublishDialog(
         row { cell(WrappingText(message("publish.intro"))).align(AlignX.FILL).resizableColumn() }
         if (rows.count { it.choosable } > 1) {
             row {
-                cell(ActionLink(message("publish.all.ready")) { setAll(true) })
-                cell(ActionLink(message("publish.all.drafts")) { setAll(false) })
+                cell(ActionLink(message("publish.all.ready")) { setAll(true) }.apply { showHelp(Help(message("help.publish.all.ready"))) })
+                cell(ActionLink(message("publish.all.drafts")) { setAll(false) }.apply { showHelp(Help(message("help.publish.all.drafts"))) })
             }
         }
         row {
@@ -109,6 +111,13 @@ internal class PublishDialog(
     private fun urlOf(pr: PrRef): String =
         pr.url.ifEmpty { github?.let { "https://${it.host}/${it.owner}/${it.name}/pull/${pr.number}" } ?: pr.number.toString() }
 
+    /** Lo que ejecuta la casilla: la de una capa nueva, marcarla lista; la de un PR que ya existe, en los dos sentidos. */
+    private fun readyHelp(row: LayerRow): Help {
+        val url = row.prUrl
+        return if (url == null) Help(message("help.publish.ready.new"), listOf(Help.gh(GhCommands.markReady(row.layer.branch, github))))
+        else Help(message("help.publish.ready.existing"), listOf(Help.gh(GhCommands.markReady(url)), Help.gh(GhCommands.markDraft(url))))
+    }
+
     private fun setAll(ready: Boolean) {
         rows.filter { it.choosable }.forEach { it.readyBox.isSelected = ready }
     }
@@ -126,7 +135,7 @@ internal class PublishDialog(
         val layer: StackLayer,
         private val status: LayerStatus,
         private val prTitle: String?,
-        private val prUrl: String?,
+        val prUrl: String?,
         proposal: PrText?,
     ) {
 

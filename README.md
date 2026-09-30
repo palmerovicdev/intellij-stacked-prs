@@ -15,14 +15,20 @@ puede alternar entre IDE y terminal en cualquier momento.
 - Barra: refrescar, **nueva pila**, **añadir capa encima**, **publicar como drafts**,
   **publicar listos para revisión**, **sync**, **rebase** (desplegable: upstack desde la
   capa actual, pila entera, downstack y capas entre sí) y ajustes.
-- Menú de cada capa: checkout, abrir o copiar el PR, **rebase upstack desde aquí**,
-  **marcar listo / volver a draft**, **labels…** y **marcar como capa final** (`stack-final`).
+- Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. Checkout, abrir o
+  copiar el PR, **rebase upstack desde aquí**, **marcar listo / volver a draft**,
+  **labels…** y **marcar como capa final** (`stack-final`). Clic derecho fuera de las filas
+  o sobre la base: lo de toda la pila (añadir capa y publicar).
+- **Cada opción explica lo que hace y el comando que ejecuta** al pasar el ratón: barra,
+  menús, botones de las bandas y opciones de los diálogos. Los comandos llevan los datos
+  reales (rama, URL del PR); los enlaces de la ventana vacía lo enseñan debajo, en gris.
 - **Rebase upstack**: tras cambiar una capa intermedia, lleva sus commits a las de encima
   sin fetch y sin tocar el trunk, así que solo salen los conflictos de ese cambio. Se ofrece
   al commitear desde el IDE en una capa que no es la cima (o se hace siempre, según los
   ajustes) y en la banda *needs rebase*, que distingue una capa atrasada (upstack) de la
   capa de abajo atrás del trunk (rebase de toda la pila).
-- Al terminar un rebase, **Push Stack**. El primer rebase de cada repositorio pregunta si
+- Al terminar un rebase, una banda ofrece **Push Stack** hasta que las ramas se suben (desde
+  el plugin o desde la terminal). El primer rebase de cada repositorio pregunta si
   activar **git rerere**, como gh-stack en la terminal, y guarda la respuesta en las mismas
   claves.
 - Aviso de rebase parado con *Resolver conflictos*, *Continuar* y *Abortar*.
@@ -158,8 +164,12 @@ del VFS y de Git4Idea al terminar.
   crearla.
 - **Publicar listos pide confirmación** y enseña qué PRs cambian. La opción *Publish as
   Drafts* queda en el mismo diálogo. Para elegir PR a PR está *Publish Stack…*.
-- **Las acciones de toda la pila dicen *Stack*** también en el menú de una capa: ahí no
-  actúan sobre esa capa sino sobre la pila entera.
+- **El menú de una capa solo tiene acciones de esa capa.** Las de toda la pila dicen
+  *Stack* y están en la barra y en el clic derecho fuera de las filas. gh-stack no publica
+  una capa suelta (`gh stack submit` sube todas), así que no hay un *Publish* por capa.
+- **Menús de lista, no `JPopupMenu`**, para que cada opción enseñe su tooltip. El menú
+  *Stack* de Pull Requests es del plugin GitHub: ahí la explicación y el comando solo salen
+  en la barra de estado.
 - **Varios remotos**: si gh-stack no sabe cuál usar, se pregunta una vez y se recuerda por
   proyecto.
 - **La base de una pila nueva es libre.** Se propone la rama actual (como

@@ -3,6 +3,28 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.6.0 — Qué hace cada opción y qué es lo siguiente
+
+Salió de usar el menú de una capa: no se sabía qué hacía cada opción ni si actuaba sobre la
+capa o sobre toda la pila, y tras un rebase el *Push Stack* se perdía con la notificación.
+
+- **Cada opción explica qué hace y el comando que ejecuta** al pasar el ratón: barra,
+  desplegable *Rebase*, menú de clic derecho, botones de las bandas y opciones de los
+  diálogos. El comando lleva los datos reales (`gh pr ready <url>`, `git checkout <rama>`) y
+  sale de los mismos `GhCommands` que se ejecutan. En la barra, el tooltip enseñaba solo el
+  nombre.
+- La lista vacía enseña en gris, debajo de cada enlace, el comando que ejecuta.
+- Los botones de notificaciones y de diálogos sí/no no admiten tooltip: el comando va en el
+  texto (rerere, *Forget/Recreate*, *Publish Ready*, conflictos, label final que falta).
+- **El menú de una capa solo tiene lo de esa capa**, sin *Stack* en el nombre. *Add Layer on
+  Top of Stack…* y los tres *Publish Stack* salen al hacer clic derecho fuera de las filas o
+  sobre la base, y en la barra. gh-stack no publica una capa suelta.
+- **Tras un rebase, una banda azul ofrece *Push Stack*** con las capas que cambiaron solo en
+  local. Se va sola al subirlas (push, sync o publish) o cuando cada rama coincide con su
+  remota, también tras un push desde la terminal.
+- El clic derecho es un menú de lista (hace falta para los tooltips). En el menú *Stack* de
+  Pull Requests, que es del plugin GitHub, la explicación solo sale en la barra de estado.
+
 ## 0.5.0 — Llevar un cambio hacia arriba sin traer el trunk
 
 Salió de usar el plugin: tras arreglar algo en una capa intermedia, *Rebase Stack* ejecutaba

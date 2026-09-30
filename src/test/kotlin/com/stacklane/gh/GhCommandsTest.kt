@@ -2,6 +2,7 @@ package com.stacklane.gh
 
 import com.stacklane.stack.GitHubRepo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -75,6 +76,14 @@ class GhCommandsTest {
         assertEquals(1, Regex("pr12:").findAll(query).count())
         assertTrue(args.containsAll(listOf("--hostname", "github.com", "owner=acme", "name=shop")))
         assertTrue(GhCommands.display(args).endsWith("query='…'"))
+    }
+
+    @Test
+    fun `only push, sync and submit leave nothing rebased to push`() {
+        listOf(GhCommands.push(), GhCommands.sync(), GhCommands.submit(ready = false), GhCommands.submit(ready = true))
+            .forEach { assertTrue(GhCommands.display(it), GhCommands.pushesStack(it)) }
+        listOf(GhCommands.rebase(), GhCommands.rebase(RebaseScope.UPSTACK), GhCommands.rebaseContinue(), GhCommands.view(), GhCommands.top())
+            .forEach { assertFalse(GhCommands.display(it), GhCommands.pushesStack(it)) }
     }
 
     @Test

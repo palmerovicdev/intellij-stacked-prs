@@ -1,6 +1,7 @@
 package com.stacklane.ui
 
 import com.intellij.ide.BrowserUtil
+import com.intellij.ide.DataManager
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
@@ -11,6 +12,7 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.CollectionListModel
@@ -22,17 +24,20 @@ import com.intellij.ui.ListSpeedSearch
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.StatusText
 import com.intellij.util.ui.UIUtil
 import com.stacklane.StacklaneBundle.message
 import com.stacklane.actions.LayerSelection
 import com.stacklane.actions.StackDataKeys
 import com.stacklane.actions.StackFlows
+import com.stacklane.gh.GhCommands
 import com.stacklane.settings.StacklaneConfigurable
 import com.stacklane.stack.LocalStackEntry
 import com.stacklane.stack.StackService
@@ -115,12 +120,16 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 
         // El menu es el de la fila bajo el raton, no el de la que estuviera seleccionada: se
         // selecciona antes de abrirlo, y fuera de las filas se quita la seleccion (menu de la pila).
+        // Un popup de lista y no un JPopupMenu: solo asi cada opcion ensena su tooltip.
         list.addMouseListener(object : PopupHandler() {
             override fun invokePopup(comp: Component, x: Int, y: Int) {
                 list.selectAt(Point(x, y))
-                val popup = actions.createActionPopupMenu(POPUP_PLACE, actions.getAction(POPUP_GROUP) as ActionGroup)
-                popup.setTargetComponent(list)
-                popup.component.show(comp, x, y)
+                val popup = JBPopupFactory.getInstance().createActionGroupPopup(
+                    null, actions.getAction(popupGroup()) as ActionGroup, DataManager.getInstance().getDataContext(list),
+                    JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, true, POPUP_PLACE,
+                )
+                // Una pila local que no esta rota no tiene acciones: nada que abrir.
+                if (popup.listStep.values.isEmpty()) Disposer.dispose(popup) else popup.show(RelativePoint(comp, Point(x, y)))
             }
         })
         ListSpeedSearch.installOn(list) { it.searchText }
@@ -147,6 +156,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         }
 
         scope.launch { service.state.collect(::render) }
+        scope.launch { service.pushPending.collect { renderBanners() } }
         scope.launch {
             service.running.collect {
                 running = it
@@ -236,9 +246,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             }
             is StackState.NotInStack -> {
                 summary.add(secondary(message("summary.not.in.stack", current.branch ?: "HEAD")))
-                if (current.localStacks.isNotEmpty()) {
-                    summary.add(ActionLink(message("link.start.stack")) { StackFlows.initStack(project) })
-                }
+                if (current.localStacks.isNotEmpty()) summary.add(startStackLink())
             }
             is StackState.InSeveralStacks -> {
                 val count = current.stacksOfBranch.size
@@ -246,9 +254,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 val text = if (count > 1) message("summary.several.stacks", current.branch, count)
                 else message("summary.several.stacks.unknown", current.branch)
                 summary.add(secondary(text))
-                if (current.localStacks.isNotEmpty()) {
-                    summary.add(ActionLink(message("link.start.stack")) { StackFlows.initStack(project) })
-                }
+                if (current.localStacks.isNotEmpty()) summary.add(startStackLink())
             }
             else -> Unit
         }
@@ -257,6 +263,9 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         summary.repaint()
     }
 
+    private fun startStackLink(): JComponent =
+        ActionLink(message("link.start.stack")) { StackFlows.initStack(project) }.apply { showHelp(Helps.initStack()) }
+
     private fun renderBanners() {
         banners.removeAll()
         val current = state
@@ -264,19 +273,22 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         if (repo?.stackRebaseInProgress == true) {
             banners.add(
                 banner(message("banner.rebase"), EditorNotificationPanel.Status.Warning)
-                    .addAction(message("action.resolve.conflicts")) { service.resolveConflicts() }
-                    .addAction(message("action.rebase.continue")) { service.continueRebase() }
-                    .addAction(message("action.rebase.abort")) { service.abortRebase() }
+                    .withAction(message("action.resolve.conflicts"), Helps.resolveConflicts()) { service.resolveConflicts() }
+                    .withAction(message("action.rebase.continue"), Helps.continueRebase()) { service.continueRebase() }
+                    .withAction(message("action.rebase.abort"), Helps.abortRebase()) { service.abortRebase() }
             )
         }
         if (current is StackState.Loaded) {
             current.detailsError?.let { error ->
                 banners.add(
                     banner(message("banner.details.error", error), EditorNotificationPanel.Status.Warning)
-                        .addAction(message("action.retry")) { service.requestRefresh() }
+                        .withAction(message("action.retry"), Helps.refresh()) { service.requestRefresh() }
                 )
             }
-            if (!current.repo.stackRebaseInProgress) renderNeedsRebase(current)
+            if (!current.repo.stackRebaseInProgress) {
+                renderNeedsRebase(current)
+                renderPushPending(current)
+            }
         }
         if (current !is StackState.Loaded || current.snapshot.upstackStart == null || current.repo.stackRebaseInProgress) {
             hideUpstackTip()
@@ -304,11 +316,24 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         val banner = banner(text, EditorNotificationPanel.Status.Info)
         val start = snapshot.upstackStart
         if (start != null) {
-            banner.addAction(message("action.rebase.upstack.from", start.branch)) { StackFlows.rebaseUpstack(project, start.branch) }
+            banner.withAction(message("action.rebase.upstack.from", start.branch), Helps.rebaseUpstackFrom(snapshot, start.branch)) {
+                StackFlows.rebaseUpstack(project, start.branch)
+            }
         }
-        banner.addAction(message("action.rebase.stack.onto", snapshot.trunk)) { service.rebase() }
+        banner.withAction(message("action.rebase.stack.onto", snapshot.trunk), Helps.rebaseStack()) { service.rebase() }
         banners.add(banner)
         if (start != null) showUpstackTip(snapshot.trunk)
+    }
+
+    /** Tras un rebase las ramas solo cambiaron en local: el siguiente paso, subirlas, queda aqui. */
+    private fun renderPushPending(state: StackState.Loaded) {
+        val layers = service.unpushedLayers(state)
+        if (layers.isEmpty()) return
+        val repository = service.repositoryFor(state.repo) ?: return
+        banners.add(
+            banner(message("banner.push", layers.joinToString(", ")), EditorNotificationPanel.Status.Info)
+                .withAction(message("action.push.stack"), Helps.push()) { service.push(repository) }
+        )
     }
 
     /** La primera vez que se ofrece un rebase upstack, que es y en que se diferencia del completo. */
@@ -342,32 +367,22 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             }
             StackState.ExtensionMissing -> {
                 text.appendLine(message("state.extension.missing"))
-                text.appendLine(message("link.install.extension"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                text.appendLink(message("link.install.extension"), Helps.installExtension().commands.single()) {
                     StackFlows.installExtension(project)
                 }
             }
             is StackState.NotInStack -> {
                 text.appendLine(message("state.not.in.stack", current.branch ?: "HEAD"))
-                text.appendLine(message("link.start.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    StackFlows.initStack(project)
-                }
-                text.appendLine(message("link.checkout.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    StackFlows.checkoutStackByInput(project)
-                }
+                appendStartOrCheckout(text)
             }
             // Solo si no se pudo leer `.git/gh-stack`: con pilas, la lista no esta vacia.
             is StackState.InSeveralStacks -> {
                 text.appendLine(message("state.several.stacks", current.branch))
-                text.appendLine(message("link.start.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    StackFlows.initStack(project)
-                }
-                text.appendLine(message("link.checkout.stack"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    StackFlows.checkoutStackByInput(project)
-                }
+                appendStartOrCheckout(text)
             }
             is StackState.Failed -> {
                 text.appendLine(current.message.lineSequence().firstOrNull { it.isNotBlank() } ?: message("state.failed"))
-                text.appendLine(message("action.retry"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
+                text.appendLink(message("action.retry"), Help.gh(GhCommands.view())) {
                     service.requestRefresh()
                 }
                 text.appendLine(message("notification.show.log"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
@@ -378,12 +393,34 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         }
     }
 
+    private fun appendStartOrCheckout(text: StatusText) {
+        text.appendLink(message("link.start.stack"), Helps.initStack().commands.single()) { StackFlows.initStack(project) }
+        text.appendLink(message("link.checkout.stack"), Helps.checkoutStack().commands.single()) { StackFlows.checkoutStackByInput(project) }
+    }
+
     private fun banner(text: String, status: EditorNotificationPanel.Status): InlineBanner =
         InlineBanner(text, status).showCloseButton(false).apply { alignmentX = Component.LEFT_ALIGNMENT }
+
+    /** Un boton de la banda con su ayuda al pasar el raton. */
+    private fun InlineBanner.withAction(text: String, help: Help, action: () -> Unit): InlineBanner = apply {
+        addAction(text, null, action).showHelp(help)
+    }
+
+    /** Un enlace de la lista vacia y, debajo y en gris, el comando que ejecuta. */
+    private fun StatusText.appendLink(text: String, command: String, action: () -> Unit) {
+        appendLine(text, SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) { action() }
+        appendLine(command, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES, null)
+    }
 
     private fun secondary(text: String): JComponent = JBLabel(text).apply { foreground = UIUtil.getContextHelpForeground() }
 
     // ---------------------------------------------------------------- acciones de la lista
+
+    /** Sobre una capa o una pila local, lo suyo; fuera de las filas o sobre la base, la pila entera. */
+    private fun popupGroup(): String = when (list.selectedValue) {
+        is StackRow.Layer, is StackRow.Local -> LAYER_POPUP_GROUP
+        is StackRow.Trunk, null -> STACK_POPUP_GROUP
+    }
 
     private fun activateSelection() {
         val repository = state.repo?.let(service::repositoryFor) ?: return
@@ -413,7 +450,8 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     private companion object {
         const val TOOLBAR_GROUP = "Stacklane.Toolbar"
         const val TOOLBAR_PLACE = "StacklaneToolbar"
-        const val POPUP_GROUP = "Stacklane.Layer.Popup"
+        const val LAYER_POPUP_GROUP = "Stacklane.Layer.Popup"
+        const val STACK_POPUP_GROUP = "Stacklane.Stack.Popup"
         const val POPUP_PLACE = "StacklaneLayerPopup"
         const val GH_INSTALL_URL = "https://cli.github.com"
         const val UPSTACK_TIP_ID = "stacklane.rebase.upstack"

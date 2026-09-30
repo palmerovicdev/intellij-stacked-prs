@@ -23,11 +23,14 @@
                 above without fetching or rebasing onto the trunk
                 (<code>gh stack rebase --upstack --no-trunk</code>), offered right after the commit,
                 from the <i>needs rebase</i> banner and from each layer. Then push the rebased
-                branches in one click (<code>gh stack push</code>). The first rebase asks whether to
+                branches in one click from the banner that stays until they are pushed
+                (<code>gh stack push</code>). The first rebase asks whether to
                 turn on <code>git rerere</code>, as gh stack does in the terminal.</li>
             <li><b>Labels</b>, <b>ready / draft</b> and a <b>final-layer label</b>
                 (<code>stack-final</code> by default) from the stack and from the
                 <i>Pull Requests</i> tool window menus.</li>
+            <li>Every button, menu item and dialog option explains on hover what it does and the
+                exact command it runs.</li>
             <li>A <b>Log</b> tab with every command and its output.</li>
         </ul>
         <p>Requires the <a href="https://cli.github.com">GitHub CLI</a>, signed in with
@@ -93,6 +96,8 @@
         <action id="Stacklane.EditLabels" class="com.stacklane.actions.EditLabelsAction"/>
         <action id="Stacklane.ToggleFinal" class="com.stacklane.actions.ToggleFinalAction"/>
 
+        <!-- Clic derecho sobre una fila: solo lo de esa capa (o esa pila local), nada con «Stack».
+             Lo de la pila entera esta en Stacklane.Stack.Popup, fuera de las filas. -->
         <group id="Stacklane.Layer.Popup">
             <!-- Solo sobre una pila local cuyas ramas ya no existen. -->
             <action id="Stacklane.RecreateStack" class="com.stacklane.actions.RecreateStackAction"/>
@@ -108,8 +113,10 @@
             <separator/>
             <reference ref="Stacklane.EditLabels"/>
             <reference ref="Stacklane.ToggleFinal"/>
-            <!-- De la pila entera, no de la capa: por eso sus textos dicen «Stack». -->
-            <separator/>
+        </group>
+
+        <!-- Clic derecho fuera de las filas o sobre la base: la pila entera, por eso dicen «Stack». -->
+        <group id="Stacklane.Stack.Popup">
             <reference ref="Stacklane.AddLayer"/>
             <reference ref="Stacklane.Publish"/>
             <reference ref="Stacklane.PublishDraft"/>

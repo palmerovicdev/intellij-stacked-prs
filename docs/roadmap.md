@@ -51,6 +51,9 @@ hecha y el plugin salga al Marketplace (P40).
 | Tras un commit del IDE en una capa intermedia, ofrecer el rebase upstack, o hacerlo siempre (P19) | `0.5.0` |
 | *Push Stack* al terminar un rebase y la pregunta de git rerere que gh-stack solo hace en la terminal (P45, P46) | `0.5.0` |
 | *Got it* que explica el rebase upstack la primera vez (P47) | `0.5.0` |
+| Cada opción explica qué hace y el comando que ejecuta, con sus datos reales (P48) | `0.6.0` |
+| Banda *Push Stack* tras un rebase, hasta que las ramas se suben (P49) | `0.6.0` |
+| Menú de una capa solo con lo de esa capa; lo de la pila, fuera de las filas (C11) | `0.6.0` |
 
 ---
 
@@ -645,6 +648,39 @@ API pública) explica qué hace y cuándo conviene el rebase completo.
 
 ---
 
+## Ronda del 2026-09-30 (cuarta) · Lo que enseñó la `0.5.0`
+
+Salió de usar el menú de una capa: no se sabía qué hacía cada opción ni si actuaba sobre la
+capa o sobre la pila, y tras un rebase el *Push Stack* se perdía con la notificación.
+
+### P48 · Qué hace cada opción y qué comando ejecuta ✅ `0.6.0`
+
+Al pasar el ratón, cada opción dice qué hace y el comando tal cual, con sus datos reales
+(`gh pr ready <url>`, `git checkout <rama>`, la secuencia de *Forget Stack*). Los comandos
+salen de `GhCommands`, los mismos que se ejecutan. Lo que no se sabe hasta ejecutar va en
+mayúsculas (`BRANCH`, `MESSAGE`).
+
+- Barra: las acciones implementan `TooltipDescriptionProvider`; sin eso el tooltip solo
+  enseña el nombre.
+- Menús: `ActionUtil.TOOLTIP_TEXT` en los popups de lista. El clic derecho pasa de
+  `JPopupMenu`, que no enseña tooltips, a `createActionGroupPopup`.
+- Bandas, casillas y enlaces: `toolTipText`. La lista vacía enseña el comando en gris debajo
+  de cada enlace (`StatusText` no tiene tooltip por fragmento).
+- Botones de notificaciones y de diálogos sí/no: sin tooltip posible, el comando va en el
+  texto.
+- La descripción de la acción es texto plano: la barra de estado no entiende HTML.
+
+Queda fuera el menú *Stack* de Pull Requests (un `JPopupMenu` del plugin GitHub): solo
+la barra de estado.
+
+### P49 · El siguiente paso, en la ventana ✅ `0.6.0`
+
+Tras un rebase, una banda azul como la de *needs rebase* dice qué capas cambiaron solo en
+local y ofrece *Push Stack*. Se va sola cuando las sube un push, sync o publish del plugin,
+o cuando cada rama coincide con su remota (push desde la terminal). La notificación sigue.
+
+---
+
 ## Cambios pequeños a lo que ya existe (`0.1.x`)
 
 Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
@@ -658,6 +694,7 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 | ✅ C5 | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra: quitado al rehacer la banda `0.5.0` | `StackPanel.renderBanners` |
 | 🟡 C6 | La página de ajustes está en *Tools*; encaja mejor en *Version Control* | `plugin.xml` |
 | ✅ C7 | La caché de build de Gradle devolvía clases de test compiladas contra firmas viejas (fallos falsos, incluso tras `clean`): desactivada `0.2.0` | `gradle.properties` |
-| ✅ C8 | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0` | `StacklaneBundle` |
+| ✅ C8 | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0`. Superada por C11 | `StacklaneBundle` |
 | ✅ C9 | *Mark Ready*, *Convert to Draft*, *Labels…* y *Mark as Final Layer* no tenían icono `0.4.0` | `Actions` |
 | ✅ C10 | El clic derecho enseñaba el menú de la fila seleccionada, no el de la fila bajo el ratón; fuera de las filas, igual. Ahora selecciona esa fila, o quita la selección `0.4.0` | `StackPanel` |
+| ✅ C11 | Aun diciendo *Stack*, ver *Publish Stack as Drafts* en el menú de una capa sin PR confundía. El menú de una capa solo tiene lo suyo; lo de la pila sale al hacer clic fuera de las filas o sobre la base `0.6.0` | `plugin.xml`, `StackPanel` |
