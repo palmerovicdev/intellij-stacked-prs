@@ -16,6 +16,25 @@ enum class Staging(val flag: String?) {
 
 data class LayerCommit(val message: String, val staging: Staging)
 
+/** Que capas toca `gh stack rebase`. */
+enum class RebaseScope(val flags: List<String>) {
+    /** Trae el trunk y rebasa todas las capas, la de abajo sobre el trunk. */
+    STACK(emptyList()),
+
+    /**
+     * Desde la capa actual hasta la cima, sin fetch ni trunk: lleva a las capas de encima lo
+     * que cambio en una de abajo, y los unicos conflictos posibles son los de ese cambio. Sin
+     * `--no-trunk`, desde la capa de abajo seria un rebase completo sobre el trunk.
+     */
+    UPSTACK(listOf("--upstack", "--no-trunk")),
+
+    /** Desde el trunk hasta la capa actual. */
+    DOWNSTACK(listOf("--downstack")),
+
+    /** Todas las capas, cada una sobre la de debajo, sin fetch ni trunk. */
+    LAYERS(listOf("--no-trunk")),
+}
+
 /**
  * Los comandos que ejecuta el plugin, uno por operacion. Son exactamente los que se
  * escribirian en la terminal, y la pestana Log los muestra asi.
@@ -51,11 +70,14 @@ object GhCommands {
 
     fun sync(): List<String> = listOf("stack", "sync")
 
-    fun rebase(): List<String> = listOf("stack", "rebase")
+    fun rebase(scope: RebaseScope = RebaseScope.STACK): List<String> = listOf("stack", "rebase") + scope.flags
 
     fun rebaseContinue(): List<String> = listOf("stack", "rebase", "--continue")
 
     fun rebaseAbort(): List<String> = listOf("stack", "rebase", "--abort")
+
+    /** Las capas activas al remoto, cada una con `--force-with-lease`. No crea PRs. */
+    fun push(): List<String> = listOf("stack", "push")
 
     fun top(): List<String> = listOf("stack", "top")
 

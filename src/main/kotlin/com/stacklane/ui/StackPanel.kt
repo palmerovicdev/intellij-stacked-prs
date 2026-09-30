@@ -11,10 +11,12 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.DoubleClickListener
 import com.intellij.ui.EditorNotificationPanel
+import com.intellij.ui.GotItTooltip
 import com.intellij.ui.InlineBanner
 import com.intellij.ui.ListSpeedSearch
 import com.intellij.ui.PopupHandler
@@ -76,6 +78,9 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 
     private var state: StackState = StackState.Loading
     private var running: String? = null
+
+    /** El «Got it» del rebase upstack, mientras la banda lo ofrece. */
+    private var upstackTip: GotItTooltip? = null
 
     init {
         val actions = ActionManager.getInstance()
@@ -271,16 +276,53 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                         .addAction(message("action.retry")) { service.requestRefresh() }
                 )
             }
-            if (current.snapshot.layers.any { it.needsRebase } && !repo!!.stackRebaseInProgress) {
-                banners.add(
-                    banner(message("banner.needs.rebase"), EditorNotificationPanel.Status.Info)
-                        .addAction(message("action.rebase.stack")) { service.rebase() }
-                )
-            }
+            if (!current.repo.stackRebaseInProgress) renderNeedsRebase(current)
+        }
+        if (current !is StackState.Loaded || current.snapshot.upstackStart == null || current.repo.stackRebaseInProgress) {
+            hideUpstackTip()
         }
         banners.isVisible = banners.componentCount > 0
         banners.revalidate()
         banners.repaint()
+    }
+
+    /**
+     * Capas que ya no parten de la de debajo. Si es por un cambio en una capa, lo primero que
+     * se ofrece es el rebase upstack, que no trae el trunk; si la de abajo se quedo atras del
+     * trunk, eso solo lo arregla rebasar toda la pila.
+     */
+    private fun renderNeedsRebase(state: StackState.Loaded) {
+        val snapshot = state.snapshot
+        val outdated = snapshot.outdatedLayers
+        val behind = snapshot.bottom?.takeIf { snapshot.behindTrunk }
+        if (outdated.isEmpty() && behind == null) return
+
+        val text = listOfNotNull(
+            outdated.takeIf { it.isNotEmpty() }?.let { layers -> message("banner.outdated", layers.joinToString(", ") { it.branch }) },
+            behind?.let { message("banner.behind.trunk", it.branch, snapshot.trunk) },
+        ).joinToString(" ")
+        val banner = banner(text, EditorNotificationPanel.Status.Info)
+        val start = snapshot.upstackStart
+        if (start != null) {
+            banner.addAction(message("action.rebase.upstack.from", start.branch)) { StackFlows.rebaseUpstack(project, start.branch) }
+        }
+        banner.addAction(message("action.rebase.stack.onto", snapshot.trunk)) { service.rebase() }
+        banners.add(banner)
+        if (start != null) showUpstackTip(snapshot.trunk)
+    }
+
+    /** La primera vez que se ofrece un rebase upstack, que es y en que se diferencia del completo. */
+    private fun showUpstackTip(trunk: String) {
+        if (upstackTip != null) return
+        val tip = GotItTooltip(UPSTACK_TIP_ID, message("tip.upstack.text", trunk), this)
+            .withHeader(message("tip.upstack.header"))
+        upstackTip = tip
+        if (tip.canShow()) tip.show(banners, GotItTooltip.BOTTOM_MIDDLE)
+    }
+
+    private fun hideUpstackTip() {
+        upstackTip?.let(Disposer::dispose)
+        upstackTip = null
     }
 
     private fun renderEmptyText() {
@@ -374,6 +416,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         const val POPUP_GROUP = "Stacklane.Layer.Popup"
         const val POPUP_PLACE = "StacklaneLayerPopup"
         const val GH_INSTALL_URL = "https://cli.github.com"
+        const val UPSTACK_TIP_ID = "stacklane.rebase.upstack"
     }
 }
 

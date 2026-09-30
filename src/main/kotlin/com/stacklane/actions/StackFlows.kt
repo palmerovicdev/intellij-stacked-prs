@@ -272,6 +272,14 @@ internal object StackFlows {
         )
     }
 
+    /** Lleva a las capas de encima lo que cambio en [from] (`gh stack rebase --upstack --no-trunk`). */
+    fun rebaseUpstack(project: Project, from: String) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        service.rebaseUpstackFrom(repository, from)
+    }
+
     /** `gh stack checkout`: si la pila solo existe en GitHub, gh-stack la trae y la registra. */
     fun checkoutStack(project: Project, target: String, repository: GitRepository? = null) {
         StackService.getInstance(project).execute(

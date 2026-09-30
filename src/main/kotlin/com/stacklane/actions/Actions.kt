@@ -4,16 +4,20 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.stacklane.StacklaneBundle.message
+import com.stacklane.gh.RebaseScope
 import com.stacklane.settings.StacklaneConfigurable
 import com.stacklane.settings.StacklaneSettings
 import com.stacklane.stack.LocalStackEntry
 import com.stacklane.stack.PrState
+import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackService
+import com.stacklane.stack.StackSnapshot
 import com.stacklane.stack.StackState
 import com.stacklane.stack.repo
 import java.awt.datatransfer.StringSelection
@@ -102,12 +106,67 @@ internal class SyncAction : ToolbarAction(AllIcons.Actions.CheckOut) {
     }
 }
 
-internal class RebaseAction : ToolbarAction(AllIcons.Vcs.Merge) {
-    override fun isEnabled(state: StackState): Boolean = hasActiveLayers(state)
-    override fun actionPerformed(e: AnActionEvent) {
-        e.project?.let { StackService.getInstance(it).rebase() }
+/** El desplegable *Rebase* de la barra. Cada alcance es una accion (ver [RebaseScopeAction]). */
+internal class RebaseGroup : DefaultActionGroup() {
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+    override fun update(e: AnActionEvent) {
+        val project = e.project
+        val service = project?.getServiceIfCreated(StackService::class.java)
+        val state = service?.state?.value as? StackState.Loaded
+        e.presentation.isEnabled = state != null && service.running.value == null &&
+            !state.repo.stackRebaseInProgress && state.snapshot.layers.any { !it.isMerged }
     }
 }
+
+/**
+ * Un alcance de `gh stack rebase`. Con un rebase parado a medias no se ofrece: gh-stack solo
+ * acepta `--continue` o `--abort`. El texto nombra las ramas a las que afecta.
+ */
+internal abstract class RebaseScopeAction(icon: Icon, private val scope: RebaseScope) : ToolbarAction(icon) {
+
+    override fun update(e: AnActionEvent) {
+        super.update(e)
+        val state = e.project?.getServiceIfCreated(StackService::class.java)?.state?.value as? StackState.Loaded
+        e.presentation.text = state?.snapshot?.let(::text) ?: templateText
+    }
+
+    override fun isEnabled(state: StackState): Boolean =
+        state is StackState.Loaded && !state.repo.stackRebaseInProgress && hasActiveLayers(state) && appliesTo(state.snapshot)
+
+    protected open fun appliesTo(snapshot: StackSnapshot): Boolean = true
+
+    protected open fun text(snapshot: StackSnapshot): String? = null
+
+    /** La capa actual, si es una capa activa: `--upstack` y `--downstack` parten de ella. */
+    protected fun currentLayer(snapshot: StackSnapshot): StackLayer? = snapshot.current?.takeIf { !it.isMerged }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val service = StackService.getInstance(project)
+        val repository = (service.state.value as? StackState.Loaded)?.repo?.let(service::repositoryFor) ?: return
+        service.rebase(scope, repository)
+    }
+}
+
+internal class RebaseUpstackAction : RebaseScopeAction(AllIcons.Actions.MoveUp, RebaseScope.UPSTACK) {
+    override fun appliesTo(snapshot: StackSnapshot): Boolean = currentLayer(snapshot) != null
+    override fun text(snapshot: StackSnapshot): String? =
+        currentLayer(snapshot)?.let { message("action.rebase.upstack.from", it.branch) }
+}
+
+internal class RebaseAction : RebaseScopeAction(AllIcons.Vcs.Merge, RebaseScope.STACK) {
+    override fun text(snapshot: StackSnapshot): String = message("action.rebase.stack.onto", snapshot.trunk)
+}
+
+internal class RebaseDownstackAction : RebaseScopeAction(AllIcons.Actions.MoveDown, RebaseScope.DOWNSTACK) {
+    override fun appliesTo(snapshot: StackSnapshot): Boolean = currentLayer(snapshot) != null
+    override fun text(snapshot: StackSnapshot): String? =
+        currentLayer(snapshot)?.let { message("action.rebase.downstack.to", snapshot.trunk, it.branch) }
+}
+
+internal class RebaseLayersAction : RebaseScopeAction(AllIcons.Vcs.Branch, RebaseScope.LAYERS)
 
 internal class OpenSettingsAction : StacklaneAction(AllIcons.General.Settings) {
     override fun actionPerformed(e: AnActionEvent) {
@@ -131,6 +190,23 @@ internal class CheckoutLayerAction : StacklaneAction(AllIcons.Actions.CheckOut) 
         val service = StackService.getInstance(project)
         val repository = service.repositoryFor(selection.state.repo) ?: return
         service.checkout(repository, selection.layer.branch)
+    }
+}
+
+/** `gh stack rebase --upstack --no-trunk` desde esta capa, con checkout antes si no es la actual. */
+internal class RebaseUpstackFromLayerAction : StacklaneAction(AllIcons.Actions.MoveUp) {
+
+    override fun update(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        e.presentation.isVisible = selection != null && !selection.layer.isMerged
+        e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) &&
+            selection?.state?.repo?.stackRebaseInProgress == false
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val selection = e.getData(StackDataKeys.LAYER) ?: return
+        StackFlows.rebaseUpstack(project, selection.layer.branch)
     }
 }
 

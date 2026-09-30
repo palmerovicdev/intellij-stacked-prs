@@ -1,16 +1,20 @@
 package com.stacklane.stack
 
+import com.intellij.CommonBundle
 import com.intellij.dvcs.repo.VcsRepositoryMappingListener
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.MessageDialogBuilder
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vcs.AbstractVcsHelper
 import com.intellij.openapi.vcs.FileStatus
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.stacklane.Notifier
 import com.stacklane.StacklaneBundle.message
@@ -19,8 +23,12 @@ import com.stacklane.gh.GhCommands
 import com.stacklane.gh.GhExit
 import com.stacklane.gh.GhNotFoundException
 import com.stacklane.gh.GhResult
+import com.stacklane.gh.GitCommands
+import com.stacklane.gh.RebaseScope
 import com.stacklane.gh.Tool
+import com.stacklane.settings.RestackMode
 import com.stacklane.settings.StacklaneProjectSettings
+import com.stacklane.settings.StacklaneSettings
 import com.stacklane.ui.RemoteChooser
 import com.stacklane.ui.StackToolWindow
 import git4idea.branch.GitBrancher
@@ -386,19 +394,172 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         }
     }
 
-    // ---------------------------------------------------------------- operaciones compartidas
+    // ---------------------------------------------------------------- rebase
 
-    fun rebase(): Job = execute(
+    /**
+     * `gh stack rebase` con su alcance. Antes, la pregunta de rerere que gh-stack solo hace en
+     * una terminal; al terminar, se ofrece subir las ramas, que solo cambiaron en local.
+     * [returnTo]: la rama a la que volver si todo va bien.
+     */
+    fun rebase(
+        scope: RebaseScope = RebaseScope.STACK,
+        repository: GitRepository? = repository(),
+        returnTo: String? = null,
+    ): Job = cs.launch {
+        val target = repository ?: return@launch
+        val rerere = askRerere(target) ?: return@launch
+        execute(
+            Operation(
+                title = rebaseTitle(scope),
+                calls = rerere + GhCall(GhCommands.rebase(scope), acceptsRemote = true),
+                repository = target,
+                onSuccess = {
+                    rebased(target)
+                    if (returnTo != null && returnTo != target.currentBranchName) {
+                        withContext(Dispatchers.EDT) { checkout(target, returnTo) }
+                    }
+                },
+            )
+        )
+    }
+
+    /**
+     * `--upstack` empieza en la rama actual: si [branch] no lo es, antes se hace checkout, y al
+     * terminar se vuelve a la rama de partida. Si el rebase se para en un conflicto, se queda
+     * donde gh-stack lo dejo.
+     */
+    fun rebaseUpstackFrom(repository: GitRepository, branch: String) {
+        val original = repository.currentBranchName
+        if (original == branch) {
+            rebase(RebaseScope.UPSTACK, repository)
+            return
+        }
+        checkout(repository, branch) {
+            if (repository.currentBranchName == branch) rebase(RebaseScope.UPSTACK, repository, returnTo = original)
+            else Notifier.warning(project, message("op.rebase.upstack"), message("rebase.checkout.failed", branch))
+        }
+    }
+
+    fun continueRebase(): Job {
+        val repository = repository()
+        return execute(
+            Operation(
+                message("op.rebase.continue"),
+                listOf(GhCall(GhCommands.rebaseContinue())),
+                repository,
+                onSuccess = { repository?.let(::rebased) },
+            )
+        )
+    }
+
+    fun push(repository: GitRepository? = repository()): Job = execute(
         Operation(
-            message("op.rebase"),
-            listOf(GhCall(GhCommands.rebase(), acceptsRemote = true)),
-            successMessage = message("op.rebase.done"),
+            message("op.push"),
+            listOf(GhCall(GhCommands.push(), acceptsRemote = true)),
+            repository,
+            successMessage = message("op.push.done"),
         )
     )
 
-    fun continueRebase(): Job = execute(
-        Operation(message("op.rebase.continue"), listOf(GhCall(GhCommands.rebaseContinue())), successMessage = message("op.rebase.done"))
-    )
+    private fun rebased(repository: GitRepository) {
+        Notifier.info(project, message("op.rebase.done"), Notifier.action(message("action.push.stack")) { push(repository) })
+    }
+
+    private fun rebaseTitle(scope: RebaseScope): @Nls String = when (scope) {
+        RebaseScope.STACK -> message("op.rebase")
+        RebaseScope.UPSTACK -> message("op.rebase.upstack")
+        RebaseScope.DOWNSTACK -> message("op.rebase.downstack")
+        RebaseScope.LAYERS -> message("op.rebase.layers")
+    }
+
+    /**
+     * La pregunta de rerere, hasta que se conteste en este repositorio (ver [Rerere]). Devuelve
+     * los comandos que guardan la respuesta, nada si ya estaba contestada, o null si se cancela:
+     * entonces no se rebasa, como al interrumpir la pregunta en la terminal.
+     */
+    private suspend fun askRerere(repository: GitRepository): List<GhCall>? {
+        val config = try {
+            GhCli.run(repository.root.toNioPath(), GitCommands.rerereConfig(), tool = Tool.GIT)
+        } catch (_: GhNotFoundException) {
+            return emptyList()
+        }
+        // 1: ninguna de las dos claves. Cualquier otro fallo es de git, y lo contara el rebase.
+        if (config.exitCode !in 0..1 || Rerere.parse(config.stdout) != Rerere.Answer.UNANSWERED) return emptyList()
+        val choice = withContext(Dispatchers.EDT) {
+            MessageDialogBuilder.yesNoCancel(message("rerere.title"), message("rerere.text"))
+                .yesText(message("rerere.enable"))
+                .noText(message("rerere.decline"))
+                .cancelText(CommonBundle.getCancelButtonText())
+                .icon(Messages.getQuestionIcon())
+                .show(project)
+        }
+        return when (choice) {
+            Messages.YES -> Rerere.enable()
+            Messages.NO -> Rerere.decline()
+            else -> null
+        }
+    }
+
+    // ---------------------------------------------------------------- tras un commit
+
+    /**
+     * Un commit del IDE en [roots]. Si cayo en una capa con capas encima, esas se quedaron
+     * atras: se ofrece llevarlo hasta ellas con un rebase upstack, o se hace sin preguntar,
+     * segun los ajustes.
+     */
+    fun afterCommit(roots: Collection<VirtualFile>) {
+        val mode = StacklaneSettings.getInstance().restackAfterCommit
+        if (mode == RestackMode.NEVER) return
+        cs.launch {
+            repositories()
+                .filter { it.root in roots && localStacks(it).isNotEmpty() && !stackRebaseInProgress(it) }
+                .forEach { afterCommit(it, mode) }
+        }
+    }
+
+    private suspend fun afterCommit(repository: GitRepository, mode: RestackMode) {
+        val root = repository.root.toNioPath()
+        // Se lee otra vez: la pila en pantalla es de antes del commit.
+        val view = try {
+            GhCli.run(root, GhCommands.view())
+        } catch (_: GhNotFoundException) {
+            return
+        }
+        if (!view.ok) return
+        val snapshot = runCatching { StackJson.parseView(view.stdout) }.getOrNull() ?: return
+        val layer = snapshot.current?.takeIf { !it.isMerged } ?: return
+        if (snapshot.outdatedAbove(layer).isEmpty()) return
+        // Ninguna de las de encima tiene el commit, aunque gh-stack solo marque la siguiente.
+        val behind = snapshot.activeAbove(layer)
+
+        val clean = isClean(root)
+        if (mode == RestackMode.ALWAYS && clean) {
+            rebase(RebaseScope.UPSTACK, repository)
+            return
+        }
+        val text = buildString {
+            append(message("restack.text", layer.branch, behind.joinToString(", ") { it.branch }, snapshot.trunk))
+            if (!clean) append("<br>").append(message("restack.dirty"))
+        }
+        Notifier.info(
+            project, message("restack.title", behind.size), text,
+            Notifier.action(message("action.rebase.upstack")) { rebaseUpstackFrom(repository, layer.branch) },
+            Notifier.action(message("action.restack.always")) {
+                StacklaneSettings.getInstance().restackAfterCommit = RestackMode.ALWAYS
+                rebaseUpstackFrom(repository, layer.branch)
+            },
+        )
+    }
+
+    /** Sin cambios en ficheros con seguimiento: git puede empezar el rebase. */
+    private suspend fun isClean(root: Path): Boolean = try {
+        val status = GhCli.run(root, GitCommands.statusTracked(), tool = Tool.GIT)
+        status.ok && status.stdout.isBlank()
+    } catch (_: GhNotFoundException) {
+        false
+    }
+
+    // ---------------------------------------------------------------- operaciones compartidas
 
     fun abortRebase(): Job = execute(
         Operation(message("op.rebase.abort"), listOf(GhCall(GhCommands.rebaseAbort())), successMessage = message("op.rebase.aborted"))
@@ -412,7 +573,8 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 .filter { it.fileStatus == FileStatus.MERGED_WITH_CONFLICTS }
                 .mapNotNull { it.virtualFile }
             if (files.isEmpty()) {
-                Notifier.info(project, message("conflict.none"))
+                // Con rerere.autoupdate, git ya aplico y anadio una resolucion recordada.
+                Notifier.info(project, message("conflict.none"), Notifier.action(message("action.rebase.continue")) { continueRebase() })
             } else {
                 AbstractVcsHelper.getInstance(project).showMergeDialogWithResult(files)
             }

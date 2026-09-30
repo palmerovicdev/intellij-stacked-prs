@@ -4,8 +4,11 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.toNullableProperty
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.stacklane.StacklaneBundle.message
 import com.stacklane.gh.GhCli
 
@@ -29,6 +32,17 @@ class StacklaneConfigurable : BoundConfigurable(message("settings.title")) {
                 textField()
                     .bindText(settings::finalLabel)
                     .comment(message("settings.final.label.comment"))
+            }
+            row(message("settings.restack")) {
+                comboBox(RestackMode.entries, textListCellRenderer("") { mode ->
+                    when (mode) {
+                        RestackMode.ASK -> message("settings.restack.ask")
+                        RestackMode.ALWAYS -> message("settings.restack.always")
+                        RestackMode.NEVER -> message("settings.restack.never")
+                    }
+                })
+                    .bindItem(settings::restackAfterCommit.toNullableProperty())
+                    .comment(message("settings.restack.comment"))
             }
         }
     }

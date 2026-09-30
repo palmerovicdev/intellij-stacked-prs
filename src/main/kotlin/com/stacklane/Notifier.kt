@@ -14,6 +14,9 @@ internal object Notifier {
     fun info(project: Project, content: @Nls String, vararg actions: NotificationAction) =
         notify(project, "", content, NotificationType.INFORMATION, actions)
 
+    fun info(project: Project, title: @Nls String, content: @Nls String, vararg actions: NotificationAction) =
+        notify(project, title, content, NotificationType.INFORMATION, actions)
+
     fun warning(project: Project, title: @Nls String, content: @Nls String, vararg actions: NotificationAction) =
         notify(project, title, content, NotificationType.WARNING, actions)
 

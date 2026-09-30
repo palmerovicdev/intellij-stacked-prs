@@ -47,6 +47,10 @@ hecha y el plugin salga al Marketplace (P40).
 | Una rama en varias pilas: en cuántas está, cuáles, y cada una se abre desde una rama que no sea base de otra (P3) | `0.3.0` |
 | *Publish Stack…*: draft o listo PR a PR, y título y descripción de los PRs nuevos (P8) | `0.4.0` |
 | Menú de la pila: acciones de toda la pila rotuladas *Stack*, iconos en todo y clic derecho sobre la fila bajo el ratón (C8–C10) | `0.4.0` |
+| Rebase upstack sin trunk: desplegable de rebase, *Rebase Upstack from Here* y banda *needs rebase* que distingue capa atrasada de trunk atrasado (P11) | `0.5.0` |
+| Tras un commit del IDE en una capa intermedia, ofrecer el rebase upstack, o hacerlo siempre (P19) | `0.5.0` |
+| *Push Stack* al terminar un rebase y la pregunta de git rerere que gh-stack solo hace en la terminal (P45, P46) | `0.5.0` |
+| *Got it* que explica el rebase upstack la primera vez (P47) | `0.5.0` |
 
 ---
 
@@ -233,7 +237,7 @@ Primera entrega: acciones *Stack Up / Down / Top / Bottom / Base* con el checkou
 fusionadas. Sin atajo por defecto, asignables en Keymap, y visibles en *Find Action*, en
 el widget de P29 y en el popup de ramas (P30).
 
-### P11 · Rebase parcial y opciones 🟡
+### P11 · Rebase parcial y opciones ✅ `0.5.0`
 
 *Rebase Stack* ejecuta `gh stack rebase` entero, con fetch del trunk. Después de tocar una
 capa intermedia lo normal es `--upstack` (de la actual a la cima). El aviso *needs
@@ -242,6 +246,23 @@ rebase* ofrece también el rebase completo.
 Primera entrega: el botón con desplegable: completo, `--upstack`, `--downstack` y
 `--no-trunk`. El aviso propone `--upstack` desde la primera capa que lo necesita. La
 opción `--committer-date-is-author-date` pasa a los ajustes (P36).
+
+Hecha en la `0.5.0`, después de que un rebase completo tras arreglar una capa intermedia
+metiera en cada capa los conflictos con lo nuevo de `main`. Lo que salió al leer
+`cmd/rebase.go` y `cmd/utils.go` de gh-stack y probarlo:
+
+- `--upstack` empieza en la rama **actual** (`[branch]` solo elige qué pila cargar) y, si
+  es la capa de abajo, la rebasa sobre el trunk después de hacer fetch. Por eso el upstack
+  del plugin es `--upstack --no-trunk`: sin fetch, y solo salen los conflictos del cambio.
+- Cada capa se rebasa con `git rebase --onto <padre> <base anterior>`: un `--amend` en una
+  capa de abajo no reaplica los commits viejos arriba.
+- `needsRebase` de la capa de abajo significa «atrás del trunk» y eso no lo arregla un
+  upstack sin trunk. La banda separa los dos casos: upstack para las capas atrasadas (desde
+  la actual si está a su altura o por debajo; si no, checkout de la primera y vuelta al
+  terminar) y rebase completo para el trunk.
+- En la barra, *Rebase* es un desplegable: upstack, completo, `--downstack` y `--no-trunk`.
+  Cada capa tiene *Rebase Upstack from Here*.
+- `--committer-date-is-author-date` sigue pendiente, en P36.
 
 ### P12 · Conflictos guiados de principio a fin 🟡
 
@@ -328,7 +349,7 @@ checkout de la capa, unshelve, commit, `gh stack rebase --upstack` y vuelta, con
 *Undo* si algo falla. Es la propuesta con más riesgo de esta ronda: primero se prueba
 sobre copias, con conflictos incluidos.
 
-### P19 · Commit y restack 🟡
+### P19 · Commit y restack ✅ `0.5.0`
 
 Al commitear en una capa que no es la cima, las de arriba quedan desfasadas. La ventana
 lo muestra (*needs rebase*), pero no lo ofrece en el momento.
@@ -336,6 +357,16 @@ lo muestra (*needs rebase*), pero no lo ofrece en el momento.
 Primera entrega: un `CheckinHandlerFactory` (API pública) que, tras commitear en una capa
 intermedia, ofrezca *Rebase upstack now / Later / Always*. La opción *Always* queda en los
 ajustes (P36).
+
+Hecha en la `0.5.0` (`RestackCheckinHandlerFactory`, `StackService.afterCommit`):
+
+- Tras el commit se vuelve a leer `gh stack view --json`: la pila en pantalla es de antes.
+  Solo avisa si alguna capa por encima de la actual quedó atrasada.
+- El aviso ofrece *Rebase Upstack* y *Always After Commit*; cerrarlo es *Later*. En los
+  ajustes: preguntar, hacerlo sin preguntar o nada.
+- *Always* solo rebasa con el árbol limpio (`git status --porcelain --untracked-files=no`):
+  git no empieza un rebase con cambios. Si queda algo, avisa en vez de fallar.
+- Los commits de la terminal no pasan por aquí; esos los sigue avisando la banda.
 
 ### P20 · Nombres para las capas nuevas 🟡
 
@@ -497,6 +528,10 @@ Primera entrega, con ámbito de proyecto:
 `--prune` al sincronizar, `--committer-date-is-author-date` al rebasar, el alcance por
 defecto del rebase (P11) y *Always* para el restack tras commit (P19).
 
+El último ya está desde la `0.5.0`: *After a commit on a lower layer* (preguntar, rebasar
+sin preguntar o nada). El alcance por defecto ya no hace falta: el desplegable pone el
+upstack primero.
+
 ### P37 · El remoto, visible y editable 🟡
 
 Cuando gh-stack no sabe a qué remoto publicar, se pregunta y se guarda en el workspace
@@ -578,6 +613,38 @@ Primera entrega: probarlo sobre una copia y pintar esa capa como *Branch deleted
 
 ---
 
+## Ronda del 2026-09-30 (tercera) · Lo que enseñó la `0.4.0`
+
+Salió de arreglar una capa intermedia con la `0.4.0`: el único rebase era el completo, que
+trae el trunk, y hubo que resolver en cada capa conflictos que no tenían que ver con el
+arreglo. P11 y P19 ya lo proponían; estas tres completan el flujo.
+
+### P45 · Subir las ramas al terminar un rebase ✅ `0.5.0`
+
+Un rebase solo cambia las ramas en local, y los PRs siguen enseñando lo de antes hasta
+que se suben. El aviso de fin (también el de *Continue Rebase*) ofrece *Push Stack*:
+`gh stack push`, con `--force-with-lease` por rama. No crea PRs; para eso está publicar.
+
+### P46 · La pregunta de git rerere ✅ `0.5.0`
+
+gh-stack pregunta si activar rerere antes de rebasar, pero solo en una terminal
+interactiva (`ensureRerere` en `cmd/utils.go`): desde el plugin nunca llegaba a preguntarse.
+El primer rebase de cada repositorio hace la misma pregunta y guarda la respuesta en las
+mismas claves: `rerere.enabled` y `rerere.autoupdate`, o `gh-stack.rerere-declined`. Así ni
+la terminal ni el IDE preguntan lo que se contestó en el otro. Un `rerere.enabled false`
+escrito a mano cuenta como respuesta. Cancelar no rebasa, como interrumpir la pregunta en
+la terminal.
+
+Con `rerere.autoupdate`, git aplica y añade una resolución recordada pero el rebase se para
+igual. *Resolve Conflicts…* sin ficheros en conflicto lo dice y ofrece *Continue Rebase*.
+
+### P47 · Explicar el rebase upstack la primera vez ✅ `0.5.0`
+
+La primera vez que la banda *needs rebase* ofrece el upstack, un *Got it* (`GotItTooltip`,
+API pública) explica qué hace y cuándo conviene el rebase completo.
+
+---
+
 ## Cambios pequeños a lo que ya existe (`0.1.x`)
 
 Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
@@ -588,7 +655,7 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 | 🟡 C2 | La línea del grafo casi no se ve en tema oscuro (`RAIL` `0x3D444D`) | `StackColors` |
 | 🟡 C3 | El progreso de *Check Out Stack* enseña la URL entera del PR; mejor `#13` | `StackFlows.checkoutFromPullRequest` |
 | 🟡 C4 | `StackRow.Layer.position` no se usa: enseñar `2/3` en el tooltip o en la fila | `StackRows` |
-| 🟡 C5 | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra | `StackPanel.renderBanners` |
+| ✅ C5 | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra: quitado al rehacer la banda `0.5.0` | `StackPanel.renderBanners` |
 | 🟡 C6 | La página de ajustes está en *Tools*; encaja mejor en *Version Control* | `plugin.xml` |
 | ✅ C7 | La caché de build de Gradle devolvía clases de test compiladas contra firmas viejas (fallos falsos, incluso tras `clean`): desactivada `0.2.0` | `gradle.properties` |
 | ✅ C8 | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0` | `StacklaneBundle` |

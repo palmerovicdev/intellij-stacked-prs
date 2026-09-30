@@ -13,9 +13,18 @@ puede alternar entre IDE y terminal en cualquier momento.
   PR, estado (draft, listo, fusionado, en cola, cerrado o sin PR), título, labels, decisión
   de review y CI. También indica la rama actual (HEAD) y las capas que necesitan rebase.
 - Barra: refrescar, **nueva pila**, **añadir capa encima**, **publicar como drafts**,
-  **publicar listos para revisión**, **sync**, **rebase** y ajustes.
-- Menú de cada capa: checkout, abrir o copiar el PR, **marcar listo / volver a draft**,
-  **labels…** y **marcar como capa final** (`stack-final`).
+  **publicar listos para revisión**, **sync**, **rebase** (desplegable: upstack desde la
+  capa actual, pila entera, downstack y capas entre sí) y ajustes.
+- Menú de cada capa: checkout, abrir o copiar el PR, **rebase upstack desde aquí**,
+  **marcar listo / volver a draft**, **labels…** y **marcar como capa final** (`stack-final`).
+- **Rebase upstack**: tras cambiar una capa intermedia, lleva sus commits a las de encima
+  sin fetch y sin tocar el trunk, así que solo salen los conflictos de ese cambio. Se ofrece
+  al commitear desde el IDE en una capa que no es la cima (o se hace siempre, según los
+  ajustes) y en la banda *needs rebase*, que distingue una capa atrasada (upstack) de la
+  capa de abajo atrás del trunk (rebase de toda la pila).
+- Al terminar un rebase, **Push Stack**. El primer rebase de cada repositorio pregunta si
+  activar **git rerere**, como gh-stack en la terminal, y guarda la respuesta en las mismas
+  claves.
 - Aviso de rebase parado con *Resolver conflictos*, *Continuar* y *Abortar*.
 - **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
   *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
@@ -39,6 +48,10 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Labels | `gh pr edit <url> --add-label … --remove-label …` |
 | Capa final | igual, con la label configurada (por defecto `stack-final`) |
 | Sync / rebase | `gh stack sync` / `gh stack rebase` (`--continue`, `--abort`) |
+| Rebase upstack | `gh stack rebase --upstack --no-trunk`, con checkout del IDE antes si no estás en esa capa y vuelta al terminar |
+| Otros rebase | `gh stack rebase --downstack` y `gh stack rebase --no-trunk` |
+| Push tras el rebase | `gh stack push` |
+| Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
 
 Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
 
@@ -49,7 +62,7 @@ uso de API interna, deprecada, experimental, *override-only* o *non-extendable*.
 contra la IDEA instalada, sin descargar nada:
 
 ```text
-Plugin com.stacklane:0.1.0 against IU-262.10315.125: Compatible
+Plugin com.stacklane:0.5.0 against IU-262.10315.125: Compatible
 ```
 
 La integración con la ventana Pull Requests no compila contra el plugin GitHub: ninguna de
@@ -99,10 +112,10 @@ elegir el zip.
 
 ```text
 gh/        GhCli (ejecuta gh sin TTY y lo cancela con la corrutina), GhCommands (cada comando)
-stack/     modelo, parser JSON, StackService (estado + operaciones), log
+stack/     modelo, parser JSON, StackService (estado + operaciones), log, rerere, handler de commit
 ui/        ventana, lista con el grafo, diálogos
 actions/   acciones (barra, menú de capa, menú de Pull Requests), PrTarget, StackFlows
-settings/  ruta de gh, nombre de la label final, remoto preferido por proyecto
+settings/  ruta de gh, nombre de la label final, qué hacer tras un commit, remoto por proyecto
 ```
 
 `StackService` lee con `gh stack view --json` más una consulta GraphQL para draft, labels,
@@ -114,7 +127,11 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 39 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 58 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- El rebase upstack, con gh-stack v0.1.1 real sobre un repositorio de prueba: tras avanzar
+  `main` y commitear en la capa del medio, la de encima recibe el commit y ninguna capa se
+  rebasa sobre `main`. La de abajo sigue marcada, porque eso solo lo arregla el rebase
+  completo.
 - En el IDE de prueba con un repositorio de demo: la ventana pinta la pila y las acciones
   se abren. Salieron dos fallos, ya corregidos: una llamada de Git4Idea prohibida en el EDT
   y los radio buttons del diálogo de nueva capa.

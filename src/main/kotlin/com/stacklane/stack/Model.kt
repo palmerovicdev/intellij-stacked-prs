@@ -17,6 +17,53 @@ data class StackSnapshot(
         val index = layers.indexOf(layer)
         return layers.subList(0, index.coerceAtLeast(0)).lastOrNull { !it.isMerged }?.branch ?: trunk
     }
+
+    /** La capa activa de mas abajo: la unica cuya base es el trunk. */
+    val bottom: StackLayer? get() = layers.firstOrNull { !it.isMerged }
+
+    /**
+     * La capa de abajo ya no contiene el trunk local (avanzo `main`, por ejemplo). Solo lo
+     * arregla rebasar la pila entera sobre el trunk.
+     */
+    val behindTrunk: Boolean get() = bottom?.needsRebase == true
+
+    /**
+     * Las capas que ya no contienen a la de debajo, sin contar la de abajo, que depende del
+     * trunk. Es lo que deja un commit en una capa intermedia, y lo arregla un rebase upstack.
+     */
+    val outdatedLayers: List<StackLayer>
+        get() {
+            val bottom = bottom
+            return layers.filter { !it.isMerged && it.needsRebase && it != bottom }
+        }
+
+    /**
+     * Las capas por encima de [layer] que recibirian un rebase upstack desde ella. gh-stack
+     * salta las fusionadas y las que estan en la cola de merge.
+     */
+    fun activeAbove(layer: StackLayer): List<StackLayer> =
+        layers.drop(layers.indexOf(layer) + 1).filter { !it.isMerged && !it.isQueued }
+
+    /**
+     * Las [outdatedLayers] por encima de [layer]. Tras un commit en [layer] solo sale la de
+     * justo encima: las demas aun contienen a su padre, aunque tampoco tengan el commit.
+     */
+    fun outdatedAbove(layer: StackLayer): List<StackLayer> {
+        val index = layers.indexOf(layer)
+        return outdatedLayers.filter { layers.indexOf(it) > index }
+    }
+
+    /**
+     * Desde que capa lanzar el rebase upstack que pone al dia las [outdatedLayers]. `--upstack`
+     * empieza en la rama actual: si esta a la altura de la primera o por debajo, desde ahi, sin
+     * checkout (las de en medio ya estan al dia y se quedan igual). Si no, desde la primera.
+     */
+    val upstackStart: StackLayer?
+        get() {
+            val first = outdatedLayers.firstOrNull() ?: return null
+            val current = current?.takeIf { !it.isMerged }
+            return if (current != null && layers.indexOf(current) <= layers.indexOf(first)) current else first
+        }
 }
 
 data class StackLayer(

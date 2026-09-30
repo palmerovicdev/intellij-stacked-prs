@@ -79,6 +79,28 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.5.0 &mdash; carry a change up without the trunk</h3>
+            <ul>
+              <li><b>Rebase Upstack</b> (<code>gh stack rebase --upstack --no-trunk</code>) carries a lower
+                layer's commits to the layers above without fetching or rebasing onto the trunk, so the
+                only conflicts are the ones the change causes.</li>
+              <li>After a commit in the IDE on a layer that is not the top, a notification offers it, or it
+                runs every time (Settings | Tools | Stacklane).</li>
+              <li>The <i>needs rebase</i> banner tells an outdated layer (rebase upstack) from a bottom
+                layer behind the trunk (rebase the whole stack), and explains the difference once.</li>
+              <li>Rebase in the toolbar is a menu: upstack, whole stack, downstack and layers only. Each
+                layer has <i>Rebase Upstack from Here</i>.</li>
+              <li>After a rebase, <b>Push Stack</b> (<code>gh stack push</code>).</li>
+              <li>The first rebase in a repository asks whether to turn on <code>git rerere</code>, as gh
+                stack does in the terminal, and stores the answer in the same keys.</li>
+            </ul>
+            <h3>0.4.0 &mdash; publish deciding pull request by pull request</h3>
+            <ul>
+              <li><b>Publish Stack…</b>: for each layer, ready for review or draft, and the title and
+                description of new pull requests, proposed from their commits.</li>
+              <li>Actions on the whole stack say <i>Stack</i>; every layer action has an icon; right-click
+                opens the menu of the row under the mouse.</li>
+            </ul>
             <h3>0.3.0 &mdash; a branch in two stacks</h3>
             <ul>
               <li>A branch that is a layer of one stack and the base of another (or the base of several

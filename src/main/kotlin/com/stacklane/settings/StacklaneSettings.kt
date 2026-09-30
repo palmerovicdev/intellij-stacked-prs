@@ -9,7 +9,13 @@ import com.intellij.openapi.components.StoragePathMacros
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 
-/** Preferencias globales: donde esta `gh` y como se llama la label de la capa final. */
+/** Que hacer cuando un commit del IDE deja atras las capas de encima. */
+enum class RestackMode { ASK, ALWAYS, NEVER }
+
+/**
+ * Preferencias globales: donde esta `gh`, como se llama la label de la capa final y que hacer
+ * tras un commit en una capa que no es la cima.
+ */
 @Service(Service.Level.APP)
 @State(name = "Stacklane", storages = [Storage("stacklane.xml")])
 class StacklaneSettings : SimplePersistentStateComponent<StacklaneSettings.Options>(Options()) {
@@ -17,7 +23,15 @@ class StacklaneSettings : SimplePersistentStateComponent<StacklaneSettings.Optio
     class Options : BaseState() {
         var ghPath by string("")
         var finalLabel by string(DEFAULT_FINAL_LABEL)
+        // Por nombre: `enum()` de BaseState es inline y viene compilado para JVM 25, y el plugin sale en 21.
+        var restackAfterCommit by string(RestackMode.ASK.name)
     }
+
+    var restackAfterCommit: RestackMode
+        get() = RestackMode.entries.firstOrNull { it.name == state.restackAfterCommit } ?: RestackMode.ASK
+        set(value) {
+            state.restackAfterCommit = value.name
+        }
 
     /** Ruta explicita a `gh`. Vacia: se busca en el PATH del shell. */
     var ghPath: String

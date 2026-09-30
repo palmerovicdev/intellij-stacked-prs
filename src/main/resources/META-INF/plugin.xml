@@ -19,6 +19,12 @@
                 (<code>gh stack submit --auto</code>) or <b>ready for review</b>
                 (<code>--open</code>, after showing which pull requests will change),
                 <b>sync</b> and <b>rebase</b>, with conflict handling.</li>
+            <li><b>Rebase upstack</b>: after a commit on a lower layer, carry it to the layers
+                above without fetching or rebasing onto the trunk
+                (<code>gh stack rebase --upstack --no-trunk</code>), offered right after the commit,
+                from the <i>needs rebase</i> banner and from each layer. Then push the rebased
+                branches in one click (<code>gh stack push</code>). The first rebase asks whether to
+                turn on <code>git rerere</code>, as gh stack does in the terminal.</li>
             <li><b>Labels</b>, <b>ready / draft</b> and a <b>final-layer label</b>
                 (<code>stack-final</code> by default) from the stack and from the
                 <i>Pull Requests</i> tool window menus.</li>
@@ -44,6 +50,8 @@
                     icon="/icons/stacklane.svg"
                     factoryClass="com.stacklane.ui.StackToolWindowFactory"/>
         <notificationGroup id="Stacklane" displayType="BALLOON" key="notification.group"/>
+        <!-- Tras un commit en una capa intermedia, ofrecer el rebase upstack. -->
+        <checkinHandlerFactory implementation="com.stacklane.stack.RestackCheckinHandlerFactory"/>
         <applicationConfigurable parentId="tools"
                                  id="com.stacklane.settings"
                                  instance="com.stacklane.settings.StacklaneConfigurable"
@@ -67,7 +75,13 @@
             <action id="Stacklane.PublishReady" class="com.stacklane.actions.PublishReadyAction"/>
             <separator/>
             <action id="Stacklane.Sync" class="com.stacklane.actions.SyncAction"/>
-            <action id="Stacklane.Rebase" class="com.stacklane.actions.RebaseAction"/>
+            <!-- Upstack primero: es lo que se quiere tras tocar una capa intermedia. -->
+            <group id="Stacklane.RebaseMenu" class="com.stacklane.actions.RebaseGroup" popup="true" icon="AllIcons.Vcs.Merge">
+                <action id="Stacklane.RebaseUpstack" class="com.stacklane.actions.RebaseUpstackAction"/>
+                <action id="Stacklane.Rebase" class="com.stacklane.actions.RebaseAction"/>
+                <action id="Stacklane.RebaseDownstack" class="com.stacklane.actions.RebaseDownstackAction"/>
+                <action id="Stacklane.RebaseLayers" class="com.stacklane.actions.RebaseLayersAction"/>
+            </group>
             <separator/>
             <action id="Stacklane.OpenSettings" class="com.stacklane.actions.OpenSettingsAction"/>
         </group>
@@ -86,6 +100,8 @@
             <action id="Stacklane.CheckoutLayer" class="com.stacklane.actions.CheckoutLayerAction"/>
             <action id="Stacklane.OpenPr" class="com.stacklane.actions.OpenPrAction"/>
             <action id="Stacklane.CopyPrLink" class="com.stacklane.actions.CopyPrLinkAction"/>
+            <separator/>
+            <action id="Stacklane.RebaseUpstackFromLayer" class="com.stacklane.actions.RebaseUpstackFromLayerAction"/>
             <separator/>
             <reference ref="Stacklane.MarkReady"/>
             <reference ref="Stacklane.MarkDraft"/>

@@ -3,6 +3,36 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.5.0 — Llevar un cambio hacia arriba sin traer el trunk
+
+Salió de usar el plugin: tras arreglar algo en una capa intermedia, *Rebase Stack* ejecutaba
+`gh stack rebase` entero. Eso trae el trunk y rebasa la capa de abajo sobre él, así que cada
+capa se comía también los conflictos con lo nuevo de `main`, no solo los del arreglo.
+
+- **Rebase Upstack** (`gh stack rebase --upstack --no-trunk`): lleva los commits de una capa
+  a las de encima, sin fetch y sin tocar el trunk. Solo salen los conflictos que causa ese
+  cambio. Sin `--no-trunk`, desde la capa de abajo gh-stack rebasaría también sobre el trunk.
+- **Tras un commit del IDE** en una capa que no es la cima, un aviso ofrece el rebase
+  upstack o *Always After Commit*. En *Settings → Tools → Stacklane* se elige: preguntar,
+  hacerlo sin preguntar (solo con el árbol limpio; si no, avisa) o nada.
+- **La banda *needs rebase*** separa los dos casos. Si hay capas que ya no parten de la de
+  debajo, propone el upstack: desde la capa actual si está a su altura o por debajo; si no,
+  hace checkout de la primera atrasada y vuelve al terminar. Si la capa de abajo se quedó
+  atrás del trunk, eso solo lo arregla *Rebase Whole Stack onto main*. La primera vez, un
+  *Got it* explica la diferencia.
+- **Rebase** en la barra es un desplegable: upstack desde la capa actual, pila entera,
+  downstack (`--downstack`) y capas entre sí (`--no-trunk`). Cada capa tiene *Rebase
+  Upstack from Here*.
+- **Push al terminar**: un rebase cambia las ramas solo en local. El aviso de fin, también
+  el de *Continue Rebase*, ofrece *Push Stack* (`gh stack push`).
+- **git rerere**: gh-stack pregunta si activarlo antes de rebasar, pero solo en una terminal
+  interactiva, así que desde el plugin nunca llegaba a preguntarse. El primer rebase de cada
+  repositorio hace la misma pregunta y guarda la respuesta en las mismas claves
+  (`rerere.enabled` y `rerere.autoupdate`, o `gh-stack.rerere-declined`): ni la terminal ni
+  el IDE vuelven a preguntar.
+- *Resolve Conflicts…* sin ficheros en conflicto (rerere ya aplicó una resolución recordada)
+  ofrece *Continue Rebase* en el mismo aviso.
+
 ## 0.4.0 — Publicar decidiendo PR a PR
 
 `gh stack submit --auto` crea los PRs nuevos como draft con títulos generados, y `--open`

@@ -37,6 +37,26 @@ class GhCommandsTest {
     }
 
     @Test
+    fun `rebase scopes and push`() {
+        assertEquals("gh stack rebase", GhCommands.display(GhCommands.rebase()))
+        // Upstack sin trunk: desde la capa de abajo, --upstack solo rebasaria tambien sobre el trunk.
+        assertEquals("gh stack rebase --upstack --no-trunk", GhCommands.display(GhCommands.rebase(RebaseScope.UPSTACK)))
+        assertEquals("gh stack rebase --downstack", GhCommands.display(GhCommands.rebase(RebaseScope.DOWNSTACK)))
+        assertEquals("gh stack rebase --no-trunk", GhCommands.display(GhCommands.rebase(RebaseScope.LAYERS)))
+        assertEquals("gh stack push", GhCommands.display(GhCommands.push()))
+    }
+
+    @Test
+    fun `git reads for the rebase flow`() {
+        assertEquals("git status --porcelain --untracked-files=no", GhCommands.display(GitCommands.statusTracked(), Tool.GIT))
+        assertEquals(
+            listOf("config", "--type=bool", "--get-regexp", "^(rerere\\.enabled|gh-stack\\.rerere-declined)$"),
+            GitCommands.rerereConfig(),
+        )
+        assertEquals("git config rerere.enabled true", GhCommands.display(GitCommands.configSet("rerere.enabled", "true"), Tool.GIT))
+    }
+
+    @Test
     fun `display quotes what the shell would split`() {
         assertEquals("gh stack add -u -m 'Fix it'\\''s bug' x", GhCommands.display(GhCommands.add("x", LayerCommit("Fix it's bug", Staging.TRACKED))))
         assertEquals(
