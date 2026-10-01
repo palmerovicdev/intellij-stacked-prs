@@ -23,7 +23,7 @@ puede alternar entre IDE y terminal en cualquier momento.
   abrir o copiar el PR, **rebase upstack desde aquí**, **cambiar la base del PR** a la capa
   de debajo cuando no coincide, **marcar listo / volver a draft**,
   **labels…** y **marcar como capa final** (`stack-final`). Clic derecho fuera de las filas
-  o sobre la base: lo de toda la pila (añadir capa y publicar).
+  o sobre la base: lo de toda la pila (añadir capa, publicar y cerrar).
 - **Cada opción explica lo que hace y el comando que ejecuta** al pasar el ratón: barra,
   menús, botones de las bandas y opciones de los diálogos. Los comandos llevan los datos
   reales (rama, URL del PR), cada uno en su bloque con fondo, y las URLs en azul; los
@@ -44,6 +44,9 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
+- **Cerrar una pila entera** (*Close Stack…*): deshacerla en GitHub, cerrar sus PRs
+  abiertos con un comentario opcional y borrar sus ramas remotas y locales. El diálogo lista
+  cada PR y rama que toca y los comandos en el orden en que se ejecutan.
 - Pestaña **Log** con cada comando ejecutado y su salida.
 
 **Menú “Stack” en la ventana Pull Requests** de IntelliJ (lista y detalle): listo / draft,
@@ -207,12 +210,20 @@ del VFS y de Git4Idea al terminar.
   commit: no cambia ningún fichero ni se pierden cambios locales), ejecuta
   `gh stack unstack --local`, vuelve y la borra. Si algo falla a medias, deshace solo lo que
   hizo. Todo aparece en el Log y en la vista previa del diálogo.
+- **Cerrar una pila va en un orden fijo**: `gh stack unstack` primero, con las ramas aún
+  vivas (si no, gh-stack se queda con una pila sin ramas); después `gh pr close` de la cima
+  hacia abajo, `git push --delete` y `git branch -D`. Si GitHub no deshace la pila (PRs en
+  cola o con auto-merge), gh-stack sale bien pero la sigue registrando: entonces no se
+  cierra ni se borra nada. Las ramas remotas solo se borran si se cierran antes los PRs
+  abiertos, y nunca una rama que es la base de otra pila. Antes del diálogo se pregunta al
+  remoto qué ramas tiene (`git ls-remote`), porque lo que git sabe en local puede estar
+  atrasado.
 - **Checkout** con el de Git4Idea (smart checkout y diálogo de cambios locales), no con
   `gh stack checkout`, salvo al traer una pila que solo existe en GitHub.
 
 ## Versiones
 
-Versión actual: **0.7.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.8.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

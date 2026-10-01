@@ -15,6 +15,8 @@ import com.stacklane.gh.GhCommands
 import com.stacklane.gh.RebaseScope
 import com.stacklane.settings.StacklaneConfigurable
 import com.stacklane.settings.StacklaneSettings
+import com.stacklane.stack.CloseChoice
+import com.stacklane.stack.ClosePlans
 import com.stacklane.stack.LocalStackEntry
 import com.stacklane.stack.Position
 import com.stacklane.stack.PrState
@@ -214,6 +216,29 @@ internal class RebaseDownstackAction : RebaseScopeAction(AllIcons.Actions.MoveDo
 }
 
 internal class RebaseLayersAction : RebaseScopeAction(AllIcons.Vcs.Branch, RebaseScope.LAYERS)
+
+/**
+ * Cerrar la pila entera: deshacerla, cerrar sus PRs y borrar sus ramas (ver
+ * StackFlows.closeStack). La ayuda ensena lo que se haria con las opciones por defecto, con
+ * lo que git sabe del remoto en local; el dialogo lo pregunta al remoto antes de abrirse.
+ */
+internal class CloseStackAction : ToolbarAction(AllIcons.Actions.Cancel) {
+
+    // Con un rebase parado a medias no: las ramas estan a medio reescribir.
+    override fun isEnabled(state: StackState): Boolean = state is StackState.Loaded && !state.repo.stackRebaseInProgress
+
+    override fun commands(e: AnActionEvent): List<String> {
+        val state = loaded(e) ?: return listOf(Help.gh(GhCommands.unstack()))
+        val service = e.project?.getServiceIfCreated(StackService::class.java) ?: return emptyList()
+        val repository = service.repositoryFor(state.repo) ?: return emptyList()
+        val targets = StackFlows.closeTargets(service, repository, state)
+        return Help.of(ClosePlans.calls(CloseChoice.defaults(targets), targets))
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        e.project?.let(StackFlows::closeStack)
+    }
+}
 
 internal class OpenSettingsAction : StacklaneAction(AllIcons.General.Settings) {
     override fun actionPerformed(e: AnActionEvent) {

@@ -2,8 +2,9 @@ package com.stacklane.gh
 
 /**
  * Los pocos comandos de git que ejecuta el plugin: los que escriben, siempre dentro de un
- * plan que los explica (ver StackPlans) o de la pregunta de rerere (ver Rerere); [log],
- * [statusTracked], [rerereConfig] y [mergeBase], solo para leer. Todo lo demas pasa por gh.
+ * plan que los explica (ver StackPlans y ClosePlans) o de la pregunta de rerere (ver Rerere);
+ * [log], [statusTracked], [rerereConfig], [mergeBase] y [lsRemoteHeads], solo para leer. Todo
+ * lo demas pasa por gh.
  */
 object GitCommands {
 
@@ -24,6 +25,20 @@ object GitCommands {
     fun switchDetached(revision: String): List<String> = listOf("switch", "--detach", revision)
 
     fun deleteBranch(name: String): List<String> = listOf("branch", "-D", name)
+
+    fun deleteBranches(names: List<String>): List<String> = listOf("branch", "-D") + names
+
+    /** Crea la rama local de [remoteBranch] (`origin/main`), con seguimiento, y cambia a ella. */
+    fun switchTracking(remoteBranch: String): List<String> = listOf("switch", "--track", remoteBranch)
+
+    fun deleteRemoteBranches(remote: String, names: List<String>): List<String> = listOf("push", remote, "--delete") + names
+
+    /**
+     * Las ramas [names] tal y como estan ahora en [remote], una por linea (`sha<TAB>refs/heads/rama`).
+     * Solo lee, pero va por la red: lo que git sabe del remoto en local puede estar atrasado.
+     */
+    fun lsRemoteHeads(remote: String, names: Collection<String>): List<String> =
+        listOf("ls-remote", "--heads", remote) + names.map { "refs/heads/$it" }
 
     /** Cambios en ficheros con seguimiento; con alguno, git no empieza un rebase. Solo lee. */
     fun statusTracked(): List<String> = listOf("status", "--porcelain", "--untracked-files=no")

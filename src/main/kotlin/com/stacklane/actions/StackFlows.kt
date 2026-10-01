@@ -15,6 +15,8 @@ import com.stacklane.gh.GhResult
 import com.stacklane.gh.GitCommands
 import com.stacklane.gh.Tool
 import com.stacklane.settings.StacklaneSettings
+import com.stacklane.stack.ClosePlans
+import com.stacklane.stack.CloseTargets
 import com.stacklane.stack.GhCall
 import com.stacklane.stack.GitHubRepo
 import com.stacklane.stack.LocalStack
@@ -26,9 +28,11 @@ import com.stacklane.stack.StackJson
 import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackPlans
 import com.stacklane.stack.StackService
+import com.stacklane.stack.StackSnapshot
 import com.stacklane.stack.StackState
 import com.stacklane.stack.repo
 import com.stacklane.ui.AddLayerDialog
+import com.stacklane.ui.CloseStackDialog
 import com.stacklane.ui.InitStackDialog
 import com.stacklane.ui.LabelsDialog
 import com.stacklane.ui.PublishDialog
@@ -142,6 +146,103 @@ internal object StackFlows {
     }
 
     private fun describe(entry: LocalStackEntry): String = (listOf(entry.stack.trunk) + entry.stack.branches).joinToString(" ← ")
+
+    private fun describe(snapshot: StackSnapshot): String = (listOf(snapshot.trunk) + snapshot.layers.map { it.branch }).joinToString(" ← ")
+
+    /**
+     * *Close Stack…*: deshacer la pila, cerrar sus PRs y borrar sus ramas, en el orden de
+     * [ClosePlans]. Antes del dialogo se pregunta al remoto que ramas tiene de verdad: lo que
+     * git sabe en local puede estar atrasado, y borrar una rama que ya no existe haria fallar
+     * el `git push --delete` entero.
+     *
+     * Primero `gh stack unstack`, solo. Si gh-stack sigue registrando la pila, GitHub se nego a
+     * deshacerla (PRs en cola o con auto-merge) y no se cierra ni se borra nada: si no, quedaria
+     * otra pila sin ramas.
+     */
+    fun closeStack(project: Project) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        val name = describe(snapshot)
+        service.launch {
+            val remoteHeads = withBackgroundProgress(project, message("close.reading")) { readRemoteHeads(service, repository, snapshot) }
+            val targets = closeTargets(service, repository, state, remoteHeads)
+            val choice = withContext(Dispatchers.EDT) {
+                val dialog = CloseStackDialog(project, name, targets)
+                // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+                dialog.show()
+                if (dialog.isOK) dialog.choice else null
+            } ?: return@launch
+
+            var unstacked = false
+            service.execute(
+                Operation(
+                    title = message("op.close"),
+                    calls = listOf(ClosePlans.unstack(choice, targets)),
+                    repository = repository,
+                    onSuccess = { unstacked = true },
+                )
+            ).join()
+            if (!unstacked) return@launch
+
+            val layers = snapshot.layers.mapTo(HashSet()) { it.branch }
+            if (service.localStacks(repository).any { entry -> entry.stack.branches.any(layers::contains) }) {
+                Notifier.warning(project, message("close.kept.title"), message("close.kept", name), showLog(project))
+                return@launch
+            }
+            val rest = ClosePlans.afterUnstack(choice, targets)
+            if (rest.isEmpty()) return@launch Notifier.info(project, message("op.close.done.unstacked", name))
+            service.execute(
+                Operation(
+                    title = message("op.close"),
+                    calls = rest,
+                    repository = repository,
+                    successMessage = message("op.close.done", name),
+                )
+            )
+        }
+    }
+
+    /**
+     * Lo que tocaria cerrar la pila de [state]. [remoteHeads]: las ramas del remoto, leidas con
+     * `git ls-remote`; sin ellas, lo que git sabe del remoto en local.
+     */
+    fun closeTargets(
+        service: StackService,
+        repository: GitRepository,
+        state: StackState.Loaded,
+        remoteHeads: Map<String, String>? = null,
+    ): CloseTargets {
+        val snapshot = state.snapshot
+        val names = stackBranches(snapshot)
+        val branches = repository.branches
+        val local = names.mapNotNull { name ->
+            branches.findLocalBranch(name)?.let(branches::getHash)?.let { name to it.asString() }
+        }.toMap()
+        val remote = service.stackRemote(repository, snapshot)
+        val heads = remoteHeads ?: branches.remoteBranches
+            .filter { it.remote.name == remote && it.nameForRemoteOperations in names }
+            .mapNotNull { branch -> branches.getHash(branch)?.let { branch.nameForRemoteOperations to it.asString() } }
+            .toMap()
+        val otherTrunks = service.localStacks(repository).mapTo(HashSet()) { it.stack.trunk }
+        return ClosePlans.targets(snapshot, state.details, remote, local, heads, otherTrunks)
+    }
+
+    private fun stackBranches(snapshot: StackSnapshot): Set<String> = snapshot.layers.mapTo(LinkedHashSet()) { it.branch } + snapshot.trunk
+
+    /** null si no se pudo preguntar (sin red, sin remoto): entonces vale lo que git sabe en local. */
+    private suspend fun readRemoteHeads(service: StackService, repository: GitRepository, snapshot: StackSnapshot): Map<String, String>? {
+        val remote = service.stackRemote(repository, snapshot) ?: return null
+        val result = try {
+            GhCli.run(repository.root.toNioPath(), GitCommands.lsRemoteHeads(remote, stackBranches(snapshot)), tool = Tool.GIT)
+        } catch (_: GhNotFoundException) {
+            return null
+        }
+        return if (result.ok) ClosePlans.parseLsRemote(result.stdout) else null
+    }
+
+    private fun showLog(project: Project) = Notifier.action(message("notification.show.log")) { StackToolWindow.showLog(project) }
 
     fun addLayer(project: Project) {
         val service = StackService.getInstance(project)

@@ -367,6 +367,16 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
     private fun preferredRemote(repository: GitRepository): String? =
         StacklaneProjectSettings.getInstance(project).remote?.takeIf { name -> repository.remotes.any { it.name == name } }
 
+    /**
+     * El remoto donde estan las ramas de [snapshot]: el elegido, el que siguen sus capas,
+     * `origin` o el primero. null si el repositorio no tiene remotos.
+     */
+    fun stackRemote(repository: GitRepository, snapshot: StackSnapshot): String? =
+        preferredRemote(repository)
+            ?: snapshot.layers.asReversed().firstNotNullOfOrNull { repository.getBranchTrackInfo(it.branch)?.remote?.name }
+            ?: repository.remotes.firstOrNull { it.name == "origin" }?.name
+            ?: repository.remotes.firstOrNull()?.name
+
     private fun remoteArgs(remote: String?): List<String> = if (remote == null) emptyList() else listOf("--remote", remote)
 
     /** Git cambio por fuera del IDE: ramas, ficheros del arbol de trabajo, cambios locales. */

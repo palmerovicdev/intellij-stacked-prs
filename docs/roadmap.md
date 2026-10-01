@@ -59,6 +59,7 @@ hecha y el plugin salga al Marketplace (P40).
 | *Show Layer Changes*: el diff de una capa contra la de debajo (P25) | `0.7.0` |
 | Tooltips más estrechos, comandos en bloque con fondo y URLs en azul (C12); C1–C4 y C6 | `0.7.0` |
 | Tests de flujo de `StackService` y de las escrituras en GitHub con un `gh` falso (P2) | sin versión: solo tests |
+| *Close Stack…*: deshacer la pila, cerrar sus PRs y borrar sus ramas, en orden seguro (P15) | `0.8.0` |
 
 ---
 
@@ -70,8 +71,8 @@ cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se desh
 1. ~~**P21 + P22 + P25**, con **C1–C4** y **C6**~~ — hechas en la `0.7.0`.
 2. ~~**P2**, acotada a los flujos que escriben en GitHub~~ — hecha (2026-09-30), sin versión:
    solo tests.
-3. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
-   a mano, dejó la pila huérfana que motivó la `0.2.0`.
+3. ~~**P15** — cerrar una pila entera, PRs y ramas, en el orden correcto~~ — hecha en la
+   `0.8.0`, salvo cerrar una sola capa de la cima (ver P15).
 4. **P9** — merge de la pila; con P15 completa el ciclo de vida.
 5. **P12** — conflictos guiados, si los rebases con conflictos siguen siendo habituales.
 6. **P44** — una capa suelta cuya rama desaparece dentro de una pila activa; después de P15.
@@ -364,7 +365,7 @@ Primera entrega: un diálogo con los PRs abiertos (`gh pr list --json`), elegido
 ordenados de abajo arriba, con la base opcional. También *Add to Stack…* desde el menú de
 Pull Requests, con la misma clave de URL que ya se usa.
 
-### P15 · Cerrar una pila entera: la pila, sus PRs y sus ramas 👾
+### P15 · Cerrar una pila entera: la pila, sus PRs y sus ramas ✅ `0.8.0`
 
 Lo que hay, leído del código de gh-stack v0.1.1 y de `gh`:
 
@@ -386,6 +387,23 @@ de cada PR y rama que se va a tocar. Se ejecuta en orden seguro: `unstack` prime
 las ramas aún vivas, y después `gh pr close` de la cima hacia abajo. Confirmación
 obligatoria y todo en el Log. Cerrar una sola capa de la cima entra aquí; una intermedia
 necesita reestructurar la pila (P16).
+
+**Hecha en la `0.8.0`**, menos cerrar una sola capa de la cima: gh-stack v0.1.1 no saca una
+capa de una pila salvo con `gh stack modify` (P16), y cerrar su PR y borrar su rama sin más
+deja justo la capa sin rama de P44. Queda para cuando esté P44. Lo que se aprendió al
+hacerla, leído de `cmd/unstack.go` de la v0.1.1:
+
+- `gh stack unstack` sin argumento actúa sobre la pila de la rama actual: se lanza con HEAD
+  todavía en una capa, y solo después se sale al trunk para borrar las ramas locales.
+- Si GitHub deja PRs apilados (en cola o con auto-merge), sale con 0 y **no** deja de seguir
+  la pila en local. Por eso el `unstack` va solo y, antes de cerrar o borrar nada, se
+  comprueba que la pila ya no esté en `.git/gh-stack`.
+- Una pila sin publicar no tiene ID en GitHub: `unstack` avisa y sigue en local. El diálogo
+  ya no ofrece la parte de GitHub si ninguna capa tiene PR.
+- Las ramas se borran con `git push <remoto> --delete` y `git branch -D` en vez de
+  `gh pr close --delete-branch`, que borra las dos a la vez: así cada borrado es una casilla.
+  Qué ramas hay en el remoto se pregunta con `git ls-remote` antes del diálogo: con una ref
+  remota atrasada (la rama ya se borró al fusionar), el `push --delete` fallaría entero.
 
 ### P16 · Reordenar, insertar, renombrar y plegar capas 🟡
 

@@ -87,6 +87,13 @@ object GhCommands {
     /** Deja de seguir en local la pila de la rama actual; GitHub no se toca. */
     fun unstackLocal(): List<String> = listOf("stack", "unstack", "--local")
 
+    /**
+     * Deshace en GitHub la pila de la rama actual y deja de seguirla en local. No cierra PRs
+     * ni borra ramas. Si GitHub deja apilados PRs en cola o con auto-merge, sale bien pero
+     * sigue registrandola en local.
+     */
+    fun unstack(): List<String> = listOf("stack", "unstack")
+
     /** Acepta numero de pila, numero o URL de PR, o nombre de rama. */
     fun checkout(target: String): List<String> = listOf("stack", "checkout", target)
 
@@ -100,6 +107,13 @@ object GhCommands {
     /** Titulo y descripcion de un PR. [pr] como en [markReady]. */
     fun editPr(pr: String, repo: GitHubRepo?, title: String, body: String): List<String> =
         listOf("pr", "edit") + prSelector(pr, repo) + listOf("--title", title, "--body", body)
+
+    /**
+     * Cierra el PR. Sin `--delete-branch`, que borra a la vez la rama local y la remota: al
+     * cerrar una pila cada borrado es una casilla aparte (ver ClosePlans).
+     */
+    fun closePr(prUrl: String, comment: String?): List<String> =
+        listOf("pr", "close", prUrl) + if (comment.isNullOrBlank()) emptyList() else listOf("--comment", comment)
 
     /** La rama sobre la que se fusionaria el PR. */
     fun editBase(prUrl: String, base: String): List<String> = listOf("pr", "edit", prUrl, "--base", base)

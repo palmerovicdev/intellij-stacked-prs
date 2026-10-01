@@ -178,6 +178,24 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         waitUntil({ "no write running, still: ${service.running.value}" }) { service.running.value == null }
     }
 
+    /**
+     * Espera a que [gh] lleve un rato sin llamadas: el refresco que pide cada escritura al
+     * terminar sale tras una pausa, y si su `gh` sigue vivo al cerrar el test, falla por hilo
+     * perdido.
+     */
+    protected fun awaitQuiet() {
+        var last = -1
+        var since = System.currentTimeMillis()
+        waitUntil("gh stays quiet") {
+            val count = gh.calls().size
+            if (count != last) {
+                last = count
+                since = System.currentTimeMillis()
+            }
+            System.currentTimeMillis() - since > QUIET_MS
+        }
+    }
+
     protected fun describeNotifications(): String =
         notifications.joinToString(" | ") { "[${it.type}] ${it.title}: ${it.content}" }.ifEmpty { "<none>" }
 
@@ -230,5 +248,8 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         val VIEW = listOf("stack", "view", "--json")
         const val TIMEOUT_MS = 20_000L
         private const val POLL_MS = 20L
+
+        // Mas que la pausa antes de cada refresco (250 ms en StackService).
+        private const val QUIET_MS = 600L
     }
 }

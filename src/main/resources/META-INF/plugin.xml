@@ -26,6 +26,9 @@
                 branches in one click from the banner that stays until they are pushed
                 (<code>gh stack push</code>). The first rebase asks whether to
                 turn on <code>git rerere</code>, as gh stack does in the terminal.</li>
+            <li><b>Close a whole stack</b>: unstack it, close its open pull requests (with an
+                optional comment) and delete its remote and local branches, in an order that
+                never leaves a stack without branches behind.</li>
             <li><b>Labels</b>, <b>ready / draft</b> and a <b>final-layer label</b>
                 (<code>stack-final</code> by default) from the stack and from the
                 <i>Pull Requests</i> tool window menus.</li>
@@ -88,6 +91,8 @@
                 <action id="Stacklane.RebaseLayers" class="com.stacklane.actions.RebaseLayersAction"/>
             </group>
             <separator/>
+            <action id="Stacklane.CloseStack" class="com.stacklane.actions.CloseStackAction"/>
+            <separator/>
             <action id="Stacklane.OpenSettings" class="com.stacklane.actions.OpenSettingsAction"/>
         </group>
 
@@ -126,6 +131,8 @@
             <reference ref="Stacklane.Publish"/>
             <reference ref="Stacklane.PublishDraft"/>
             <reference ref="Stacklane.PublishReady"/>
+            <separator/>
+            <reference ref="Stacklane.CloseStack"/>
         </group>
     </actions>
 </idea-plugin>

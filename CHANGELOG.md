@@ -3,6 +3,29 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.8.0 — Cerrar una pila entera
+
+Salió del roadmap (P15): cerrar a mano los PRs y borrar las ramas antes de deshacer la pila
+dejó la pila huérfana que motivó la `0.2.0`.
+
+- **Close Stack…**, en la barra y en el clic derecho fuera de las filas: deshace la pila,
+  cierra sus PRs abiertos y borra sus ramas. El diálogo tiene una casilla por paso
+  —deshacerla también en GitHub, cerrar los PRs (con comentario opcional), borrar las ramas
+  del remoto, borrar las locales—, debajo de cada una los PRs y ramas que toca, y los
+  comandos en el orden en que se ejecutan.
+- **Orden seguro**: `gh stack unstack` primero, con las ramas aún vivas; después
+  `gh pr close` de la cima hacia abajo, `git push <remoto> --delete` y `git branch -D`. Si
+  estás en una de las ramas, antes se cambia al trunk.
+- Si GitHub deja la pila apilada (PRs en cola o con auto-merge), gh-stack sale bien pero la
+  sigue registrando: el plugin lo comprueba y para ahí, sin cerrar ni borrar nada, y lo dice.
+- Las ramas remotas solo se borran si antes se cierran los PRs abiertos: borrar la rama de
+  un PR abierto lo cierra sin comentario. Nunca se borra una rama que es la base de otra
+  pila.
+- Antes del diálogo se pregunta al remoto qué ramas tiene (`git ls-remote`). Las ramas
+  locales que no coinciden con el remoto se avisan y, por defecto, no se borran.
+- Todo queda en el Log; el tooltip de *Close Stack…* enseña los comandos con los datos de la
+  pila.
+
 ## 0.7.0 — Cada capa, de un vistazo
 
 Salió de revisar el roadmap tras la `0.6.0`: la consulta a GitHub ya traía la base de cada
