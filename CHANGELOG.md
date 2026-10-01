@@ -3,6 +3,34 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.9.0 — Fusionar la pila
+
+Salió del roadmap (P9): con *Close Stack* (P15), el ciclo de vida de una pila se completa sin
+salir del IDE.
+
+- **Merge Stack…**, en la barra y en el clic derecho fuera de las filas, y **Merge Up to
+  Here…** en el menú de cada capa: `gh stack merge <pr> --yes --squash|--merge|--rebase`
+  fusiona en GitHub ese PR y todos los de debajo de una vez; si uno no se puede, no se
+  fusiona ninguno.
+- El diálogo es la confirmación. Muestra hasta qué PR se fusiona (se puede bajar), cada capa
+  con su review, su CI y si entra o no, y el método. Solo ofrece los métodos que admite el
+  repositorio, recuerda el último usado en el proyecto y, si nunca se usó ninguno, propone el
+  que prefieres en GitHub. Si la base usa cola de merge, no se elige método: los PRs entran
+  en la cola.
+- Avisa de lo que GitHub comprobará al fusionar y gh-stack no mira: PRs sin aprobar, CI
+  fallando o en marcha, conflictos o *Behind*. Un draft, un PR cerrado o una capa sin PR
+  impide fusionar esa capa y las de encima: la opción se ve desactivada y su ayuda dice por
+  qué.
+- **Ningún merge de otra pila por error**: `gh stack merge N` prueba N primero como número de
+  pila. Antes de lanzarlo, `gh api repos/OWNER/REPO/stacks/N` comprueba que no haya una pila
+  con ese número, salvo que fusionarla entera sea exactamente lo mismo. Si la hay, o no se
+  puede comprobar, no se ejecuta nada y se explica.
+- Un conflicto en GitHub (salida 3) se avisa como lo que es: nada se fusionó. Ya no se
+  confunde con un rebase local.
+- **Sync and Prune** (`gh stack sync --prune`): en el aviso de fin y en una banda azul que se
+  queda mientras haya capas fusionadas cuya rama siga en local. Borra esas ramas, rebasa el
+  resto de la pila sobre el trunk y la sube.
+
 ## 0.8.0 — Cerrar una pila entera
 
 Salió del roadmap (P15): cerrar a mano los PRs y borrar las ramas antes de deshacer la pila

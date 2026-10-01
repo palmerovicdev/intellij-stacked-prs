@@ -8,10 +8,8 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.NamedColorUtil
 import com.stacklane.StacklaneBundle.message
-import com.stacklane.stack.ChecksState
 import com.stacklane.stack.PrDetails
 import com.stacklane.stack.PrSize
-import com.stacklane.stack.ReviewDecision
 import java.awt.BasicStroke
 import java.awt.BorderLayout
 import java.awt.Color
@@ -110,22 +108,8 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
         if (details.labels.size > visible.size) {
             badges += Chip.status("+${details.labels.size - visible.size}", StackColors.DRAFT)
         }
-        details.review?.let { review ->
-            val color = when (review) {
-                ReviewDecision.APPROVED -> StackColors.READY
-                ReviewDecision.CHANGES_REQUESTED -> StackColors.CLOSED
-                ReviewDecision.REVIEW_REQUIRED -> StackColors.DRAFT
-            }
-            badges += Chip.status(reviewText(review), color)
-        }
-        details.checks?.let { checks ->
-            val color = when (checks) {
-                ChecksState.SUCCESS -> StackColors.READY
-                ChecksState.FAILURE -> StackColors.CLOSED
-                ChecksState.PENDING -> StackColors.QUEUED
-            }
-            badges += Chip.status(checksText(checks), color)
-        }
+        details.review?.let { badges += Chip.review(it) }
+        details.checks?.let { badges += Chip.checks(it) }
         if (details.hasConflicts) badges += Chip.status(message("pr.conflicts"), StackColors.CLOSED)
         if (details.isBehind) badges += Chip.status(message("pr.behind"), StackColors.QUEUED)
         return badges

@@ -84,10 +84,10 @@ class FakeGh(private val dir: Path) {
         if (!calls.exists()) emptyList()
         else calls.readText().split(RECORD).filter { it.isNotEmpty() }.map { it.split(UNIT).dropLast(1) }
 
-    /** Las llamadas que no son lecturas de la ventana (`stack view` y la consulta GraphQL). */
+    /** Las llamadas que no son lecturas: ni `stack view` ni `gh api` (GraphQL o un GET). */
     fun writes(): List<List<String>> = calls().filter { !isRead(it) }
 
-    private fun isRead(args: List<String>) = args == listOf("stack", "view", "--json") || args.take(2) == listOf("api", "graphql")
+    private fun isRead(args: List<String>) = args == listOf("stack", "view", "--json") || args.firstOrNull() == "api"
 
     private fun key(args: List<String>) = args.joinToString("") { it + UNIT }
 

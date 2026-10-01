@@ -60,6 +60,7 @@ hecha y el plugin salga al Marketplace (P40).
 | Tooltips más estrechos, comandos en bloque con fondo y URLs en azul (C12); C1–C4 y C6                                                                  | `0.7.0`                 |
 | Tests de flujo de `StackService` y de las escrituras en GitHub con un `gh` falso (P2)                                                                  | sin versión: solo tests |
 | *Close Stack…*: deshacer la pila, cerrar sus PRs y borrar sus ramas, en orden seguro (P15)                                                             | `0.8.0`                 |
+| *Merge Stack…* y *Merge Up to Here…*: merge atómico hasta una capa y *Sync and Prune* (P9)                                                             | `0.9.0`                 |
 
 ---
 
@@ -73,7 +74,7 @@ cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se desh
    solo tests.
 3. ~~**P15** — cerrar una pila entera, PRs y ramas, en el orden correcto~~ — hecha en la
    `0.8.0`, salvo cerrar una sola capa de la cima (ver P15).
-4. **P9** — merge de la pila; con P15 completa el ciclo de vida.
+4. ~~**P9** — merge de la pila; con P15 completa el ciclo de vida~~ — hecha en la `0.9.0`.
 5. **P12** — conflictos guiados, si los rebases con conflictos siguen siendo habituales.
 6. **P44** — una capa suelta cuya rama desaparece dentro de una pila activa; después de P15.
 
@@ -241,8 +242,9 @@ pedidos por otros; basta con apoyarlos y contar el caso del IDE:
 | Insertar una capa en medio sin `unstack` + `link`      | [#382](https://github.com/github/gh-stack/issues/382) |
 | Las pilas no se comparten entre worktrees (P43)        | [#459](https://github.com/github/gh-stack/issues/459) |
 
-Quedan por abrir: listar las pilas locales en JSON, `isDraft` en el JSON y
-`unstack --local <rama>`.
+Quedan por abrir: listar las pilas locales en JSON, `isDraft` en el JSON,
+`unstack --local <rama>` y que `merge` acepte un PR sin confundirlo con un número de pila
+(URL, `#N` o `--pr N`; ver P9).
 
 ### P7 · El estado interno de gh-stack, solo como último recurso 🟡
 
@@ -286,7 +288,7 @@ Hecha en la `0.4.0` (`PublishDialog`, `PublishPlans`):
 - Un PR cerrado, en la cola de merge o sin datos de GitHub no se toca, y la fila dice por qué.
 - Desde el menú de una capa, el diálogo abre con el foco en ella.
 
-### P9 · Merge de la pila 🟡
+### P9 · Merge de la pila ✅ `0.9.0`
 
 `gh stack merge <pr> --yes --squash|--merge|--rebase` fusiona de forma atómica hasta la
 capa elegida y entra en la cola de merge si la base la usa. No está en el plugin.
@@ -294,6 +296,29 @@ capa elegida y entra en la cola de merge si la base la usa. No está en el plugi
 Primera entrega: *Merge Up To This Layer…* en el menú de capa. El diálogo muestra qué capas
 entran, su review y su CI, y el método (se recuerda el último). Al terminar ofrece
 `gh stack sync --prune` para borrar las ramas fusionadas. Nunca sin confirmación.
+
+**Hecha en la `0.9.0`** (`MergePlans`, `MergeStackDialog`, `StackFlows.mergeStack`), también
+como *Merge Stack…* en la barra y en el menú de la pila. Lo que se aprendió leyendo
+`cmd/merge.go` de la v0.1.1:
+
+- **Un número suelto es primero un número de pila.** `gh stack merge 12` busca la pila 12 y,
+  solo si no existe, el PR #12; con `--yes` fusionaría esa otra pila entera. No acepta URL
+  ni rama. Antes de lanzarlo se lee `gh api repos/OWNER/REPO/stacks/12`: con 404 se lanza;
+  si la pila 12 existe, solo si #12 es su PR de arriba (fusionarla entera es lo mismo); si no,
+  o si la lectura falla, no se ejecuta nada. Se apunta en P6.
+- Qué entra lo calcula como `mergeCandidates`: de abajo arriba, saltando las fusionadas,
+  hasta el primer draft o cerrado. Aquí, además, una capa sin PR o sin datos de GitHub
+  también para.
+- Sin terminal no pregunta: con `--yes`, el método pedido o el preferido del usuario. Los
+  métodos que admite el repositorio y la cola de merge se leen antes del diálogo con la
+  misma consulta GraphQL que hace gh-stack. Con cola, gh-stack ignora el método: no se manda.
+- Sale con 0 si fusionó, si encoló o si ya estaba fusionado, y lo dice en la salida
+  (`Merged #…`, `Added … to the merge queue`); el aviso sale de ahí. Con un conflicto en
+  GitHub sale con 3, el mismo código que un rebase con conflictos: se avisa aparte.
+- Espera el resultado hasta 10 minutos (600 consultas de 1 s); el progreso se puede cancelar.
+- `gh stack view --json` refresca el estado de los PRs, así que tras el merge las capas salen
+  fusionadas sin sync. La banda *Sync and Prune* se deriva de eso: capas fusionadas cuya rama
+  sigue en local.
 
 ### P10 · Navegar por la pila 🟡
 

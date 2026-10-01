@@ -14,10 +14,12 @@ import com.stacklane.StacklaneBundle.message
 import com.stacklane.gh.GhCommands
 import com.stacklane.gh.RebaseScope
 import com.stacklane.settings.StacklaneConfigurable
+import com.stacklane.settings.StacklaneProjectSettings
 import com.stacklane.settings.StacklaneSettings
 import com.stacklane.stack.CloseChoice
 import com.stacklane.stack.ClosePlans
 import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.MergePlans
 import com.stacklane.stack.Position
 import com.stacklane.stack.PrState
 import com.stacklane.stack.StackLayer
@@ -28,6 +30,7 @@ import com.stacklane.stack.StackState
 import com.stacklane.stack.repo
 import com.stacklane.ui.Help
 import com.stacklane.ui.Helps
+import com.stacklane.ui.mergeBlockText
 import com.stacklane.ui.showHelp
 import java.awt.datatransfer.StringSelection
 import javax.swing.Icon
@@ -240,6 +243,34 @@ internal class CloseStackAction : ToolbarAction(AllIcons.Actions.Cancel) {
     }
 }
 
+/**
+ * Fusionar la pila hasta su capa mas alta que se pueda (ver StackFlows.mergeStack). El dialogo
+ * deja elegir otra mas abajo.
+ */
+internal class MergeStackAction : ToolbarAction(AllIcons.Vcs.Merge) {
+
+    override fun isEnabled(state: StackState): Boolean =
+        state is StackState.Loaded && !state.repo.stackRebaseInProgress && MergePlans.targets(state.snapshot, state.details).candidates.isNotEmpty()
+
+    override fun help(e: AnActionEvent): Help {
+        val state = loaded(e) ?: return super.help(e)
+        val targets = MergePlans.targets(state.snapshot, state.details)
+        val top = targets.candidates.lastOrNull() ?: return super.help(e)
+        return Help(templatePresentation.description.orEmpty(), listOf(mergeCommand(e.project, top.number)))
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        e.project?.let { StackFlows.mergeStack(it) }
+    }
+}
+
+/** `gh stack merge` con el ultimo metodo usado en el proyecto, o los tres si aun no se uso ninguno. */
+internal fun mergeCommand(project: Project?, pr: Int): String {
+    val method = project?.let { StacklaneProjectSettings.getInstance(it).mergeMethod }
+    val command = Help.gh(GhCommands.merge(pr, method))
+    return if (method != null) command else "$command --squash | --merge | --rebase"
+}
+
 internal class OpenSettingsAction : StacklaneAction(AllIcons.General.Settings) {
     override fun actionPerformed(e: AnActionEvent) {
         ShowSettingsUtil.getInstance().showSettingsDialog(e.project, StacklaneConfigurable::class.java)
@@ -302,6 +333,45 @@ internal class RebaseUpstackFromLayerAction : StacklaneAction(AllIcons.Actions.M
         val selection = e.getData(StackDataKeys.LAYER) ?: return
         StackFlows.rebaseUpstack(project, selection.layer.branch)
     }
+}
+
+/**
+ * Fusionar en GitHub esta capa y todas las de debajo (ver StackFlows.mergeStack). Se ve en las
+ * capas activas con PR; si alguna de debajo (o esta) no se puede fusionar, se ve desactivada y
+ * la ayuda dice por que.
+ */
+internal class MergeUpToLayerAction : StacklaneAction(AllIcons.Vcs.Merge) {
+
+    override fun updateState(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        e.presentation.isVisible = selection != null && !selection.layer.isMerged && selection.layer.pr != null &&
+            selection.details?.state != PrState.MERGED
+        e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) && selection != null &&
+            !selection.state.repo.stackRebaseInProgress && candidate(selection) != null
+    }
+
+    override fun help(e: AnActionEvent): Help {
+        val selection = e.getData(StackDataKeys.LAYER) ?: return super.help(e)
+        val targets = MergePlans.targets(selection.state.snapshot, selection.state.details)
+        val candidate = targets.candidateOf(selection.layer.branch)
+        if (candidate == null) {
+            val blocker = targets.blocker ?: return super.help(e)
+            val layer = blocker.layer
+            val name = layer.pr?.let { "#${it.number} ${layer.branch}" } ?: layer.branch
+            return Help(message("help.merge.unavailable", name, mergeBlockText(blocker.reason)))
+        }
+        val prs = targets.upTo(candidate).joinToString(", ") { "#${it.number}" }
+        return Help(message("help.merge.up.to.layer", prs, targets.trunk), listOf(mergeCommand(e.project, candidate.number)))
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        val selection = e.getData(StackDataKeys.LAYER) ?: return
+        StackFlows.mergeStack(project, upTo = selection.layer.branch)
+    }
+
+    private fun candidate(selection: LayerSelection) =
+        MergePlans.targets(selection.state.snapshot, selection.state.details).candidateOf(selection.layer.branch)
 }
 
 // ---------------------------------------------------------------------- una pila local sin ramas

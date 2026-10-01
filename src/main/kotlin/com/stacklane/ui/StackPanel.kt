@@ -289,6 +289,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 )
             }
             if (!current.repo.stackRebaseInProgress) {
+                renderMerged(current)
                 renderNeedsRebase(current)
                 renderPushPending(current)
             }
@@ -326,6 +327,20 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         banner.withAction(message("action.rebase.stack.onto", snapshot.trunk), Helps.rebaseStack()) { service.rebase() }
         banners.add(banner)
         if (start != null) showUpstackTip(snapshot.trunk)
+    }
+
+    /**
+     * Capas fusionadas en GitHub cuya rama sigue aqui: el siguiente paso tras un merge, borrarlas
+     * y poner el resto de la pila sobre el trunk, queda aqui hasta que se hace.
+     */
+    private fun renderMerged(state: StackState.Loaded) {
+        val repository = service.repositoryFor(state.repo) ?: return
+        val merged = StackFlows.mergedWithLocalBranch(repository, state.snapshot)
+        if (merged.isEmpty()) return
+        banners.add(
+            banner(message("banner.merged", merged.joinToString(", "), state.snapshot.trunk), EditorNotificationPanel.Status.Info)
+                .withAction(message("action.sync.prune"), Helps.syncAndPrune(state.snapshot.trunk)) { StackFlows.syncAndPrune(project) }
+        )
     }
 
     /** Tras un rebase las ramas solo cambiaron en local: el siguiente paso, subirlas, queda aqui. */

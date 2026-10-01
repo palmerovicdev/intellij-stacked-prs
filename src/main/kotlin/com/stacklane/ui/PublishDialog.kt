@@ -11,7 +11,6 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.panels.HorizontalLayout
-import com.intellij.ui.components.panels.VerticalLayout
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.TopGap
@@ -29,12 +28,9 @@ import com.stacklane.stack.PublishPlans
 import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackState
 import java.awt.BorderLayout
-import java.awt.Dimension
-import java.awt.Rectangle
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.Scrollable
 import javax.swing.event.DocumentEvent
 import javax.swing.text.JTextComponent
 
@@ -87,14 +83,9 @@ internal class PublishDialog(
             }
         }
         row {
-            val graph = Graph().apply {
+            val graph = DialogGraph().apply {
                 rows.asReversed().forEachIndexed { index, row -> add(row.component(lineAbove = index > 0)) }
-                val base = JPanel(HorizontalLayout(JBUI.scale(6))).apply {
-                    isOpaque = false
-                    add(JLabel(snapshot.trunk))
-                    add(Chip.status(message("layer.trunk"), StackColors.DRAFT))
-                }
-                add(graphRow(base, null, null, Rail.Node(Rail.Shape.SQUARE, StackColors.DRAFT), lineAbove = rows.isNotEmpty(), lineBelow = false))
+                addBase(snapshot.trunk, lineAbove = rows.isNotEmpty())
             }
             cell(ScrollPaneFactory.createScrollPane(graph, true)).align(Align.FILL)
         }.resizableRow().topGap(TopGap.SMALL)
@@ -219,27 +210,7 @@ internal class PublishDialog(
         private fun secondary(text: String) = JLabel(text).apply { foreground = NamedColorUtil.getInactiveTextColor() }
     }
 
-    /** Las filas del grafo. Sigue el ancho del dialogo y, si la pila es alta, se desplaza. */
-    private class Graph : JPanel(VerticalLayout(0)), Scrollable {
-
-        init {
-            isOpaque = false
-        }
-
-        override fun getPreferredScrollableViewportSize(): Dimension =
-            preferredSize.let { Dimension(it.width, minOf(it.height, JBUI.scale(MAX_HEIGHT))) }
-
-        override fun getScrollableUnitIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int = JBUI.scale(16)
-
-        override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int = visibleRect.height
-
-        override fun getScrollableTracksViewportWidth(): Boolean = true
-
-        override fun getScrollableTracksViewportHeight(): Boolean = false
-    }
-
     private companion object {
-        const val MAX_HEIGHT = 420
         const val BODY_PREVIEW = 40
 
         /** En la vista previa, una descripcion larga se abrevia: el Log la ensena entera. */

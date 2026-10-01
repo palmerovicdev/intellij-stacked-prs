@@ -26,6 +26,12 @@
                 branches in one click from the banner that stays until they are pushed
                 (<code>gh stack push</code>). The first rebase asks whether to
                 turn on <code>git rerere</code>, as gh stack does in the terminal.</li>
+            <li><b>Merge a stack</b>, whole or up to a layer, with GitHub's atomic stack merge
+                (<code>gh stack merge</code>): the dialog shows which pull requests go in, their
+                review and CI, and the merge method the repository allows (the last one used is
+                remembered). If the base uses a merge queue, they join the queue. Afterwards,
+                <b>Sync and Prune</b> deletes the merged branches
+                (<code>gh stack sync --prune</code>).</li>
             <li><b>Close a whole stack</b>: unstack it, close its open pull requests (with an
                 optional comment) and delete its remote and local branches, in an order that
                 never leaves a stack without branches behind.</li>
@@ -91,6 +97,7 @@
                 <action id="Stacklane.RebaseLayers" class="com.stacklane.actions.RebaseLayersAction"/>
             </group>
             <separator/>
+            <action id="Stacklane.MergeStack" class="com.stacklane.actions.MergeStackAction"/>
             <action id="Stacklane.CloseStack" class="com.stacklane.actions.CloseStackAction"/>
             <separator/>
             <action id="Stacklane.OpenSettings" class="com.stacklane.actions.OpenSettingsAction"/>
@@ -118,6 +125,8 @@
             <!-- Solo si el PR apunta en GitHub a otra rama que la capa de debajo. -->
             <action id="Stacklane.ChangePrBase" class="com.stacklane.actions.ChangePrBaseAction"/>
             <separator/>
+            <action id="Stacklane.MergeUpToLayer" class="com.stacklane.actions.MergeUpToLayerAction"/>
+            <separator/>
             <reference ref="Stacklane.MarkReady"/>
             <reference ref="Stacklane.MarkDraft"/>
             <separator/>
@@ -132,6 +141,7 @@
             <reference ref="Stacklane.PublishDraft"/>
             <reference ref="Stacklane.PublishReady"/>
             <separator/>
+            <reference ref="Stacklane.MergeStack"/>
             <reference ref="Stacklane.CloseStack"/>
         </group>
     </actions>

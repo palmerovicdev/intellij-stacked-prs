@@ -71,6 +71,8 @@ class Operation(
     val workDir: Path? = null,
     val successMessage: @Nls String? = null,
     val onSuccess: (suspend () -> Unit)? = null,
+    /** Tras [onSuccess], con lo que devolvio la ultima llamada: para avisar segun lo que dijo gh. */
+    val onOutput: (suspend (GhResult) -> Unit)? = null,
     /** Trata un fallo concreto; true si ya se aviso al usuario y sobra el aviso generico. */
     val onFailure: ((GhResult) -> Boolean)? = null,
     /**
@@ -313,6 +315,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         try {
             _running.value = operation.title
             val workDir = operation.workDir ?: repository?.root?.toNioPath() ?: return@launch
+            var last: GhResult? = null
             // Lo mismo que hace el IDE antes de un checkout o un rebase: git ve lo que hay en disco.
             withContext(Dispatchers.EDT) { FileDocumentManager.getInstance().saveAllDocuments() }
             val failure = withBackgroundProgress(project, operation.title, cancellable = true) {
@@ -321,6 +324,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                     for (call in operation.calls) {
                         val result = run(repository, workDir, call)
                         if (!result.ok) return@withBackgroundProgress result
+                        last = result
                         completed++
                     }
                     null
@@ -335,6 +339,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 }
                 operation.successMessage?.let { Notifier.info(project, it) }
                 operation.onSuccess?.invoke()
+                last?.let { operation.onOutput?.invoke(it) }
             } else if (operation.onFailure?.invoke(failure) != true) {
                 reportFailure(operation, failure, repository)
             }

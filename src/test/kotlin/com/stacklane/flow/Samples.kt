@@ -37,4 +37,7 @@ object Samples {
                   "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"SUCCESS"}}}]}}
         }}}
     """.trimIndent()
+
+    /** [DETAILS_TWO_LAYERS] con #11 listo para review: las dos capas se pueden fusionar. */
+    val DETAILS_READY = DETAILS_TWO_LAYERS.replace(""""isDraft":true""", """"isDraft":false""")
 }

@@ -1,5 +1,6 @@
 package com.stacklane.stack
 
+import com.stacklane.gh.MergeMethod
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -97,6 +98,34 @@ object StackJson {
         return (root["labels"] as? JsonArray).orEmpty()
             .mapNotNull { (it as? JsonObject)?.string("name") }
             .toCollection(LinkedHashSet())
+    }
+
+    /**
+     * La respuesta de [com.stacklane.gh.GhCommands.mergeSettings]. null si no llego el
+     * repositorio o no dice ningun metodo: entonces no se sabe, y GitHub lo comprueba al fusionar.
+     */
+    fun parseMergeSettings(text: String): MergeSettings? {
+        val root = parse(text) as? JsonObject ?: return null
+        val repository = root.obj("data")?.obj("repository") ?: return null
+        val allowed = buildSet {
+            if (repository.bool("squashMergeAllowed")) add(MergeMethod.SQUASH)
+            if (repository.bool("mergeCommitAllowed")) add(MergeMethod.MERGE)
+            if (repository.bool("rebaseMergeAllowed")) add(MergeMethod.REBASE)
+        }
+        val rules = (repository.obj("ref")?.obj("rules")?.get("nodes") as? JsonArray).orEmpty()
+        val queue = repository["mergeQueue"] is JsonObject || rules.any { (it as? JsonObject)?.string("type") == "MERGE_QUEUE" }
+        if (allowed.isEmpty() && !queue) return null
+        return MergeSettings(allowed, MergeMethod.parse(repository.string("viewerDefaultMergeMethod")), queue)
+    }
+
+    /**
+     * `gh api repos/OWNER/REPO/stacks/N`: los numeros de sus PRs, de abajo arriba. null si no
+     * tiene la forma de una pila.
+     */
+    fun parseRemoteStackPrs(text: String): List<Int>? {
+        val root = parse(text) as? JsonObject ?: return null
+        val prs = root["pull_requests"] as? JsonArray ?: return null
+        return prs.mapNotNull { (it as? JsonObject)?.int("number") }
     }
 
     /**

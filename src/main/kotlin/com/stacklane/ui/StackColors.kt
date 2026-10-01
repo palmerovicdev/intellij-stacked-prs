@@ -6,8 +6,10 @@ import com.intellij.util.ui.GraphicsUtil
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.stacklane.StacklaneBundle.message
+import com.stacklane.stack.ChecksState
 import com.stacklane.stack.PrDetails
 import com.stacklane.stack.PrState
+import com.stacklane.stack.ReviewDecision
 import com.stacklane.stack.StackLayer
 import java.awt.Color
 import java.awt.Graphics
@@ -91,6 +93,26 @@ internal class Chip(text: String, fg: Color, private val fill: Color, private va
         /** Pastilla tenue del color de un estado. */
         fun status(text: String, color: Color): Chip =
             Chip(text, color, ColorUtil.withAlpha(color, 0.12), ColorUtil.withAlpha(color, 0.45))
+
+        /** La decision de review, en verde, rojo o gris como en GitHub. */
+        fun review(review: ReviewDecision): Chip = status(
+            reviewText(review),
+            when (review) {
+                ReviewDecision.APPROVED -> StackColors.READY
+                ReviewDecision.CHANGES_REQUESTED -> StackColors.CLOSED
+                ReviewDecision.REVIEW_REQUIRED -> StackColors.DRAFT
+            },
+        )
+
+        /** El CI del ultimo commit. */
+        fun checks(checks: ChecksState): Chip = status(
+            checksText(checks),
+            when (checks) {
+                ChecksState.SUCCESS -> StackColors.READY
+                ChecksState.FAILURE -> StackColors.CLOSED
+                ChecksState.PENDING -> StackColors.QUEUED
+            },
+        )
 
         /** Una label de GitHub con su color, pintada como la pinta GitHub. Ver [LabelStyle]. */
         fun label(name: String, hex: String): Chip {

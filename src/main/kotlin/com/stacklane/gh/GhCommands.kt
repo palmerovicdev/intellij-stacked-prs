@@ -35,6 +35,17 @@ enum class RebaseScope(val flags: List<String>) {
     LAYERS(listOf("--no-trunk")),
 }
 
+/** Como fusiona GitHub los PRs de `gh stack merge`. [graphql]: como lo nombra la API. */
+enum class MergeMethod(val flag: String, val graphql: String) {
+    SQUASH("--squash", "SQUASH"),
+    MERGE("--merge", "MERGE"),
+    REBASE("--rebase", "REBASE");
+
+    companion object {
+        fun parse(value: String?): MergeMethod? = entries.firstOrNull { it.name == value || it.graphql == value }
+    }
+}
+
 /**
  * Los comandos que ejecuta el plugin, uno por operacion. Son exactamente los que se
  * escribirian en la terminal, y la pestana Log los muestra asi.
@@ -68,7 +79,19 @@ object GhCommands {
     fun submit(ready: Boolean): List<String> =
         if (ready) listOf("stack", "submit", "--auto", "--open") else listOf("stack", "submit", "--auto")
 
-    fun sync(): List<String> = listOf("stack", "sync")
+    /** [prune]: borra tambien las ramas locales de las capas fusionadas. */
+    fun sync(prune: Boolean = false): List<String> = if (prune) listOf("stack", "sync", "--prune") else listOf("stack", "sync")
+
+    /**
+     * Fusiona en GitHub, de una vez, el PR [pr] y todos los de debajo: o entran todos o ninguno.
+     * Si la base usa cola de merge, entran en la cola. Sin [method] (cola de merge), gh-stack no
+     * manda ninguno: la cola usa el suyo.
+     *
+     * Un numero suelto es para gh-stack primero un numero de pila y despues uno de PR: antes de
+     * lanzarlo hay que comprobar que no haya una pila con ese numero (ver MergePlans.numberCheck).
+     */
+    fun merge(pr: Int, method: MergeMethod?): List<String> =
+        listOfNotNull("stack", "merge", pr.toString(), "--yes", method?.flag)
 
     fun rebase(scope: RebaseScope = RebaseScope.STACK): List<String> = listOf("stack", "rebase") + scope.flags
 
@@ -176,6 +199,24 @@ object GhCommands {
         )
     }
 
+    /**
+     * Los metodos de merge que admite el repositorio, el que prefiere el usuario y si [base] usa
+     * cola de merge: lo mismo que pregunta `gh stack merge` antes de fusionar. Solo lee.
+     */
+    fun mergeSettings(repo: GitHubRepo, base: String): List<String> = listOf(
+        "api", "graphql",
+        "--hostname", repo.host,
+        "-f", "owner=${repo.owner}",
+        "-f", "name=${repo.name}",
+        "-f", "base=$base",
+        "-f", "qualified=refs/heads/$base",
+        "-f", "query=$MERGE_SETTINGS_QUERY",
+    )
+
+    /** La pila de GitHub con numero [number], si existe (si no, `HTTP 404`). Solo lee. */
+    fun remoteStack(repo: GitHubRepo, number: Int): List<String> =
+        listOf("api", "repos/${repo.owner}/${repo.name}/stacks/$number", "--hostname", repo.host)
+
     /** La linea que se pegaria en la terminal. */
     fun display(args: List<String>, tool: Tool = Tool.GH): String = buildString {
         append(tool.command)
@@ -187,6 +228,14 @@ object GhCommands {
     }
 
     private const val FINAL_LABEL_COLOR = "8250DF"
+
+    // La de RepoMergeConfig y BaseBranchUsesMergeQueue de gh-stack (merge_async.go de la v0.1.1), en una.
+    private const val MERGE_SETTINGS_QUERY =
+        "query(\$owner: String!, \$name: String!, \$base: String!, \$qualified: String!) { " +
+            "repository(owner: \$owner, name: \$name) { " +
+            "mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed viewerDefaultMergeMethod " +
+            "mergeQueue(branch: \$base) { id } " +
+            "ref(qualifiedName: \$qualified) { rules(first: 50) { nodes { type } } } } }"
 
     private val SAFE = Regex("[A-Za-z0-9_./:=@%+,-]+")
 

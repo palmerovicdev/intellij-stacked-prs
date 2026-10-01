@@ -179,6 +179,8 @@ internal object Helps {
 
     fun push() = Help(message("help.push"), listOf(Help.gh(GhCommands.push())))
 
+    fun syncAndPrune(trunk: String) = Help(message("help.sync.prune", trunk), listOf(Help.gh(GhCommands.sync(prune = true))))
+
     /**
      * El IDE compara desde el ultimo commit comun con la capa de debajo: es lo que hace `...`
      * en `git diff`, aunque el comando que corre por dentro sea otro.

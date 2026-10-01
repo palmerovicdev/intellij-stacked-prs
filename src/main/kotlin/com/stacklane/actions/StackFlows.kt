@@ -11,6 +11,14 @@ import com.stacklane.StacklaneBundle.message
 import com.stacklane.gh.GhCli
 import com.stacklane.gh.GhCommands
 import com.stacklane.gh.GhNotFoundException
+import com.stacklane.gh.GhExit
+import com.stacklane.settings.StacklaneProjectSettings
+import com.stacklane.stack.MergeOutcome
+import com.stacklane.stack.MergePlans
+import com.stacklane.stack.MergeTargets
+import com.stacklane.stack.NumberCheck
+import com.stacklane.ui.MergeStackDialog
+import com.stacklane.ui.mergeBlockText
 import com.stacklane.gh.GhResult
 import com.stacklane.gh.GitCommands
 import com.stacklane.gh.Tool
@@ -244,6 +252,114 @@ internal object StackFlows {
 
     private fun showLog(project: Project) = Notifier.action(message("notification.show.log")) { StackToolWindow.showLog(project) }
 
+    /**
+     * *Merge Up to Here…* ([upTo]: esa capa) y *Merge Stack…* (null: la mas alta que se pueda).
+     * Antes del dialogo se lee como fusiona el repositorio; despues, antes de lanzar
+     * `gh stack merge N`, se comprueba que N no sea tambien el numero de otra pila: gh-stack lo
+     * probaria primero como pila y, con `--yes`, la fusionaria entera.
+     */
+    fun mergeStack(project: Project, upTo: String? = null) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val targets = MergePlans.targets(state.snapshot, state.details)
+        val initial = upTo?.let(targets::candidateOf) ?: targets.candidates.lastOrNull()
+            ?: return Notifier.info(project, message("merge.title"), nothingToMerge(targets))
+        val github = githubOf(state) ?: return Notifier.error(project, message("merge.title"), message("details.no.github"))
+        val root = repository.root.toNioPath()
+        val remembered = StacklaneProjectSettings.getInstance(project)
+        service.launch {
+            val settings = try {
+                withBackgroundProgress(project, message("merge.reading")) {
+                    StackJson.parseMergeSettings(GhCli.run(root, GhCommands.mergeSettings(github, targets.trunk)).stdout)
+                }
+            } catch (_: GhNotFoundException) {
+                return@launch Notifier.error(project, message("merge.title"), message("state.gh.missing"))
+            }
+            val choice = withContext(Dispatchers.EDT) {
+                val dialog = MergeStackDialog(project, state, targets, settings, remembered.mergeMethod, initial)
+                dialog.show()
+                if (dialog.isOK) dialog.choice else null
+            } ?: return@launch
+            choice.method?.let { remembered.mergeMethod = it }
+
+            val number = choice.target.number
+            val check = try {
+                withBackgroundProgress(project, message("merge.checking", number)) { GhCli.run(root, GhCommands.remoteStack(github, number)) }
+            } catch (_: GhNotFoundException) {
+                return@launch Notifier.error(project, message("merge.title"), message("state.gh.missing"))
+            }
+            when (MergePlans.numberCheck(number, check)) {
+                null -> return@launch Notifier.error(
+                    project, message("merge.check.failed.title"), message("merge.check.failed", number) + "<br>" + Notifier.html(check.errorText),
+                )
+                NumberCheck.OTHER_STACK -> return@launch Notifier.warning(project, message("merge.number.taken.title"), message("merge.number.taken", number))
+                NumberCheck.PULL_REQUEST, NumberCheck.SAME_MERGE -> Unit
+            }
+
+            val prs = targets.upTo(choice.target).joinToString(", ") { "#${it.number}" }
+            service.execute(
+                Operation(
+                    title = message("op.merge", prs),
+                    calls = listOf(MergePlans.call(choice)),
+                    repository = repository,
+                    onOutput = { result ->
+                        val outcome = MergePlans.outcome(result) ?: if (settings?.usesMergeQueue == true) MergeOutcome.QUEUED else MergeOutcome.MERGED
+                        when (outcome) {
+                            MergeOutcome.MERGED -> Notifier.info(
+                                project, message("op.merge.done", prs, targets.trunk),
+                                Notifier.action(message("action.sync.prune")) { syncAndPrune(project) },
+                            )
+                            MergeOutcome.QUEUED -> Notifier.info(project, message("op.merge.queued", prs, targets.trunk))
+                            MergeOutcome.ALREADY_MERGED -> Notifier.info(project, message("op.merge.already", prs))
+                        }
+                    },
+                    onFailure = { result ->
+                        // gh-stack sale con 3 si GitHub encontro conflictos: no es un rebase local.
+                        val conflict = result.exitCode == GhExit.CONFLICT
+                        if (conflict) {
+                            Notifier.error(project, message("operation.failed", message("op.merge", prs)), message("merge.conflict", targets.trunk), showLog(project))
+                        }
+                        conflict
+                    },
+                )
+            )
+        }
+    }
+
+    /** Por que no hay nada que fusionar: una capa lo impide desde abajo, o ya esta todo fusionado. */
+    private fun nothingToMerge(targets: MergeTargets): String {
+        val blocker = targets.blocker ?: return message("merge.nothing.merged")
+        val layer = blocker.layer
+        return message("merge.nothing.blocked", layer.pr?.let { "#${it.number} ${layer.branch}" } ?: layer.branch, mergeBlockText(blocker.reason))
+    }
+
+    /** Donde estan los PRs de la pila. Un alias de ~/.ssh/config no es un host que gh entienda. */
+    private fun githubOf(state: StackState.Loaded): GitHubRepo? =
+        state.snapshot.layers.firstNotNullOfOrNull { layer -> layer.pr?.url?.let(GitHubRepo::fromPullRequestUrl) }
+            ?: state.repo.github?.takeUnless { it.isSshAlias }
+
+    /**
+     * Tras fusionar capas en GitHub: `gh stack sync --prune` borra sus ramas locales, rebasa el
+     * resto de la pila sobre el trunk y la sube.
+     */
+    fun syncAndPrune(project: Project) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        service.execute(
+            Operation(
+                title = message("op.sync.prune"),
+                calls = listOf(GhCall(GhCommands.sync(prune = true), acceptsRemote = true)),
+                repository = service.repositoryFor(state.repo),
+                successMessage = message("op.sync.prune.done"),
+            )
+        )
+    }
+
+    /** Capas ya fusionadas cuya rama sigue en este repositorio: lo que borra [syncAndPrune]. */
+    fun mergedWithLocalBranch(repository: GitRepository, snapshot: StackSnapshot): List<String> =
+        snapshot.layers.filter { it.isMerged && repository.branches.findLocalBranch(it.branch) != null }.map { it.branch }
+
     fun addLayer(project: Project) {
         val service = StackService.getInstance(project)
         val state = service.state.value as? StackState.Loaded ?: return
@@ -277,9 +393,8 @@ internal object StackFlows {
         val state = service.state.value as? StackState.Loaded ?: return
         val repository = service.repositoryFor(state.repo) ?: return
         val snapshot = state.snapshot
-        // Donde gh-stack crea los PRs. Un alias de ~/.ssh/config no es un host que gh entienda.
-        val github = snapshot.layers.firstNotNullOfOrNull { layer -> layer.pr?.url?.let(GitHubRepo::fromPullRequestUrl) }
-            ?: state.repo.github?.takeUnless { it.isSshAlias }
+        // Donde gh-stack crea los PRs.
+        val github = githubOf(state)
         val fresh = snapshot.layers.filter { !it.isMerged && it.pr == null }
         service.launch {
             val proposals = try {

@@ -17,13 +17,13 @@ puede alternar entre IDE y terminal en cualquier momento.
   ponerse al día con su base (*Behind*).
 - Barra: refrescar, **nueva pila**, **añadir capa encima**, **publicar como drafts**,
   **publicar listos para revisión**, **sync**, **rebase** (desplegable: upstack desde la
-  capa actual, pila entera, downstack y capas entre sí) y ajustes.
+  capa actual, pila entera, downstack y capas entre sí), **fusionar**, **cerrar** y ajustes.
 - Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. Checkout, **ver los
   cambios de la capa** (el diff del IDE contra la de debajo, lo mismo que enseña su PR),
-  abrir o copiar el PR, **rebase upstack desde aquí**, **cambiar la base del PR** a la capa
+  abrir o copiar el PR, **rebase upstack desde aquí**, **fusionar hasta aquí**, **cambiar la base del PR** a la capa
   de debajo cuando no coincide, **marcar listo / volver a draft**,
   **labels…** y **marcar como capa final** (`stack-final`). Clic derecho fuera de las filas
-  o sobre la base: lo de toda la pila (añadir capa, publicar y cerrar).
+  o sobre la base: lo de toda la pila (añadir capa, publicar, fusionar y cerrar).
 - **Cada opción explica lo que hace y el comando que ejecuta** al pasar el ratón: barra,
   menús, botones de las bandas y opciones de los diálogos. Los comandos llevan los datos
   reales (rama, URL del PR), cada uno en su bloque con fondo, y las URLs en azul; los
@@ -44,6 +44,11 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
+- **Fusionar la pila** (*Merge Stack…* o, desde una capa, *Merge Up to Here…*): GitHub
+  fusiona ese PR y todos los de debajo de una vez, o ninguno. El diálogo enseña qué capas
+  entran, su review y su CI, y el método (solo los que admite el repositorio; se recuerda el
+  último). Con cola de merge, entran en la cola. Después, **Sync and Prune** borra las ramas
+  fusionadas, desde el aviso o desde la banda que se queda hasta hacerlo.
 - **Cerrar una pila entera** (*Close Stack…*): deshacerla en GitHub, cerrar sus PRs
   abiertos con un comentario opcional y borrar sus ramas remotas y locales. El diálogo lista
   cada PR y rama que toca y los comandos en el orden en que se ejecutan.
@@ -68,6 +73,8 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Rebase upstack | `gh stack rebase --upstack --no-trunk`, con checkout del IDE antes si no estás en esa capa y vuelta al terminar |
 | Otros rebase | `gh stack rebase --downstack` y `gh stack rebase --no-trunk` |
 | Push tras el rebase | `gh stack push` |
+| Fusionar | `gh stack merge <pr> --yes --squash` (o `--merge`, `--rebase`; sin método con cola de merge), tras comprobar con `gh api repos/OWNER/REPO/stacks/<pr>` que no hay una pila con ese número |
+| Tras fusionar | `gh stack sync --prune` |
 | Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
 
 Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
@@ -79,7 +86,7 @@ uso de API interna, deprecada, experimental, *override-only* o *non-extendable*.
 contra la IDEA instalada, sin descargar nada:
 
 ```text
-Plugin com.stacklane:0.7.0 against IU-262.10315.125: Compatible
+Plugin com.stacklane:0.9.0 against IU-262.10315.125: Compatible
 ```
 
 La integración con la ventana Pull Requests no compila contra el plugin GitHub: ninguna de
@@ -132,7 +139,7 @@ gh/        GhCli (ejecuta gh sin TTY y lo cancela con la corrutina), GhCommands 
 stack/     modelo, parser JSON, StackService (estado + operaciones), log, rerere, handler de commit
 ui/        ventana, lista con el grafo, diálogos
 actions/   acciones (barra, menú de capa, menú de Pull Requests), PrTarget, StackFlows
-settings/  ruta de gh, nombre de la label final, qué hacer tras un commit, remoto por proyecto
+settings/  ruta de gh, nombre de la label final, qué hacer tras un commit; remoto y último método de merge por proyecto
 ```
 
 Los tests de `src/test/.../flow` corren dentro de un IDE headless con el framework de pruebas de

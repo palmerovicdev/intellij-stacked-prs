@@ -81,10 +81,23 @@ class GhCommandsTest {
 
     @Test
     fun `only push, sync and submit leave nothing rebased to push`() {
-        listOf(GhCommands.push(), GhCommands.sync(), GhCommands.submit(ready = false), GhCommands.submit(ready = true))
+        listOf(GhCommands.push(), GhCommands.sync(), GhCommands.sync(prune = true), GhCommands.submit(ready = false), GhCommands.submit(ready = true))
             .forEach { assertTrue(GhCommands.display(it), GhCommands.pushesStack(it)) }
         listOf(GhCommands.rebase(), GhCommands.rebase(RebaseScope.UPSTACK), GhCommands.rebaseContinue(), GhCommands.view(), GhCommands.top())
             .forEach { assertFalse(GhCommands.display(it), GhCommands.pushesStack(it)) }
+    }
+
+    @Test
+    fun `merge and the reads before it`() {
+        assertEquals("gh stack merge 12 --yes --rebase", GhCommands.display(GhCommands.merge(12, MergeMethod.REBASE)))
+        assertEquals("gh stack merge 12 --yes", GhCommands.display(GhCommands.merge(12, null)))
+        assertEquals("gh stack sync --prune", GhCommands.display(GhCommands.sync(prune = true)))
+        val repo = GitHubRepo("github.com", "acme", "shop")
+        assertEquals("gh api repos/acme/shop/stacks/12 --hostname github.com", GhCommands.display(GhCommands.remoteStack(repo, 12)))
+        assertEquals(
+            listOf("api", "graphql", "--hostname", "github.com", "-f", "owner=acme", "-f", "name=shop", "-f", "base=main", "-f", "qualified=refs/heads/main"),
+            GhCommands.mergeSettings(repo, "main").dropLast(2),
+        )
     }
 
     @Test

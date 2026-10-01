@@ -8,6 +8,7 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.StoragePathMacros
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.stacklane.gh.MergeMethod
 
 /** Que hacer cuando un commit del IDE deja atras las capas de encima. */
 enum class RestackMode { ASK, ALWAYS, NEVER }
@@ -55,7 +56,8 @@ class StacklaneSettings : SimplePersistentStateComponent<StacklaneSettings.Optio
 
 /**
  * Preferencias de este proyecto, en el workspace (no se versionan): el repositorio elegido
- * cuando hay varios y el remoto al que publicar cuando gh-stack no sabe elegir.
+ * cuando hay varios, el remoto al que publicar cuando gh-stack no sabe elegir y el ultimo
+ * metodo de merge, que depende de lo que admita el repositorio.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "StacklaneProject", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
@@ -64,6 +66,7 @@ class StacklaneProjectSettings : SimplePersistentStateComponent<StacklaneProject
     class Options : BaseState() {
         var repositoryRoot by string()
         var remote by string()
+        var mergeMethod by string()
     }
 
     var repositoryRoot: String?
@@ -76,6 +79,13 @@ class StacklaneProjectSettings : SimplePersistentStateComponent<StacklaneProject
         get() = state.remote
         set(value) {
             state.remote = value
+        }
+
+    /** El ultimo con el que se fusiono desde el plugin. */
+    var mergeMethod: MergeMethod?
+        get() = MergeMethod.parse(state.mergeMethod)
+        set(value) {
+            state.mergeMethod = value?.name
         }
 
     companion object {
