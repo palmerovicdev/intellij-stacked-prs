@@ -159,6 +159,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         scope.launch { service.state.collect(::render) }
         scope.launch { service.pushPending.collect { renderBanners() } }
         scope.launch { service.conflicts.collect { renderBanners() } }
+        scope.launch { service.removals.collect { renderBanners() } }
         scope.launch {
             service.running.collect {
                 running = it
@@ -206,6 +207,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                     isTop = index == snapshot.layers.lastIndex,
                     detailsLoading = state.detailsLoading,
                     wrongBase = snapshot.wrongBase(layer, details),
+                    missing = state.missingOf(layer),
                 )
             }
             layers.asReversed() + StackRow.Trunk(snapshot.trunk, snapshot.currentBranch == snapshot.trunk)
@@ -284,8 +286,10 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 )
             }
             if (!current.repo.stackRebaseInProgress) {
+                renderMissing(current)
                 renderMerged(current)
                 renderNeedsRebase(current)
+                renderRemovals(current)
                 renderPushPending(current)
             }
         }
@@ -355,6 +359,44 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         banner.withAction(message("action.rebase.stack.onto", snapshot.trunk), Helps.rebaseStack()) { service.rebase() }
         banners.add(banner)
         if (start != null) showUpstackTip(snapshot.trunk)
+    }
+
+    /**
+     * Capas activas sin rama local: gh-stack no puede rebasar, sincronizar ni subir la pila hasta
+     * que vuelvan o salgan de ella. Si es solo una, tambien se ofrece sacarla.
+     */
+    private fun renderMissing(state: StackState.Loaded) {
+        val missing = state.missing.takeIf { it.isNotEmpty() } ?: return
+        val pending = service.removals.value[state.repo.root].orEmpty()
+        val banner = banner(message("banner.missing", missing.size, missing.joinToString(", ") { it.branch }), EditorNotificationPanel.Status.Warning)
+            .withAction(message(if (missing.size == 1) "action.restore.branch" else "action.restore.branches"), Helps.restoreBranches(missing)) {
+                StackFlows.restoreBranches(project, missing)
+            }
+        missing.singleOrNull()?.takeIf { it.branch !in pending }?.let { layer ->
+            banner.withAction(message("action.Stacklane.RemoveFromStack.text"), Helps.removeFromStack(state.snapshot, layer)) {
+                StackFlows.removeFromStack(project, layer)
+            }
+        }
+        banners.add(banner)
+    }
+
+    /**
+     * Capas recuperadas para sacarlas de la pila: lo que queda, `gh stack modify` en la terminal,
+     * se queda aqui hasta que salen. Si la pila necesita rebase, esa banda sale antes: modify no
+     * abre una pila con capas divergidas.
+     */
+    private fun renderRemovals(state: StackState.Loaded) {
+        val pending = service.removals.value[state.repo.root].orEmpty()
+        val missing = state.missing.mapTo(HashSet()) { it.branch }
+        state.snapshot.layers.filter { it.branch in pending && it.branch !in missing }.forEach { layer ->
+            banners.add(
+                banner(message("banner.remove", layer.branch), EditorNotificationPanel.Status.Info)
+                    .withAction(message("action.copy.modify"), Helps.copyModify(layer.branch)) { StackFlows.copyModify() }
+                    .withAction(message("action.dismiss"), Help(message("help.dismiss.remove", layer.branch))) {
+                        service.forgetRemoval(state.repo.root, layer.branch)
+                    }
+            )
+        }
     }
 
     /**
@@ -471,7 +513,11 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     private fun activateSelection() {
         val repository = state.repo?.let(service::repositoryFor) ?: return
         when (val row = list.selectedValue) {
-            is StackRow.Layer -> if (!row.layer.isCurrent) service.checkout(repository, row.layer.branch)
+            // Sin rama no hay checkout: recuperarla es lo que la vuelve a hacer util.
+            is StackRow.Layer -> when {
+                row.missing != null -> StackFlows.restoreBranches(project, listOf(row.missing))
+                !row.layer.isCurrent -> service.checkout(repository, row.layer.branch)
+            }
             is StackRow.Trunk -> if (!row.isCurrent) service.checkout(repository, row.name)
             is StackRow.Local -> activateLocal(repository, row.entry)
             null -> Unit

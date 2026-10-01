@@ -72,8 +72,12 @@ sealed interface StackState {
         val details: Map<Int, PrDetails>,
         val detailsLoading: Boolean,
         val detailsError: String?,
+        /** Las capas activas sin rama local. Ver [StackSnapshot.missingBranches]. */
+        val missing: List<MissingBranch> = emptyList(),
     ) : StackState {
         fun detailsOf(layer: StackLayer): PrDetails? = layer.pr?.let { details[it.number] }
+
+        fun missingOf(layer: StackLayer): MissingBranch? = missing.firstOrNull { it.branch == layer.branch }
     }
 
     data class Failed(val repo: RepoRef?, val message: String) : StackState

@@ -70,5 +70,18 @@ object StackPlans {
      */
     fun restore(heads: Map<String, String>): Plan = Plan(heads.map { (branch, sha) -> git(GitCommands.branch(branch, sha)) })
 
+    /**
+     * Recrear las ramas de capas que siguen en una pila activa (ver [MissingBranch]): desde el
+     * remoto si alli siguen, si no en su ultimo commit conocido, y si no se sabe, vacias sobre su
+     * capa de debajo. De abajo arriba: asi la de debajo ya existe si hace falta. No cambia de
+     * rama ni toca el arbol de trabajo. Si una falla, las de antes se quedan: ya sirven.
+     */
+    fun restoreLayers(missing: List<MissingBranch>): Plan = Plan(missing.map { git(restoreLayer(it)) })
+
+    fun restoreLayer(missing: MissingBranch): List<String> = when {
+        missing.remoteBranch != null -> GitCommands.branchTracking(missing.branch, missing.remoteBranch)
+        else -> GitCommands.branch(missing.branch, missing.lastCommit ?: missing.parent)
+    }
+
     private fun git(args: List<String>) = GhCall(args, tool = Tool.GIT)
 }

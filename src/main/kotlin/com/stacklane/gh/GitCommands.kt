@@ -20,6 +20,9 @@ object GitCommands {
 
     fun branch(name: String, startPoint: String): List<String> = listOf("branch", name, startPoint)
 
+    /** Crea la rama local [name] desde [remoteBranch] (`origin/feat/a`), con seguimiento, sin cambiar a ella. */
+    fun branchTracking(name: String, remoteBranch: String): List<String> = listOf("branch", "--track", name, remoteBranch)
+
     fun switch(branch: String): List<String> = listOf("switch", branch)
 
     fun switchDetached(revision: String): List<String> = listOf("switch", "--detach", revision)

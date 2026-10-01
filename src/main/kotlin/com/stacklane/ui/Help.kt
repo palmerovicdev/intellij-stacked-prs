@@ -12,6 +12,9 @@ import com.stacklane.gh.GhCommands
 import com.stacklane.gh.RebaseScope
 import com.stacklane.gh.Tool
 import com.stacklane.stack.GhCall
+import com.stacklane.stack.LayerPlans
+import com.stacklane.stack.MissingBranch
+import com.stacklane.stack.StackPlans
 import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackSnapshot
 import org.jetbrains.annotations.Nls
@@ -190,5 +193,39 @@ internal object Helps {
         return Help(message("help.layer.changes", layer.branch, parent), listOf(Help.git(listOf("diff", "$parent...${layer.branch}"))))
     }
 
+    /** Recrear las ramas de capas que siguen en la pila, cada una desde donde se pueda. */
+    fun restoreBranches(missing: List<MissingBranch>) = Help(
+        missing.singleOrNull()?.let { message("help.restore.branch", it.branch, restoreSource(it)) } ?: message("help.restore.branches"),
+        Help.of(StackPlans.restoreLayers(missing).calls),
+    )
+
+    /** De donde sale la rama recuperada: el remoto, su ultimo commit conocido o, vacia, la capa de debajo. */
+    fun restoreSource(missing: MissingBranch): @Nls String = when {
+        missing.remoteBranch != null -> message("restore.from.remote", missing.remoteBranch)
+        missing.lastCommit != null -> message("restore.from.commit", missing.lastCommit.take(SHORT_HASH))
+        else -> message("restore.empty", missing.parent)
+    }
+
+    /**
+     * La de arriba sin PR sale sin modify (ver LayerPlans.drop); cualquier otra, recuperando la rama
+     * y con `gh stack modify` en la terminal.
+     */
+    fun removeFromStack(snapshot: StackSnapshot, missing: MissingBranch): Help {
+        val layer = snapshot.layers.firstOrNull { it.branch == missing.branch }
+        if (layer != null && LayerPlans.dropBlock(snapshot, layer) == null) {
+            return Help(
+                message("help.remove.top", missing.branch),
+                Help.of(LayerPlans.drop(snapshot, layer, snapshot.currentBranch, deleteLocal = false, deleteOn = null, layerExists = false).calls),
+            )
+        }
+        return Help(
+            message("help.remove.from.stack", missing.branch),
+            Help.of(StackPlans.restoreLayers(listOf(missing)).calls) + Help.gh(GhCommands.modify()),
+        )
+    }
+
+    fun copyModify(branch: String) = Help(message("help.copy.modify", branch), listOf(Help.gh(GhCommands.modify())))
+
     private const val INIT = "gh stack init --base BASE BRANCH…"
+    private const val SHORT_HASH = 7
 }

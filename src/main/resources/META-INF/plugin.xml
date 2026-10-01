@@ -117,12 +117,17 @@
             <!-- Solo sobre una pila local cuyas ramas ya no existen. -->
             <action id="Stacklane.RecreateStack" class="com.stacklane.actions.RecreateStackAction"/>
             <action id="Stacklane.ForgetStack" class="com.stacklane.actions.ForgetStackAction"/>
+            <!-- Solo sobre una capa cuya rama ya no existe en local. -->
+            <action id="Stacklane.RestoreBranch" class="com.stacklane.actions.RestoreBranchAction"/>
+            <action id="Stacklane.RemoveFromStack" class="com.stacklane.actions.RemoveFromStackAction"/>
             <action id="Stacklane.CheckoutLayer" class="com.stacklane.actions.CheckoutLayerAction"/>
             <action id="Stacklane.ShowLayerChanges" class="com.stacklane.actions.ShowLayerChangesAction"/>
             <action id="Stacklane.OpenPr" class="com.stacklane.actions.OpenPrAction"/>
             <action id="Stacklane.CopyPrLink" class="com.stacklane.actions.CopyPrLinkAction"/>
             <separator/>
             <action id="Stacklane.RebaseUpstackFromLayer" class="com.stacklane.actions.RebaseUpstackFromLayerAction"/>
+            <!-- Solo en la capa de arriba sin PR. -->
+            <action id="Stacklane.DeleteLayer" class="com.stacklane.actions.DeleteLayerAction"/>
             <!-- Solo si el PR apunta en GitHub a otra rama que la capa de debajo. -->
             <action id="Stacklane.ChangePrBase" class="com.stacklane.actions.ChangePrBaseAction"/>
             <separator/>

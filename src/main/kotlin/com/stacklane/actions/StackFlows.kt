@@ -2,6 +2,7 @@ package com.stacklane.actions
 
 import com.intellij.CommonBundle
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
@@ -28,7 +29,9 @@ import com.stacklane.stack.CloseTargets
 import com.stacklane.stack.GhCall
 import com.stacklane.stack.GitHubRepo
 import com.stacklane.stack.LocalStack
+import com.stacklane.stack.LayerPlans
 import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.MissingBranch
 import com.stacklane.stack.Operation
 import com.stacklane.stack.Position
 import com.stacklane.stack.PublishPlans
@@ -41,6 +44,9 @@ import com.stacklane.stack.StackState
 import com.stacklane.stack.repo
 import com.stacklane.ui.AddLayerDialog
 import com.stacklane.ui.CloseStackDialog
+import com.stacklane.ui.DeleteLayerDialog
+import com.stacklane.ui.Help
+import com.stacklane.ui.Helps
 import com.stacklane.ui.InitStackDialog
 import com.stacklane.ui.LabelsDialog
 import com.stacklane.ui.PublishDialog
@@ -51,6 +57,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import java.awt.datatransfer.StringSelection
 import java.nio.file.Path
 
 /**
@@ -531,6 +538,79 @@ internal object StackFlows {
             )
         )
     }
+
+    // ------------------------------------------------------------------ capas sin rama
+
+    /** Recrea las ramas de [missing], de la pila en pantalla (ver StackPlans.restoreLayers). */
+    fun restoreBranches(project: Project, missing: List<MissingBranch>) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        service.restoreBranches(missing, service.repositoryFor(state.repo))
+    }
+
+    /**
+     * Sacar de la pila una capa sin rama. gh-stack v0.1.1 solo saca capas con `gh stack modify`,
+     * que es una pantalla interactiva de la terminal y no abre la pila mientras a una capa le falte
+     * la rama (*failed to check linearity*) ni si alguna diverge de la de debajo. Se recupera la
+     * rama, se copia el comando y la banda de la ventana guia el resto hasta que la capa sale.
+     */
+    fun removeFromStack(project: Project, missing: MissingBranch) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        // La de arriba sin PR sale sin modify, y sin recuperar nada.
+        val layer = state.snapshot.layers.firstOrNull { it.branch == missing.branch }
+        if (layer != null && LayerPlans.dropBlock(state.snapshot, layer) == null) return deleteLayer(project, layer)
+        val above = state.snapshot.layers.dropWhile { it.branch != missing.branch }.drop(1).filter { !it.isMerged }
+        val confirmed = MessageDialogBuilder.okCancel(
+            message("remove.title", missing.branch),
+            message(
+                "remove.text", missing.branch, Helps.restoreSource(missing), missing.parent,
+                above.joinToString(", ") { it.branch }.ifEmpty { message("remove.none.above") },
+            ),
+        )
+            .yesText(message("remove.confirm"))
+            .noText(CommonBundle.getCancelButtonText())
+            .icon(Messages.getInformationIcon())
+            .ask(project)
+        if (!confirmed) return
+        copyModify()
+        service.restoreBranches(listOf(missing), repository, forRemoval = true)
+    }
+
+    /**
+     * Borrar la capa de arriba, sin PR (ver [LayerPlans.drop]). Que ramas hay en el remoto se mira
+     * con lo que git sabe en local: borrarla alli es lo ultimo, asi que si falla, la pila ya esta bien.
+     */
+    fun deleteLayer(project: Project, layer: StackLayer) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        if (LayerPlans.dropBlock(snapshot, layer) != null) return
+        val branches = repository.branches
+        val exists = branches.findLocalBranch(layer.branch) != null
+        val remote = service.stackRemote(repository, snapshot)?.takeIf { name ->
+            branches.remoteBranches.any { it.remote.name == name && it.nameForRemoteOperations == layer.branch }
+        }
+        val dialog = DeleteLayerDialog(project, snapshot, layer, repository.currentBranchName, exists, remote)
+        // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+        dialog.show()
+        if (!dialog.isOK) return
+        val plan = dialog.plan
+        service.execute(
+            Operation(
+                title = message("op.delete.layer", layer.branch),
+                calls = plan.calls,
+                repository = repository,
+                successMessage = message("op.delete.layer.done", layer.branch, snapshot.parentOf(layer)),
+                cleanup = plan.cleanup,
+            )
+        )
+    }
+
+    /** `gh stack modify`, al portapapeles: solo se puede usar en la terminal. */
+    fun copyModify() = CopyPasteManager.getInstance().setContents(StringSelection(Help.gh(GhCommands.modify())))
 
     // ------------------------------------------------------------------ un PR
 

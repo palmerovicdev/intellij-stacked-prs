@@ -3,6 +3,27 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.11.0 — Capas sin rama y borrar la capa de arriba
+
+Salió del roadmap (P44) y de una petición al usarlo: una capa sin PR en la cima no se podía
+borrar.
+
+- **Una capa cuya rama ya no está en el repositorio** se marca *Branch deleted* (o *Only on
+  origin* si sigue en un remoto). gh-stack v0.1.1 la sigue listando, pero `rebase`, `sync`,
+  `push` y `submit` fallan al buscarla con un error de git que no lo dice. Una banda lo
+  explica, y si una escritura falla por eso, el aviso dice qué capa es.
+- **Restore Branch** (menú de la capa, banda, aviso o doble clic) la recrea sin cambiar de
+  rama: desde el remoto si sigue allí, si no en el último commit que gh-stack guardó (el de
+  la capa al subirla, o la base de la de encima) y, si no se sabe, vacía sobre la de debajo.
+- **Remove From Stack…** la saca de la pila. `gh stack modify` es la única forma en
+  gh-stack v0.1.1, es interactivo y no abre la pila mientras falte la rama: se recupera la
+  rama, se copia el comando y una banda azul guía el resto hasta que la capa sale. Si es la
+  de arriba y no tiene PR, sale directamente, como *Delete Layer…*.
+- **Delete Layer…** en la capa de arriba sin PR: `git switch` a la de debajo si estás en
+  ella, `gh stack unstack --local`, `gh stack init` con las demás capas y `git branch -D`
+  (y, si se marca, `git push --delete`). Desactivada, con el porqué, si hay capas fusionadas
+  o en cola o si es la única capa.
+
 ## 0.10.0 — Conflictos guiados
 
 Salió del roadmap (P12): con un rebase parado había que pulsar tres veces y no se sabía qué

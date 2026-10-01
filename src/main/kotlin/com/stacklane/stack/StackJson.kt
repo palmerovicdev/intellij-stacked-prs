@@ -35,6 +35,8 @@ object StackJson {
                 isQueued = branch.bool("isQueued"),
                 needsRebase = branch.bool("needsRebase"),
                 pr = pr,
+                head = branch.string("head")?.takeIf { it.isNotEmpty() },
+                base = branch.string("base")?.takeIf { it.isNotEmpty() },
             )
         }
         return StackSnapshot(

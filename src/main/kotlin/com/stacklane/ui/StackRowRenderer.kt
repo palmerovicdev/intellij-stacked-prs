@@ -70,13 +70,19 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
         val layer = row.layer
         val status = row.status
 
+        val missing = row.missing
         val name = JLabel(layer.branch).apply {
-            foreground = if (layer.isMerged) colors.secondary else colors.primary
+            foreground = if (layer.isMerged || missing != null) colors.secondary else colors.primary
             font = if (layer.isCurrent) JBFont.label().asBold() else JBFont.label()
         }
         val badges = listOfNotNull(
             layer.pr?.let { pr -> JLabel("#${pr.number}").apply { foreground = colors.secondary } },
             Chip.status(status.text, status.color),
+            missing?.let {
+                val remote = it.remoteBranch?.substringBefore('/')
+                if (remote != null) Chip.status(message("layer.branch.remote", remote), StackColors.WARNING)
+                else Chip.status(message("layer.branch.deleted"), StackColors.WARNING)
+            },
             if (layer.needsRebase) Chip.status(message("layer.needs.rebase"), StackColors.WARNING) else null,
             if (row.wrongBase != null) Chip.status(message("layer.wrong.base"), StackColors.WARNING) else null,
         )
@@ -94,7 +100,7 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
 
         return graphRow(
             first, second, colors.background,
-            Rail.Node(if (layer.isCurrent) Rail.Shape.FILLED else Rail.Shape.RING, status.color),
+            Rail.Node(if (layer.isCurrent) Rail.Shape.FILLED else Rail.Shape.RING, if (missing != null) StackColors.WARNING else status.color),
             lineAbove = !row.isTop,
             lineBelow = true,
         )

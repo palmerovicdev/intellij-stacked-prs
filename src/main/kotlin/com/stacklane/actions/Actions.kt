@@ -17,9 +17,12 @@ import com.stacklane.settings.StacklaneConfigurable
 import com.stacklane.settings.StacklaneProjectSettings
 import com.stacklane.settings.StacklaneSettings
 import com.stacklane.stack.CloseChoice
+import com.stacklane.stack.DropBlock
+import com.stacklane.stack.LayerPlans
 import com.stacklane.stack.ClosePlans
 import com.stacklane.stack.LocalStackEntry
 import com.stacklane.stack.MergePlans
+import com.stacklane.stack.MissingBranch
 import com.stacklane.stack.Position
 import com.stacklane.stack.PrState
 import com.stacklane.stack.StackLayer
@@ -28,6 +31,7 @@ import com.stacklane.stack.StackService
 import com.stacklane.stack.StackSnapshot
 import com.stacklane.stack.StackState
 import com.stacklane.stack.repo
+import com.stacklane.ui.DeleteLayerDialog
 import com.stacklane.ui.Help
 import com.stacklane.ui.Helps
 import com.stacklane.ui.mergeBlockText
@@ -283,8 +287,8 @@ internal class CheckoutLayerAction : StacklaneAction(AllIcons.Actions.CheckOut) 
 
     override fun updateState(e: AnActionEvent) {
         val selection = e.getData(StackDataKeys.LAYER)
-        e.presentation.isVisible = selection != null
-        e.presentation.isEnabled = selection != null && !selection.layer.isCurrent && !busy(e.project)
+        e.presentation.isVisible = selection != null && selection.missing == null
+        e.presentation.isEnabled = e.presentation.isVisible && selection?.layer?.isCurrent == false && !busy(e.project)
     }
 
     override fun commands(e: AnActionEvent): List<String> = listOfNotNull(e.getData(StackDataKeys.LAYER)?.layer?.branch?.let(Help::checkout))
@@ -303,7 +307,7 @@ internal class ShowLayerChangesAction : StacklaneAction(AllIcons.Actions.Diff) {
 
     override fun updateState(e: AnActionEvent) {
         val selection = e.getData(StackDataKeys.LAYER)
-        e.presentation.isEnabledAndVisible = selection != null && !selection.layer.isMerged
+        e.presentation.isEnabledAndVisible = selection != null && !selection.layer.isMerged && selection.missing == null
     }
 
     override fun help(e: AnActionEvent): Help =
@@ -320,7 +324,7 @@ internal class RebaseUpstackFromLayerAction : StacklaneAction(AllIcons.Actions.M
 
     override fun updateState(e: AnActionEvent) {
         val selection = e.getData(StackDataKeys.LAYER)
-        e.presentation.isVisible = selection != null && !selection.layer.isMerged
+        e.presentation.isVisible = selection != null && !selection.layer.isMerged && selection.missing == null
         e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) &&
             selection?.state?.repo?.stackRebaseInProgress == false
     }
@@ -372,6 +376,79 @@ internal class MergeUpToLayerAction : StacklaneAction(AllIcons.Vcs.Merge) {
 
     private fun candidate(selection: LayerSelection) =
         MergePlans.targets(selection.state.snapshot, selection.state.details).candidateOf(selection.layer.branch)
+}
+
+/**
+ * Borrar la capa de arriba si no tiene PR (ver LayerPlans.drop). Se ve en esa capa; si la pila
+ * no lo permite, desactivada y la ayuda dice por que. Sin rama (P44) la saca *Remove From Stack*.
+ */
+internal class DeleteLayerAction : StacklaneAction(AllIcons.General.Delete) {
+
+    override fun updateState(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        val snapshot = selection?.state?.snapshot
+        e.presentation.isVisible = selection != null && snapshot != null && selection.layer == snapshot.top &&
+            selection.layer.pr == null && selection.missing == null
+        e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) && selection != null &&
+            !selection.state.repo.stackRebaseInProgress && LayerPlans.dropBlock(selection.state.snapshot, selection.layer) == null
+    }
+
+    override fun help(e: AnActionEvent): Help {
+        val selection = e.getData(StackDataKeys.LAYER) ?: return super.help(e)
+        val snapshot = selection.state.snapshot
+        return when (LayerPlans.dropBlock(snapshot, selection.layer)) {
+            null -> Help(
+                templatePresentation.description.orEmpty(),
+                DeleteLayerDialog.defaultCommands(snapshot, selection.layer, snapshot.currentBranch, layerExists = true),
+            )
+            DropBlock.MERGED_LAYERS -> Help(message("help.delete.layer.merged"), listOf(Help.gh(GhCommands.modify())))
+            DropBlock.ONLY_LAYER -> Help(message("help.delete.layer.only"))
+            DropBlock.NOT_TOP, DropBlock.HAS_PR -> super.help(e)
+        }
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        StackFlows.deleteLayer(project, e.getData(StackDataKeys.LAYER)?.layer ?: return)
+    }
+}
+
+// ---------------------------------------------------------------------- una capa sin rama
+
+/** Acciones sobre una capa activa cuya rama ya no esta en local (ver StackSnapshot.missingBranches). */
+internal abstract class MissingBranchAction(icon: Icon) : StacklaneAction(icon) {
+
+    override fun updateState(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        e.presentation.isVisible = selection?.missing != null
+        e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) && selection?.state?.repo?.stackRebaseInProgress == false
+    }
+
+    override fun help(e: AnActionEvent): Help = e.getData(StackDataKeys.LAYER)?.missing?.let(::help) ?: super.help(e)
+
+    protected abstract fun help(missing: MissingBranch): Help
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        perform(project, e.getData(StackDataKeys.LAYER)?.missing ?: return)
+    }
+
+    protected abstract fun perform(project: Project, missing: MissingBranch)
+}
+
+internal class RestoreBranchAction : MissingBranchAction(AllIcons.Actions.Rollback) {
+    override fun help(missing: MissingBranch): Help = Helps.restoreBranches(listOf(missing))
+    override fun perform(project: Project, missing: MissingBranch) = StackFlows.restoreBranches(project, listOf(missing))
+}
+
+internal class RemoveFromStackAction : MissingBranchAction(AllIcons.General.Remove) {
+    override fun help(e: AnActionEvent): Help {
+        val selection = e.getData(StackDataKeys.LAYER)
+        val missing = selection?.missing ?: return super.help(e)
+        return Helps.removeFromStack(selection.state.snapshot, missing)
+    }
+    override fun help(missing: MissingBranch): Help = Help(templatePresentation.description.orEmpty())
+    override fun perform(project: Project, missing: MissingBranch) = StackFlows.removeFromStack(project, missing)
 }
 
 // ---------------------------------------------------------------------- una pila local sin ramas

@@ -44,6 +44,14 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
   *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
   último commit de cada rama. *New Stack* también limpia antes los nombres que retienen.
+- **Una capa sin rama dentro de una pila activa** (se borró a mano o al cerrar su PR):
+  se marca *Branch deleted* (o *Only on origin*) y una banda avisa de que gh-stack no puede
+  rebasar, sincronizar ni subir la pila sin ella. **Restore Branch** (o doble clic) la
+  recrea desde el remoto o en su último commit conocido; **Remove From Stack…** la saca: la
+  de arriba sin PR directamente, y cualquier otra recuperando la rama y con
+  `gh stack modify` en la terminal, que una banda guía hasta que la capa sale.
+- **Borrar la capa de arriba sin PR** (*Delete Layer…*): sale de la pila sin
+  `gh stack modify`, con su rama local y, si se marca, la remota.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
@@ -78,6 +86,8 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Push tras el rebase | `gh stack push` |
 | Fusionar | `gh stack merge <pr> --yes --squash` (o `--merge`, `--rebase`; sin método con cola de merge), tras comprobar con `gh api repos/OWNER/REPO/stacks/<pr>` que no hay una pila con ese número |
 | Tras fusionar | `gh stack sync --prune` |
+| Recuperar la rama de una capa | `git branch <rama> <último commit>` o `git branch --track <rama> origin/<rama>` |
+| Borrar la capa de arriba sin PR | `git switch <capa de debajo>` si estás en ella, `gh stack unstack --local`, `gh stack init --base <trunk> <demás capas>`, `git branch -D <rama>` (y `git push origin --delete <rama>`) |
 | Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
 
 Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
@@ -160,7 +170,7 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 141 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 160 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - `StackService` y los flujos que escriben en GitHub, con un `gh` falso: los estados de la
   ventana, el reintento con `--remote` tras *multiple remotes*, los avisos por código de
   salida (3 con y sin rebase parado, 8, 9, 10), el corte de una secuencia y su limpieza, una
@@ -177,6 +187,10 @@ del VFS y de Git4Idea al terminar.
 - En el IDE de prueba con un repositorio de demo: la ventana pinta la pila y las acciones
   se abren. Salieron dos fallos, ya corregidos: una llamada de Git4Idea prohibida en el EDT
   y los radio buttons del diálogo de nueva capa.
+- Una capa sin rama (P44), con gh-stack v0.1.1 real: qué devuelven `view`, `rebase`, `sync`,
+  `push` y `modify`, y que *drop* en `modify` la saca una vez recuperada y rebasada. Borrar la
+  capa de arriba con `unstack --local` + `init`, también con gh-stack real. En el IDE, solo con
+  tests de flujo: la pastilla, las bandas y el diálogo aún no se han visto pintados.
 - La salida JSON y los códigos de salida corresponden al código de gh-stack v0.1.1.
 - Pilas con base `develop` y con base en una capa de otra pila, creadas con gh-stack real.
 - Una rama en dos pilas, con gh-stack real: `view --json` sale con 6 en la capa que es base
@@ -232,12 +246,20 @@ del VFS y de Git4Idea al terminar.
   abiertos, y nunca una rama que es la base de otra pila. Antes del diálogo se pregunta al
   remoto qué ramas tiene (`git ls-remote`), porque lo que git sabe en local puede estar
   atrasado.
+- **Borrar la capa de arriba sin `modify`.** gh-stack 0.1.1 solo saca capas con
+  `gh stack modify`, que es interactivo. Para la de arriba sin PR, el plugin deja de seguir la
+  pila en local y la vuelve a crear con las demás capas, que gh-stack adopta tal cual. Sus PRs
+  se encuentran al leer la pila, y el siguiente `submit` o `sync` adopta la pila de GitHub
+  porque tiene los mismos PRs. No se ofrece con capas fusionadas o en cola: la pila de GitHub
+  las guarda y la nueva no las tendría. Si `init` falla, se vuelve a crear la pila como estaba.
+- **Una capa sin rama no se puede sacar con `modify`**: gh-stack se niega a abrir la pila
+  (*failed to check linearity*). Por eso *Remove From Stack…* recupera antes la rama.
 - **Checkout** con el de Git4Idea (smart checkout y diálogo de cambios locales), no con
   `gh stack checkout`, salvo al traer una pila que solo existe en GitHub.
 
 ## Versiones
 
-Versión actual: **0.8.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.11.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

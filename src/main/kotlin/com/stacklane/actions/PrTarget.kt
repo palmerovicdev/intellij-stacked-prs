@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.DataKey
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
 import com.stacklane.stack.GitHubRepo
 import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.MissingBranch
 import com.stacklane.stack.PrDetails
 import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackState
@@ -15,6 +16,9 @@ import java.awt.Component
 /** La capa seleccionada en la ventana Stacks, con la pila a la que pertenece. */
 data class LayerSelection(val state: StackState.Loaded, val layer: StackLayer) {
     val details: PrDetails? get() = state.detailsOf(layer)
+
+    /** Si la rama de la capa ya no esta en local, lo que se sabe para recuperarla. */
+    val missing: MissingBranch? get() = state.missingOf(layer)
 }
 
 object StackDataKeys {

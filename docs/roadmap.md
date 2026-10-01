@@ -62,6 +62,7 @@ hecha y el plugin salga al Marketplace (P40).
 | *Close Stack…*: deshacer la pila, cerrar sus PRs y borrar sus ramas, en orden seguro (P15)                                                             | `0.8.0`                 |
 | *Merge Stack…* y *Merge Up to Here…*: merge atómico hasta una capa y *Sync and Prune* (P9)                                                             | `0.9.0`                 |
 | Rebase parado: diálogo de conflictos solo, capa y commit en la banda, *Continue* al resolver y *Abort* con confirmación (P12)                           | `0.10.0`                |
+| Capa sin rama: *Branch deleted*, *Restore Branch* y *Remove From Stack…*; *Delete Layer…* en la de arriba sin PR (P44)                                 | `0.11.0`                |
 
 ---
 
@@ -78,7 +79,10 @@ cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se desh
 4. ~~**P9** — merge de la pila; con P15 completa el ciclo de vida~~ — hecha en la `0.9.0`.
 5. ~~**P12** — conflictos guiados, si los rebases con conflictos siguen siendo habituales~~ —
    hecha en la `0.10.0`.
-6. **P44** — una capa suelta cuya rama desaparece dentro de una pila activa; después de P15.
+6. ~~**P44** — una capa suelta cuya rama desaparece dentro de una pila activa~~ — hecha en
+   la `0.11.0`, con *Delete Layer…* para la capa de arriba sin PR.
+7. **P16, renombrar** — pedido al usar la `0.11.0`: cambiar el nombre de una capa, su rama y
+   su PR.
 
 Fuera del orden, pero no descartadas: **P10 + P29** (el doble clic ya cubre lo básico), **P4, P40, P41 y P42** (van con
 la `1.0.0` y el Marketplace) y **P1**, que sigue siendo
@@ -772,7 +776,7 @@ está pedido en gh-stack ([#459](https://github.com/github/gh-stack/issues/459),
 Queda una entrega pequeña: comprobar init, add y submit desde un worktree y explicarlo en
 el README.
 
-### P44 · Una capa cuya rama desaparece dentro de una pila activa 🟡
+### P44 · Una capa cuya rama desaparece dentro de una pila activa ✅ `0.11.0`
 
 La `0.2.0` resuelve la pila a la que no le queda ninguna rama. Queda el caso a medias:
 se cierra el PR de una capa y se borra su rama, pero las demás siguen. No se ha visto
@@ -782,6 +786,21 @@ todavía qué devuelve `gh stack view --json` con una capa sin rama, ni si `sync
 Primera entrega: probarlo sobre una copia y pintar esa capa como *Branch deleted*, con *Remove From Stack* (lo que
 permita gh-stack, o `modify` en la terminal, P16) y *Restore Branch*, que la recrea en su último commit conocido, igual
 que la `0.2.0`.
+
+**Hecha en la `0.11.0`** (`StackSnapshot.missingBranches`, `StackPlans.restoreLayers`, `LayerPlans`). Lo que se vio
+con gh-stack v0.1.1 real sobre un repositorio de prueba (`main ← a ← b ← c`, borrando `b`):
+
+- `view --json` sigue listando `b`, sin `needsRebase` en ella ni en `c` (el `merge-base` falla y lo calla). Su `head`
+  es el de la última subida; una capa nunca subida no lo tiene, pero la `base` de la de encima es su commit de entonces.
+- `rebase` falla en `resolveOriginalRefs` (*unknown revision 'b'*); `rebase --upstack` desde `c`, al no poder rebasar
+  sobre `b`; `sync` se salta el rebase y falla al subir; `push` y `submit`, con *src refspec refs/heads/b*.
+- `modify` tampoco abre la pila: *failed to check linearity for b*. Con la rama recuperada se niega si `b` diverge de
+  la de debajo (*b has diverged from a*); tras un `rebase`, *drop* la saca, rebasa `c` sobre `a` sin sus commits y deja
+  la rama `b`. Por eso *Remove From Stack…* recupera la rama, copia `gh stack modify` y una banda guía el resto.
+- La de arriba sin PR sale sin `modify`: `unstack --local` y `init` con las demás capas, que gh-stack adopta. El
+  siguiente `submit`/`sync` adopta la pila de GitHub porque sigue teniendo los mismos PRs (`reconcileUntrackedStack`).
+  Con capas fusionadas o en cola no: la pila de GitHub las guarda y la nueva no las tendría. Es también lo que pedía
+  P15 para cerrar una capa de la cima, cuando no tiene PR.
 
 ---
 

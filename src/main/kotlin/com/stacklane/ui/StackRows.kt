@@ -4,6 +4,7 @@ import com.intellij.openapi.util.text.StringUtil
 import com.stacklane.StacklaneBundle.message
 import com.stacklane.stack.ChecksState
 import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.MissingBranch
 import com.stacklane.stack.PrDetails
 import com.stacklane.stack.ReviewDecision
 import com.stacklane.stack.StackLayer
@@ -30,6 +31,8 @@ internal sealed interface StackRow {
         val detailsLoading: Boolean,
         /** La base del PR en GitHub, si no es [parent]. Ver `StackSnapshot.wrongBase`. */
         val wrongBase: String? = null,
+        /** La rama de la capa no esta en local. Ver `StackSnapshot.missingBranches`. */
+        val missing: MissingBranch? = null,
     ) : StackRow {
         val status: LayerStatus get() = LayerStatus.of(layer, details)
 
@@ -50,6 +53,7 @@ internal sealed interface StackRow {
             append(escape(listOfNotNull(status.text, details?.review?.let(::reviewText), details?.checks?.let(::checksText)).joinToString(" · ")))
             details?.size?.let { append("<br>").append(escape(message("tooltip.size", it.additions, it.deletions, it.files))) }
             if (layer.needsRebase) append("<br>").append(escape(message("layer.needs.rebase")))
+            missing?.let { append("<br>").append(escape(message("tooltip.missing", Helps.restoreSource(it)))) }
             wrongBase?.let { append("<br>").append(escape(message("tooltip.wrong.base", it, parent))) }
             if (details?.hasConflicts == true) append("<br>").append(escape(message("tooltip.conflicts", details.baseRef)))
             if (details?.isBehind == true) append("<br>").append(escape(message("tooltip.behind", details.baseRef)))

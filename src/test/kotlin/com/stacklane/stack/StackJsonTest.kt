@@ -55,6 +55,14 @@ class StackJsonTest {
         assertEquals("feat/api", snapshot.top?.branch)
     }
 
+    @Test
+    fun `view keeps the head and base gh-stack saved for each layer`() {
+        val (a, b) = StackJson.parseView(viewWithoutPrs).layers
+        assertNull(a.head)
+        assertEquals("6ef805d5", a.base)
+        assertEquals("d36d7ca0", b.base)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `view that is not json fails`() {
         StackJson.parseView("current branch \"main\" is not part of a stack")

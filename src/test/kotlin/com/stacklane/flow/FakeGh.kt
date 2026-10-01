@@ -3,8 +3,10 @@ package com.stacklane.flow
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
+import kotlin.io.path.ExperimentalPathApi
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
+import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -37,6 +39,12 @@ class FakeGh(private val dir: Path) {
     class Rule internal constructor(private val dir: Path) {
         fun release() {
             dir.resolve("hold").deleteIfExists()
+        }
+
+        /** Deja de contestar: la siguiente regla que encaje toma su lugar. */
+        @OptIn(ExperimentalPathApi::class)
+        fun remove() {
+            dir.deleteRecursively()
         }
     }
 

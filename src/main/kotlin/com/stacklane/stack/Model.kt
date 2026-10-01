@@ -74,7 +74,38 @@ data class StackSnapshot(
             val current = current?.takeIf { !it.isMerged }
             return if (current != null && layers.indexOf(current) <= layers.indexOf(first)) current else first
         }
+
+    /**
+     * Las capas activas cuya rama no esta en local, de abajo arriba. gh-stack las sigue listando,
+     * pero `rebase`, `sync`, `push` y `submit` fallan al no encontrarlas, y `modify` se niega a
+     * abrir la pila. [local]: las ramas locales; [remote]: por nombre, la rama remota que la tiene
+     * (`origin/feat/a`), si alguna. Las fusionadas sin rama son lo normal tras `sync --prune`.
+     */
+    fun missingBranches(local: Set<String>, remote: Map<String, String>): List<MissingBranch> =
+        layers.filter { !it.isMerged && it.branch !in local }.map { layer ->
+            MissingBranch(layer.branch, remote[layer.branch], lastCommitOf(layer), parentOf(layer))
+        }
+
+    /**
+     * El ultimo commit conocido de [layer]: el que gh-stack guardo al subirla o, si no la subio
+     * nunca, la base que guardo para la capa activa de encima, que es esta misma rama entonces.
+     */
+    private fun lastCommitOf(layer: StackLayer): String? =
+        layer.head ?: layers.drop(layers.indexOf(layer) + 1).firstOrNull { !it.isMerged }?.base
 }
+
+/**
+ * Una capa activa sin rama local (ver [StackSnapshot.missingBranches]). Se recrea desde
+ * [remoteBranch] si sigue en un remoto; si no, en [lastCommit]; y si tampoco se sabe, vacia
+ * sobre [parent].
+ */
+data class MissingBranch(
+    val branch: String,
+    /** `remoto/rama`, o null si no esta en ningun remoto. */
+    val remoteBranch: String?,
+    val lastCommit: String?,
+    val parent: String,
+)
 
 data class StackLayer(
     val branch: String,
@@ -83,6 +114,10 @@ data class StackLayer(
     val isQueued: Boolean,
     val needsRebase: Boolean,
     val pr: PrRef?,
+    /** El commit de la rama cuando gh-stack la subio por ultima vez; null si no la subio nunca. */
+    val head: String? = null,
+    /** El commit de la capa de debajo (o del trunk) cuando gh-stack la apilo o la subio. */
+    val base: String? = null,
 )
 
 /** El PR tal y como lo guarda gh-stack: sin draft, labels ni CI. Eso lo trae [PrDetails]. */

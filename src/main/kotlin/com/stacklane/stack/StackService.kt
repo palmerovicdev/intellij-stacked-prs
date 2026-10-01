@@ -120,6 +120,15 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
      */
     val conflicts: StateFlow<Int?> = _conflicts.asStateFlow()
 
+    private val _removals = MutableStateFlow<Map<VirtualFile, Set<String>>>(emptyMap())
+
+    /**
+     * Por raiz de repositorio, las capas cuya rama se recupero para sacarlas de la pila con
+     * `gh stack modify`, que solo se puede hacer en la terminal. La ventana lo recuerda mientras
+     * sigan en la pila.
+     */
+    val removals: StateFlow<Map<VirtualFile, Set<String>>> = _removals.asStateFlow()
+
     val log = StackLog()
 
     // CONFLATED: cien eventos seguidos de git se quedan en un refresco.
@@ -222,7 +231,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             val branch = repository.currentBranchName
             val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
             when {
-                result.ok -> showSnapshot(ref, StackJson.parseView(result.stdout))
+                result.ok -> StackJson.parseView(result.stdout).let { showSnapshot(ref, it, missingBranches(repository, it)) }
                 // Con el rebase parado HEAD esta suelto y gh-stack no sabe en que rama esta (lee
                 // `git symbolic-ref HEAD`): `view` sale con 2. La pila de antes sigue siendo esa.
                 result.exitCode == GhExit.NOT_IN_STACK && ref.stackRebaseInProgress && previous != null ->
@@ -244,12 +253,15 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         }
     }
 
-    private suspend fun showSnapshot(ref: RepoRef, snapshot: StackSnapshot) {
+    private suspend fun showSnapshot(ref: RepoRef, snapshot: StackSnapshot, missing: List<MissingBranch>) {
         val numbers = snapshot.layers.mapNotNull { it.pr?.number }.toSet()
         // Mientras llegan los datos nuevos se ensenan los anteriores: sin parpadeo.
         val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
         val cached = previous?.details.orEmpty().filterKeys { it in numbers }
-        val loaded = StackState.Loaded(ref, snapshot, cached, detailsLoading = numbers.isNotEmpty(), detailsError = null)
+        // La que ya salio de la pila deja de estar pendiente de sacar.
+        val layers = snapshot.layers.mapTo(HashSet()) { it.branch }
+        _removals.update { all -> all[ref.root]?.let { all + (ref.root to it.filterTo(HashSet(), layers::contains)) } ?: all }
+        val loaded = StackState.Loaded(ref, snapshot, cached, detailsLoading = numbers.isNotEmpty(), detailsError = null, missing = missing)
         _state.value = loaded
         if (numbers.isEmpty()) return
 
@@ -278,6 +290,21 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 current
             }
         }
+    }
+
+    /**
+     * Las capas activas de [snapshot] sin rama local. Si una sigue en un remoto, se toma la del
+     * remoto elegido, despues la de `origin` y despues cualquiera.
+     */
+    private fun missingBranches(repository: GitRepository, snapshot: StackSnapshot): List<MissingBranch> {
+        val branches = repository.branches
+        val local = branches.localBranches.mapTo(HashSet()) { it.name }
+        val preferred = preferredRemote(repository) ?: "origin"
+        val remote = branches.remoteBranches
+            .sortedBy { if (it.remote.name == preferred) 0 else 1 }
+            .groupBy { it.nameForRemoteOperations }
+            .mapValues { (_, candidates) -> candidates.first().name }
+        return snapshot.missingBranches(local, remote)
     }
 
     private suspend fun repoRef(repository: GitRepository) = RepoRef(
@@ -459,6 +486,8 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
     private suspend fun reportFailure(operation: Operation, result: GhResult, repository: GitRepository?) {
         val showLog = Notifier.action(message("notification.show.log")) { StackToolWindow.showLog(project) }
         val stop = repository?.let { rebaseStop(it) }
+        // Solo de gh: un `git branch` que falla al recuperar una rama tambien la nombra.
+        val missing = if (operation.calls.any { it.tool == Tool.GH }) missingIn(result, repository) else emptyList()
         when {
             (result.exitCode == GhExit.CONFLICT || result.exitCode == GhExit.REBASE_ACTIVE) && stop != null ->
                 Notifier.warning(
@@ -481,9 +510,56 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 Notifier.error(project, operation.title, message("error.unavailable"), showLog)
             result.exitCode == GhExit.MODIFY_RECOVERY ->
                 Notifier.error(project, operation.title, message("error.modify"), showLog)
+            // gh-stack no salta una capa sin rama: falla al buscarla, con un error de git que no lo dice.
+            missing.isNotEmpty() ->
+                Notifier.error(
+                    project, message("operation.failed", operation.title),
+                    message("error.missing.branch", missing.joinToString(", ") { it.branch }),
+                    Notifier.action(message(if (missing.size == 1) "action.restore.branch" else "action.restore.branches")) {
+                        restoreBranches(missing, repository)
+                    },
+                    showLog,
+                )
             else ->
                 Notifier.error(project, message("operation.failed", operation.title), Notifier.html(result.errorText), showLog)
         }
+    }
+
+    /** Las capas sin rama del estado en pantalla que nombra el error de [result]. */
+    private fun missingIn(result: GhResult, repository: GitRepository?): List<MissingBranch> {
+        val state = _state.value as? StackState.Loaded ?: return emptyList()
+        if (repository == null || state.repo.root != repository.root || state.missing.isEmpty()) return emptyList()
+        // git las nombra entre comillas, sueltas o como `refs/heads/rama`.
+        val words = result.errorText.split(ERROR_SEPARATORS).flatMapTo(HashSet()) { listOf(it, it.removePrefix(HEADS)) }
+        return state.missing.filter { it.branch in words }
+    }
+
+    // ---------------------------------------------------------------- capas sin rama
+
+    /**
+     * Recrea las ramas de [missing] (ver [StackPlans.restoreLayers]). [forRemoval]: se recuperan
+     * para sacarlas de la pila con `gh stack modify`; la ventana lo recuerda hasta que salgan.
+     */
+    fun restoreBranches(missing: List<MissingBranch>, repository: GitRepository? = repository(), forRemoval: Boolean = false): Job {
+        val names = missing.joinToString(", ") { it.branch }
+        return execute(
+            Operation(
+                title = message("op.restore", names),
+                calls = StackPlans.restoreLayers(missing).calls,
+                repository = repository,
+                successMessage = if (forRemoval) null else message("op.restore.done", names),
+                onSuccess = {
+                    if (forRemoval && repository != null) {
+                        _removals.update { it + (repository.root to it[repository.root].orEmpty() + missing.map(MissingBranch::branch)) }
+                    }
+                },
+            )
+        )
+    }
+
+    /** Ya no hace falta recordar que [branch] se va a sacar de la pila. */
+    fun forgetRemoval(root: VirtualFile, branch: String) {
+        _removals.update { all -> all[root]?.let { all + (root to it - branch) } ?: all }
     }
 
     // ---------------------------------------------------------------- rebase
@@ -735,6 +811,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         private val REBASE_DIRS = listOf("rebase-merge", "rebase-apply")
         private const val HEADS = "refs/heads/"
         private const val UNIT_SEPARATOR = '\u001F'
+        private val ERROR_SEPARATORS = Regex("""[\s'"`:]+""")
 
         fun getInstance(project: Project): StackService = project.service()
     }

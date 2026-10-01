@@ -104,6 +104,12 @@ object GhCommands {
 
     fun top(): List<String> = listOf("stack", "top")
 
+    /**
+     * La pantalla interactiva de gh-stack para reestructurar la pila. El plugin no la ejecuta: no
+     * tiene version sin terminal. Solo se copia y se ensena (ver StackFlows.removeFromStack).
+     */
+    fun modify(): List<String> = listOf("stack", "modify")
+
     /** Sube las ramas de la pila al remoto: tras uno de estos no queda nada rebasado sin subir. */
     fun pushesStack(args: List<String>): Boolean = args.take(2).let { it == push() || it == sync() || it == listOf("stack", "submit") }
 
