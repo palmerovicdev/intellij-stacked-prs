@@ -61,6 +61,7 @@ hecha y el plugin salga al Marketplace (P40).
 | Tests de flujo de `StackService` y de las escrituras en GitHub con un `gh` falso (P2)                                                                  | sin versión: solo tests |
 | *Close Stack…*: deshacer la pila, cerrar sus PRs y borrar sus ramas, en orden seguro (P15)                                                             | `0.8.0`                 |
 | *Merge Stack…* y *Merge Up to Here…*: merge atómico hasta una capa y *Sync and Prune* (P9)                                                             | `0.9.0`                 |
+| Rebase parado: diálogo de conflictos solo, capa y commit en la banda, *Continue* al resolver y *Abort* con confirmación (P12)                           | `0.10.0`                |
 
 ---
 
@@ -75,7 +76,8 @@ cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se desh
 3. ~~**P15** — cerrar una pila entera, PRs y ramas, en el orden correcto~~ — hecha en la
    `0.8.0`, salvo cerrar una sola capa de la cima (ver P15).
 4. ~~**P9** — merge de la pila; con P15 completa el ciclo de vida~~ — hecha en la `0.9.0`.
-5. **P12** — conflictos guiados, si los rebases con conflictos siguen siendo habituales.
+5. ~~**P12** — conflictos guiados, si los rebases con conflictos siguen siendo habituales~~ —
+   hecha en la `0.10.0`.
 6. **P44** — una capa suelta cuya rama desaparece dentro de una pila activa; después de P15.
 
 Fuera del orden, pero no descartadas: **P10 + P29** (el doble clic ya cubre lo básico), **P4, P40, P41 y P42** (van con
@@ -357,7 +359,7 @@ metiera en cada capa los conflictos con lo nuevo de `main`. Lo que salió al lee
   Cada capa tiene *Rebase Upstack from Here*.
 - `--committer-date-is-author-date` sigue pendiente, en P36.
 
-### P12 · Conflictos guiados de principio a fin 🟡
+### P12 · Conflictos guiados de principio a fin ✅ `0.10.0`
 
 Cuando `gh stack rebase` se para, hoy hay un aviso y una banda con *Resolve Conflicts*, *Continue* y *Abort*. Hay que
 pulsar tres veces y no se sabe qué capa se está
@@ -367,6 +369,27 @@ Primera entrega: abrir el diálogo de conflictos solo al pararse. Cuando
 `ChangeListManager` deje de ver conflictos, ofrecer *Continue* en un clic. La banda
 indica qué capa se está rebasando si se puede saber sin leer estado interno de gh-stack (con `REBASE_HEAD` y la rama de
 git). *Abort* sigue pidiendo confirmación.
+
+**Hecha en la `0.10.0`** (`StackService.rebaseStop`, `onChangesUpdated`, `StackPanel.renderRebaseStop`).
+Lo que se aprendió al hacerla, leído de `cmd/rebase.go` y `cmd/view.go` de la v0.1.1:
+
+- *Abort* no pedía confirmación, aunque la propuesta lo diera por hecho. Ahora sí: deshace
+  también las capas ya rebasadas.
+- Con el rebase parado, HEAD está suelto y `gh stack view --json` sale con 2: gh-stack lee
+  la rama con `git symbolic-ref HEAD`. La ventana decía que la rama no estaba en ninguna
+  pila; ahora se queda la pila de antes mientras dure el rebase.
+- La capa sale de `rebase-merge/head-name` (o `rebase-apply/`) y el commit de
+  `git log -1 REBASE_HEAD`; la posición, de las pilas locales. Del estado de gh-stack solo se
+  mira que su fichero exista, como antes.
+- Los conflictos los cuenta un `ChangeListListener` (API pública, registrado en plugin.xml)
+  tras cada repaso de cambios del IDE. Tras una escritura la cuenta se olvida hasta el
+  siguiente repaso: si no, un *Continue* que se para en la capa siguiente enseñaría un
+  momento la banda azul de la anterior.
+- El diálogo se abre después de refrescar git en el IDE (`invokeAfterUpdate`), no al leer la
+  salida de gh: antes, el IDE aún no ve los ficheros en conflicto.
+- `gh stack rebase --continue` ejecuta él mismo `git rebase --continue`; con conflictos sin
+  resolver falla con un error genérico. Por eso *Continue* solo sale en la banda cuando no
+  queda ninguno (o el IDE aún no los ha contado); en el aviso sigue estando siempre.
 
 ### P13 · Traer una pila de GitHub 🟡
 

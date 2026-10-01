@@ -11,9 +11,11 @@ import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vcs.AbstractVcsHelper
 import com.intellij.openapi.vcs.FileStatus
+import com.intellij.openapi.vcs.changes.ChangeListListener
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.stacklane.Notifier
@@ -108,6 +110,15 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
      * La ventana ofrece *Push Stack* mientras alguna siga distinta de su rama remota.
      */
     val pushPending: StateFlow<Map<VirtualFile, Set<String>>> = _pushPending.asStateFlow()
+
+    private val _conflicts = MutableStateFlow<Int?>(null)
+
+    /**
+     * Mientras un `gh stack rebase` esta parado en el repositorio que se muestra, cuantos
+     * ficheros siguen en conflicto segun [ChangeListManager]; null si no hay rebase parado o
+     * si aun no se sabe (el IDE no ha vuelto a mirar los cambios desde la ultima escritura).
+     */
+    val conflicts: StateFlow<Int?> = _conflicts.asStateFlow()
 
     val log = StackLog()
 
@@ -209,8 +220,13 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         try {
             val result = GhCli.run(ref.root.toNioPath(), GhCommands.view())
             val branch = repository.currentBranchName
+            val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
             when {
                 result.ok -> showSnapshot(ref, StackJson.parseView(result.stdout))
+                // Con el rebase parado HEAD esta suelto y gh-stack no sabe en que rama esta (lee
+                // `git symbolic-ref HEAD`): `view` sale con 2. La pila de antes sigue siendo esa.
+                result.exitCode == GhExit.NOT_IN_STACK && ref.stackRebaseInProgress && previous != null ->
+                    _state.value = previous.copy(repo = ref)
                 // En `view --json` el 6 solo significa «la rama esta en varias pilas» (view.go de la v0.1.1).
                 result.exitCode == GhExit.DISAMBIGUATE && branch != null ->
                     _state.value = StackState.InSeveralStacks(ref, branch, localStacks(repository))
@@ -264,16 +280,59 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         }
     }
 
-    private fun repoRef(repository: GitRepository) = RepoRef(
+    private suspend fun repoRef(repository: GitRepository) = RepoRef(
         root = repository.root,
         name = repository.root.name,
         github = githubOf(repository),
-        stackRebaseInProgress = stackRebaseInProgress(repository),
+        rebase = rebaseStop(repository),
     )
 
     /** gh-stack deja este fichero mientras un `gh stack rebase` espera `--continue`/`--abort`. */
     fun stackRebaseInProgress(repository: GitRepository): Boolean =
         gitDir(repository)?.resolve(REBASE_STATE_FILE)?.let(Files::exists) == true
+
+    /**
+     * Donde esta parado el `gh stack rebase`, o null si no lo esta. Solo con lo que dice git: la
+     * rama del rebase de git en curso y su `REBASE_HEAD`; de gh-stack, solo que el rebase sigue
+     * abierto y sus pilas locales, para saber que capa es esa rama.
+     */
+    suspend fun rebaseStop(repository: GitRepository): RebaseStop? {
+        if (!stackRebaseInProgress(repository)) return null
+        val gitDir = gitDir(repository)
+        val branch = REBASE_DIRS.firstNotNullOfOrNull { dir ->
+            gitDir?.resolve(dir)?.resolve("head-name")?.takeIf(Files::isRegularFile)
+                ?.let { runCatching { Files.readString(it).trim() }.getOrNull() }
+        }?.takeIf { it.startsWith(HEADS) }?.removePrefix(HEADS)
+        val stack = branch?.let { name -> localStacks(repository).map { it.stack }.firstOrNull { name in it.branches } }
+        val head = try {
+            GhCli.run(repository.root.toNioPath(), GitCommands.rebaseHead(), tool = Tool.GIT)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        val commit = head?.takeIf { it.ok }?.stdout?.trim()?.split(UNIT_SEPARATOR, limit = 2)?.takeIf { it.size == 2 }
+        return RebaseStop(
+            branch = branch,
+            position = branch?.let { stack?.positionOf(it) },
+            layers = stack?.branches?.size,
+            commit = commit?.get(0),
+            subject = commit?.get(1),
+        )
+    }
+
+    /** Los ficheros de [root] que el IDE ve en conflicto, en el ultimo repaso de los cambios. */
+    private fun conflictedFiles(root: VirtualFile): List<VirtualFile> =
+        ChangeListManager.getInstance(project).allChanges
+            .filter { it.fileStatus == FileStatus.MERGED_WITH_CONFLICTS }
+            .mapNotNull { it.virtualFile }
+            .filter { VfsUtilCore.isAncestor(root, it, false) }
+
+    /** El IDE termino de repasar los cambios: cuantos conflictos quedan, si hay rebase parado. */
+    internal fun onChangesUpdated() {
+        val repository = repository()
+        _conflicts.value = repository?.takeIf(::stackRebaseInProgress)?.let { conflictedFiles(it.root).size }
+    }
 
     /** Las pilas que gh-stack sigue en local, con lo que queda de sus ramas. */
     fun localStacks(repository: GitRepository): List<LocalStackEntry> {
@@ -312,6 +371,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             return@launch
         }
         val repository = operation.repository ?: repository()
+        var stoppedOnConflicts = false
         try {
             _running.value = operation.title
             val workDir = operation.workDir ?: repository?.root?.toNioPath() ?: return@launch
@@ -340,13 +400,16 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 operation.successMessage?.let { Notifier.info(project, it) }
                 operation.onSuccess?.invoke()
                 last?.let { operation.onOutput?.invoke(it) }
-            } else if (operation.onFailure?.invoke(failure) != true) {
-                reportFailure(operation, failure, repository)
+            } else {
+                stoppedOnConflicts = failure.exitCode == GhExit.CONFLICT && repository != null && stackRebaseInProgress(repository)
+                if (operation.onFailure?.invoke(failure) != true) reportFailure(operation, failure, repository)
             }
         } catch (e: GhNotFoundException) {
             if (e.tool == Tool.GH) _state.value = StackState.GhMissing
             Notifier.error(project, operation.title, message(if (e.tool == Tool.GH) "state.gh.missing" else "state.git.missing"))
         } finally {
+            // Lo que se conto antes ya no vale: hasta el repaso que pide syncIde, no se sabe.
+            _conflicts.value = null
             withContext(NonCancellable) {
                 repository?.let(::syncIde)
             }
@@ -354,6 +417,8 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             writeLock.unlock()
             requestRefresh()
         }
+        // Despues de syncIde: el dialogo espera al repaso de cambios que ve los conflictos nuevos.
+        if (stoppedOnConflicts) withContext(Dispatchers.EDT) { resolveConflicts(opened = true) }
     }
 
     private suspend fun run(repository: GitRepository?, workDir: Path, call: GhCall): GhResult {
@@ -391,13 +456,14 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         VcsDirtyScopeManager.getInstance(project).dirDirtyRecursively(repository.root)
     }
 
-    private fun reportFailure(operation: Operation, result: GhResult, repository: GitRepository?) {
+    private suspend fun reportFailure(operation: Operation, result: GhResult, repository: GitRepository?) {
         val showLog = Notifier.action(message("notification.show.log")) { StackToolWindow.showLog(project) }
-        val stackRebase = repository != null && stackRebaseInProgress(repository)
+        val stop = repository?.let { rebaseStop(it) }
         when {
-            (result.exitCode == GhExit.CONFLICT || result.exitCode == GhExit.REBASE_ACTIVE) && stackRebase ->
+            (result.exitCode == GhExit.CONFLICT || result.exitCode == GhExit.REBASE_ACTIVE) && stop != null ->
                 Notifier.warning(
-                    project, message("conflict.title"), message("conflict.rebase"),
+                    project, message("conflict.title"),
+                    stop.branch?.let { message("conflict.rebase.layer", it) } ?: message("conflict.rebase"),
                     Notifier.action(message("action.resolve.conflicts")) { resolveConflicts() },
                     Notifier.action(message("action.rebase.continue")) { continueRebase() },
                     Notifier.action(message("action.rebase.abort")) { abortRebase() },
@@ -617,24 +683,42 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
 
     // ---------------------------------------------------------------- operaciones compartidas
 
-    fun abortRebase(): Job = execute(
-        Operation(message("op.rebase.abort"), listOf(GhCall(GhCommands.rebaseAbort())), successMessage = message("op.rebase.aborted"))
-    )
+    /**
+     * Abortar deshace tambien las capas que ya se rebasaron y lo resuelto hasta ahora: se pregunta
+     * siempre. En el EDT.
+     */
+    fun abortRebase() {
+        val confirmed = MessageDialogBuilder.yesNo(message("abort.title"), message("abort.text"))
+            .yesText(message("action.rebase.abort"))
+            .noText(CommonBundle.getCancelButtonText())
+            .icon(Messages.getWarningIcon())
+            .ask(project)
+        if (!confirmed) return
+        execute(
+            Operation(message("op.rebase.abort"), listOf(GhCall(GhCommands.rebaseAbort())), successMessage = message("op.rebase.aborted"))
+        )
+    }
 
-    /** El dialogo de conflictos de siempre, con los ficheros que git marco en conflicto. */
-    fun resolveConflicts() {
+    /**
+     * El dialogo de conflictos de siempre, con los ficheros que git marco en conflicto. [opened]:
+     * se abre solo porque el rebase se acaba de parar; si no queda ninguno, ya lo dice la banda.
+     */
+    fun resolveConflicts(opened: Boolean = false) {
+        val repository = repository() ?: return
         val changes = ChangeListManager.getInstance(project)
         changes.invokeAfterUpdate(true) {
-            val files = changes.allChanges
-                .filter { it.fileStatus == FileStatus.MERGED_WITH_CONFLICTS }
-                .mapNotNull { it.virtualFile }
-            if (files.isEmpty()) {
+            val files = conflictedFiles(repository.root)
+            when {
+                files.isNotEmpty() -> mergeDialog(files)
                 // Con rerere.autoupdate, git ya aplico y anadio una resolucion recordada.
-                Notifier.info(project, message("conflict.none"), Notifier.action(message("action.rebase.continue")) { continueRebase() })
-            } else {
-                AbstractVcsHelper.getInstance(project).showMergeDialogWithResult(files)
+                !opened -> Notifier.info(project, message("conflict.none"), Notifier.action(message("action.rebase.continue")) { continueRebase() })
             }
         }
+    }
+
+    /** El dialogo de conflictos del IDE. Los tests lo cambian: sin pantalla no se puede crear. */
+    internal var mergeDialog: (List<VirtualFile>) -> Unit = { files ->
+        AbstractVcsHelper.getInstance(project).showMergeDialogWithResult(files)
     }
 
     /** Checkout con el de git4idea: smart checkout, dialogo de cambios locales, etc. */
@@ -647,15 +731,20 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         private const val STACK_FILE = "gh-stack"
         private const val REBASE_STATE_FILE = "gh-stack-rebase-state"
 
+        /** Donde deja git el rebase en curso: `rebase-merge` el de siempre, `rebase-apply` el de `--apply`. */
+        private val REBASE_DIRS = listOf("rebase-merge", "rebase-apply")
+        private const val HEADS = "refs/heads/"
+        private const val UNIT_SEPARATOR = '\u001F'
+
         fun getInstance(project: Project): StackService = project.service()
     }
 }
 
 /**
- * Los avisos de git4idea, registrados en plugin.xml. No crean el servicio: si la ventana
+ * Los avisos de git4idea y del repaso de cambios del IDE, registrados en plugin.xml. No crean el servicio: si la ventana
  * no se abrio nunca, no hay nada que refrescar.
  */
-internal class GitEvents(private val project: Project) : GitRepositoryChangeListener, VcsRepositoryMappingListener {
+internal class GitEvents(private val project: Project) : GitRepositoryChangeListener, VcsRepositoryMappingListener, ChangeListListener {
 
     override fun repositoryChanged(repository: GitRepository) {
         project.getServiceIfCreated(StackService::class.java)?.onRepositoryChanged(repository)
@@ -663,5 +752,9 @@ internal class GitEvents(private val project: Project) : GitRepositoryChangeList
 
     override fun mappingChanged() {
         project.getServiceIfCreated(StackService::class.java)?.requestRefresh()
+    }
+
+    override fun changeListUpdateDone() {
+        project.getServiceIfCreated(StackService::class.java)?.onChangesUpdated()
     }
 }

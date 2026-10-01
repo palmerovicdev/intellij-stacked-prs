@@ -75,6 +75,7 @@
     <projectListeners>
         <listener class="com.stacklane.stack.GitEvents" topic="git4idea.repo.GitRepositoryChangeListener"/>
         <listener class="com.stacklane.stack.GitEvents" topic="com.intellij.dvcs.repo.VcsRepositoryMappingListener"/>
+        <listener class="com.stacklane.stack.GitEvents" topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
     </projectListeners>
 
     <actions resource-bundle="messages.StacklaneBundle">

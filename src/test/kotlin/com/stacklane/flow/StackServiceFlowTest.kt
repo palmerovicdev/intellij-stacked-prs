@@ -88,6 +88,7 @@ class StackServiceFlowTest : FlowTestCase() {
         )
 
         awaitIdle()
+        answerMessages(Messages.YES)
         press(warning, msg("action.rebase.abort"))
         awaitNotificationWith(msg("op.rebase.aborted"))
         assertEquals(listOf(rebase, listOf("stack", "rebase", "--abort")), gh.writes())

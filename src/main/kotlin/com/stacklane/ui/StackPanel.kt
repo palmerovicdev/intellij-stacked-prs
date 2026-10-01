@@ -40,6 +40,7 @@ import com.stacklane.actions.StackFlows
 import com.stacklane.gh.GhCommands
 import com.stacklane.settings.StacklaneConfigurable
 import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.RebaseStop
 import com.stacklane.stack.StackService
 import com.stacklane.stack.StackState
 import com.stacklane.stack.repo
@@ -157,6 +158,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 
         scope.launch { service.state.collect(::render) }
         scope.launch { service.pushPending.collect { renderBanners() } }
+        scope.launch { service.conflicts.collect { renderBanners() } }
         scope.launch {
             service.running.collect {
                 running = it
@@ -273,14 +275,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         banners.removeAll()
         val current = state
         val repo = current.repo
-        if (repo?.stackRebaseInProgress == true) {
-            banners.add(
-                banner(message("banner.rebase"), EditorNotificationPanel.Status.Warning)
-                    .withAction(message("action.resolve.conflicts"), Helps.resolveConflicts()) { service.resolveConflicts() }
-                    .withAction(message("action.rebase.continue"), Helps.continueRebase()) { service.continueRebase() }
-                    .withAction(message("action.rebase.abort"), Helps.abortRebase()) { service.abortRebase() }
-            )
-        }
+        repo?.rebase?.let(::renderRebaseStop)
         if (current is StackState.Loaded) {
             current.detailsError?.let { error ->
                 banners.add(
@@ -300,6 +295,39 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         banners.isVisible = banners.componentCount > 0
         banners.revalidate()
         banners.repaint()
+    }
+
+    /**
+     * El rebase parado: en que capa y en que commit, y lo que toca. Mientras quedan conflictos,
+     * resolverlos; cuando el IDE ya no ve ninguno, el siguiente paso es *Continue*, en azul.
+     * Sin la cuenta (el IDE aun no ha repasado los cambios), las tres acciones.
+     */
+    private fun renderRebaseStop(stop: RebaseStop) {
+        val conflicts = service.conflicts.value
+        val text = listOfNotNull(
+            when {
+                stop.branch != null && stop.position != null && stop.layers != null ->
+                    message("banner.rebase.layer", stop.branch, stop.position, stop.layers)
+                stop.branch != null -> message("banner.rebase.branch", stop.branch)
+                else -> message("banner.rebase")
+            },
+            stop.commit?.let { message("banner.rebase.commit", it, stop.subject.orEmpty()) },
+            when (conflicts) {
+                null -> message("banner.rebase.unknown")
+                0 -> message("banner.rebase.resolved")
+                else -> message("banner.rebase.count", conflicts)
+            },
+        ).joinToString(" ")
+        val status = if (conflicts == 0) EditorNotificationPanel.Status.Info else EditorNotificationPanel.Status.Warning
+        val banner = banner(text, status)
+        if (conflicts != 0) {
+            banner.withAction(message("action.resolve.conflicts"), Helps.resolveConflicts()) { service.resolveConflicts() }
+        }
+        if (conflicts == null || conflicts == 0) {
+            banner.withAction(message("action.rebase.continue"), Helps.continueRebase()) { service.continueRebase() }
+        }
+        banner.withAction(message("action.rebase.abort"), Helps.abortRebase()) { service.abortRebase() }
+        banners.add(banner)
     }
 
     /**

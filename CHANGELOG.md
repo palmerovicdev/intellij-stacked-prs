@@ -3,6 +3,26 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.10.0 — Conflictos guiados
+
+Salió del roadmap (P12): con un rebase parado había que pulsar tres veces y no se sabía qué
+capa se estaba rebasando.
+
+- **El diálogo de conflictos se abre solo** cuando `gh stack rebase` (o su `--continue`) se
+  para, con los ficheros en conflicto de ese repositorio. Si git ya reutilizó una resolución
+  recordada (rerere) y no queda ninguno, no se abre nada: lo dice la banda.
+- **La banda dice dónde se paró**: la capa y su posición en la pila (*feat/a, layer 1 of 3*)
+  y el commit que git no pudo aplicar, con su asunto. Sale de git (`rebase-merge/head-name` y
+  `REBASE_HEAD`), no del estado interno de gh-stack.
+- **Cuenta los conflictos** con lo que ve el IDE. Mientras queda alguno, ofrece *Resolve
+  Conflicts* y *Abort*; cuando no queda ninguno, la banda pasa a azul y el siguiente paso es
+  **Continue** (`gh stack rebase --continue`), en un clic.
+- **Abort pide confirmación**: `gh stack rebase --abort` devuelve todas las capas a como
+  estaban, también las ya rebasadas, y se pierde lo resuelto.
+- **La pila sigue en pantalla durante el rebase.** Con HEAD suelto, `gh stack view` no sabe
+  en qué rama está y sale con 2; la ventana decía que la rama no estaba en ninguna pila.
+  Ahora se queda la pila de antes de pararse.
+
 ## 0.9.0 — Fusionar la pila
 
 Salió del roadmap (P9): con *Close Stack* (P15), el ciclo de vida de una pila se completa sin

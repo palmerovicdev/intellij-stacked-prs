@@ -19,7 +19,7 @@ class LocalStackTest {
         LocalStackEntry.all(stacks.toList(), local, remote)
 
     private fun state(branch: String, vararg stacks: LocalStack) =
-        StackState.InSeveralStacks(RepoRef(LightVirtualFile("repo"), "repo", null, false), branch, entries(*stacks))
+        StackState.InSeveralStacks(RepoRef(LightVirtualFile("repo"), "repo", null), branch, entries(*stacks))
 
     @Test
     fun `a stack contains its trunk, like gh-stack`() {

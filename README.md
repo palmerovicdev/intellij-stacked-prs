@@ -37,7 +37,10 @@ puede alternar entre IDE y terminal en cualquier momento.
   el plugin o desde la terminal). El primer rebase de cada repositorio pregunta si
   activar **git rerere**, como gh-stack en la terminal, y guarda la respuesta en las mismas
   claves.
-- Aviso de rebase parado con *Resolver conflictos*, *Continuar* y *Abortar*.
+- **Conflictos guiados**: cuando un rebase se para, el diálogo de conflictos del IDE se abre
+  solo. La banda dice en qué capa y en qué commit se paró y cuántos ficheros siguen en
+  conflicto; cuando el IDE ya no ve ninguno, se vuelve azul con **Continuar**. *Abortar*
+  pide confirmación: deshace también las capas ya rebasadas.
 - **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
   *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
   último commit de cada rama. *New Stack* también limpia antes los nombres que retienen.
@@ -86,7 +89,7 @@ uso de API interna, deprecada, experimental, *override-only* o *non-extendable*.
 contra la IDEA instalada, sin descargar nada:
 
 ```text
-Plugin com.stacklane:0.9.0 against IU-262.10315.125: Compatible
+Plugin com.stacklane:0.10.0 against IU-262.10315.125: Compatible
 ```
 
 La integración con la ventana Pull Requests no compila contra el plugin GitHub: ninguna de
@@ -157,12 +160,16 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 99 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 141 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - `StackService` y los flujos que escriben en GitHub, con un `gh` falso: los estados de la
   ventana, el reintento con `--remote` tras *multiple remotes*, los avisos por código de
   salida (3 con y sin rebase parado, 8, 9, 10), el corte de una secuencia y su limpieza, una
   escritura a la vez, la pregunta de rerere, publicar, ready/draft, cambiar la base y la label
   de capa final.
+- Un rebase parado de verdad (git real, gh falso): la capa, su posición y el commit en
+  conflicto salen de `rebase-merge/head-name` y `REBASE_HEAD`; la pila sigue en pantalla
+  aunque `view` falle con HEAD suelto; los conflictos se cuentan hasta resolverlos; el
+  diálogo de conflictos se abre solo, y *Abortar* no hace nada si se cancela.
 - El rebase upstack, con gh-stack v0.1.1 real sobre un repositorio de prueba: tras avanzar
   `main` y commitear en la capa del medio, la de encima recibe el commit y ninguna capa se
   rebasa sobre `main`. La de abajo sigue marcada, porque eso solo lo arregla el rebase

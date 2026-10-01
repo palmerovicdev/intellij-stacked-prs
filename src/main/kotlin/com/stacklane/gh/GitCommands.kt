@@ -3,7 +3,7 @@ package com.stacklane.gh
 /**
  * Los pocos comandos de git que ejecuta el plugin: los que escriben, siempre dentro de un
  * plan que los explica (ver StackPlans y ClosePlans) o de la pregunta de rerere (ver Rerere);
- * [log], [statusTracked], [rerereConfig], [mergeBase] y [lsRemoteHeads], solo para leer. Todo
+ * [log], [statusTracked], [rerereConfig], [mergeBase], [lsRemoteHeads] y [rebaseHead], solo para leer. Todo
  * lo demas pasa por gh.
  */
 object GitCommands {
@@ -39,6 +39,12 @@ object GitCommands {
      */
     fun lsRemoteHeads(remote: String, names: Collection<String>): List<String> =
         listOf("ls-remote", "--heads", remote) + names.map { "refs/heads/$it" }
+
+    /**
+     * El commit que un rebase parado no pudo aplicar: hash corto y asunto, separados por US
+     * (0x1F). Solo lee; falla si no hay `REBASE_HEAD`.
+     */
+    fun rebaseHead(): List<String> = listOf("log", "-1", "--format=%h%x1f%s", "REBASE_HEAD", "--")
 
     /** Cambios en ficheros con seguimiento; con alguno, git no empieza un rebase. Solo lee. */
     fun statusTracked(): List<String> = listOf("status", "--porcelain", "--untracked-files=no")

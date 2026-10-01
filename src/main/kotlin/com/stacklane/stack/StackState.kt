@@ -8,8 +8,26 @@ data class RepoRef(
     val name: String,
     /** Deducido de los remotos; null si ninguno apunta a GitHub. */
     val github: GitHubRepo?,
-    /** Hay un `gh stack rebase` parado a la espera de `--continue` o `--abort`. */
-    val stackRebaseInProgress: Boolean,
+    /** El `gh stack rebase` parado a la espera de `--continue` o `--abort`, o null. */
+    val rebase: RebaseStop? = null,
+) {
+    val stackRebaseInProgress: Boolean get() = rebase != null
+}
+
+/**
+ * Donde se paro un `gh stack rebase`, segun git y no segun el estado interno de gh-stack:
+ * la rama que git esta rebasando (`rebase-merge/head-name`) y el commit que no pudo aplicar
+ * (`REBASE_HEAD`). Cada dato es null si git no lo dice, por ejemplo con el rebase de git ya
+ * terminado y gh-stack esperando `--continue` para seguir con las capas de arriba.
+ */
+data class RebaseStop(
+    val branch: String? = null,
+    /** Posicion de [branch] en su pila, 1 la de abajo, y cuantas capas tiene la pila. */
+    val position: Int? = null,
+    val layers: Int? = null,
+    /** Hash corto y asunto del commit en conflicto. */
+    val commit: String? = null,
+    val subject: String? = null,
 )
 
 /** Lo que pinta la ventana Stacks. Un unico estado, publicado por [StackService]. */

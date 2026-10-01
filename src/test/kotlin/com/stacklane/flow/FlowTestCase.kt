@@ -122,6 +122,14 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         return output
     }
 
+    /** git sin exigir que salga bien (un rebase que se para, por ejemplo): su codigo de salida. */
+    protected fun gitExit(vararg args: String): Int {
+        val process = ProcessBuilder(listOf("git") + args).directory(repoDir.toFile()).redirectErrorStream(true).start()
+        process.inputStream.bufferedReader().readText()
+        check(process.waitFor(30, TimeUnit.SECONDS)) { "git ${args.joinToString(" ")} did not finish" }
+        return process.exitValue()
+    }
+
     /** La configuracion del repositorio, o null si la clave no esta. */
     protected fun gitConfig(key: String): String? = try {
         git("config", "--get", key).trim()
