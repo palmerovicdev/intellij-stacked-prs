@@ -64,6 +64,7 @@ hecha y el plugin salga al Marketplace (P40).
 | Rebase parado: diálogo de conflictos solo, capa y commit en la banda, *Continue* al resolver y *Abort* con confirmación (P12)                           | `0.10.0`                |
 | Capa sin rama: *Branch deleted*, *Restore Branch* y *Remove From Stack…*; *Delete Layer…* en la de arriba sin PR (P44)                                 | `0.11.0`                |
 | *Rename Branch…* (capas sin PR), *Edit Title…* y *Publish as Draft / Ready…* desde el menú de una capa (P16, en parte)                                 | `0.11.0`                |
+| El título propuesto de un PR nuevo es el nombre de su rama                                                                                             | `0.11.1`                |
 
 ---
 

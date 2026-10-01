@@ -55,7 +55,8 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Renombrar la rama de una capa sin PR** (*Rename Branch…*), aquí y en GitHub si se subió,
   y **cambiar el título de un PR** (*Edit Title…*), por separado.
 - **Publicar una capa desde su menú** (*Publish as Draft…* / *Publish Ready for Review…*),
-  con título y descripción propuestos desde sus commits, si no hay capas sin PR encima.
+  con el nombre de la rama como título propuesto y la descripción de sus commits, si no hay
+  capas sin PR encima.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
@@ -270,7 +271,7 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.11.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.11.1**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

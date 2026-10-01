@@ -3,6 +3,12 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.11.1 — El título de un PR nuevo, de su rama
+
+- **El título propuesto de un PR nuevo es el nombre de su rama**, tal cual, en *Publish
+  Stack…* y en el *Publish* de una capa. Antes era el asunto del primer commit. La
+  descripción sigue saliendo de sus commits, y los dos se pueden cambiar antes de publicar.
+
 ## 0.11.0 — Capas sin rama, borrar, renombrar y publicar una capa
 
 Salió del roadmap (P44 y parte de P16) y de lo que se pidió al usarlo: una capa sin PR en la
@@ -33,7 +39,7 @@ desde su menú.
 - **Edit Title…** en el menú de una capa con PR y en el de la ventana Pull Requests:
   `gh pr edit <url> --title …`.
 - **Publish as Draft…** y **Publish Ready for Review…** vuelven al menú de una capa sin PR,
-  ahora sobre esa capa: título y descripción propuestos desde sus commits, `gh stack submit
+  ahora sobre esa capa: título y descripción editables, `gh stack submit
   --auto`, `gh pr edit` y, si es lista, `gh pr ready`. Como `submit` publica todas las capas
   sin PR, solo se activan si no hay ninguna encima; las de debajo salen como draft y el
   diálogo lo dice.

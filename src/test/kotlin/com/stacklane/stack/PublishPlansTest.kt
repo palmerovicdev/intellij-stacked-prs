@@ -95,12 +95,12 @@ class PublishPlansTest {
     }
 
     @Test
-    fun `proposes the commit itself for one commit and a list for several`() {
+    fun `proposes the branch name as title and the commits as description`() {
         val one = listOf(CommitMessage("feat(flows): flow view of booking", "Adds the flow view.\n\nCloses #12"))
-        assertEquals(PrText("feat(flows): flow view of booking", "Adds the flow view.\n\nCloses #12"), PublishPlans.proposal("feat/flows", one))
+        assertEquals(PrText("feat/flows", "Adds the flow view.\n\nCloses #12"), PublishPlans.proposal("feat/flows", one))
 
         val several = listOf(CommitMessage("feat: first", "x"), CommitMessage("fix: second", ""), CommitMessage("chore: third", "y"))
-        assertEquals(PrText("feat: first", "- feat: first\n- fix: second\n- chore: third"), PublishPlans.proposal("feat/flows", several))
+        assertEquals(PrText("feat/flows", "- feat: first\n- fix: second\n- chore: third"), PublishPlans.proposal("feat/flows", several))
 
         assertEquals(PrText("feat/flows", ""), PublishPlans.proposal("feat/flows", emptyList()))
     }

@@ -37,7 +37,7 @@ import javax.swing.text.JTextComponent
 /**
  * *Publish Stack…*: lo que hace el editor interactivo de `gh stack submit`, que el plugin no
  * puede abrir. Una fila por capa activa, de arriba abajo como en la ventana Stacks: las
- * nuevas con el titulo y la descripcion de su PR (propuestos a partir de sus commits) y
+ * nuevas con el titulo y la descripcion de su PR (el nombre de la rama y sus commits) y
  * todas con su casilla de listo para review. Se ejecuta `gh stack submit --auto` y despues
  * lo elegido, PR a PR (ver [PublishPlans.calls]).
  *

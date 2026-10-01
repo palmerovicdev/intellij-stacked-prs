@@ -20,8 +20,9 @@ import com.stacklane.stack.StackSnapshot
 import javax.swing.JComponent
 
 /**
- * *Publish as Draft…* / *Publish Ready for Review…* desde el menu de una capa sin PR: su titulo y
- * descripcion, propuestos a partir de sus commits, y los comandos de [PublishPlans.layerCalls].
+ * *Publish as Draft…* / *Publish Ready for Review…* desde el menu de una capa sin PR: su titulo
+ * (el nombre de la rama) y su descripcion (de sus commits), que se pueden cambiar, y los comandos
+ * de [PublishPlans.layerCalls].
  * Es la confirmacion.
  */
 internal class PublishLayerDialog(

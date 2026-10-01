@@ -78,14 +78,14 @@ object PublishPlans {
         )
 
     /**
-     * Titulo y descripcion propuestos para el PR de [branch]. Con un commit, su asunto y su
-     * cuerpo. Con varios, el asunto del primero, que suele decir de que va la capa, y la lista
-     * de todos en la descripcion. Sin commits propios, el nombre de la rama.
+     * Titulo y descripcion propuestos para el PR de [branch]. El titulo es siempre el nombre de la
+     * rama, tal cual. La descripcion sale de los commits: con uno, su cuerpo; con varios, la lista
+     * de sus asuntos; sin commits propios, vacia.
      */
     fun proposal(branch: String, commits: List<CommitMessage>): PrText = when (commits.size) {
         0 -> PrText(branch, "")
-        1 -> PrText(commits[0].subject, commits[0].body)
-        else -> PrText(commits[0].subject, commits.joinToString("\n") { "- ${it.subject}" })
+        1 -> PrText(branch, commits[0].body)
+        else -> PrText(branch, commits.joinToString("\n") { "- ${it.subject}" })
     }
 
     /** La salida de [com.stacklane.gh.GitCommands.log]. */

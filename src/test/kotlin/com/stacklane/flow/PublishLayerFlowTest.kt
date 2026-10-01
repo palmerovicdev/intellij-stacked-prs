@@ -40,11 +40,11 @@ class PublishLayerFlowTest : FlowTestCase() {
         })
     }
 
-    fun `test ready for review titles it from its commit and marks it ready`() {
+    fun `test ready for review titles it with the branch name and marks it ready`() {
         val state = loadStack()
         preferredRemote = "origin"
         val submit = listOf("stack", "submit", "--auto", "--remote", "origin")
-        val edit = listOf("pr", "edit", "feat/b", "--repo", "acme/shop", "--title", "Flow view", "--body", "Shows the flows.")
+        val edit = listOf("pr", "edit", "feat/b", "--repo", "acme/shop", "--title", "feat/b", "--body", "Shows the flows.")
         val ready = listOf("pr", "ready", "feat/b", "--repo", "acme/shop")
         listOf(submit, edit, ready).forEach { gh.respond(it) }
         acceptProposal()
@@ -60,7 +60,7 @@ class PublishLayerFlowTest : FlowTestCase() {
         val state = loadStack()
         preferredRemote = "origin"
         val submit = listOf("stack", "submit", "--auto", "--remote", "origin")
-        val edit = listOf("pr", "edit", "feat/b", "--repo", "acme/shop", "--title", "Flow view", "--body", "Shows the flows.")
+        val edit = listOf("pr", "edit", "feat/b", "--repo", "acme/shop", "--title", "feat/b", "--body", "Shows the flows.")
         listOf(submit, edit).forEach { gh.respond(it) }
         acceptProposal()
 
