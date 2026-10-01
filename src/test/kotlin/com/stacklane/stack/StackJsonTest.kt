@@ -91,6 +91,32 @@ class StackJsonTest {
     }
 
     @Test
+    fun `size, conflicts and behind from graphql`() {
+        val text = """
+            {"data":{"repository":{
+              "pr12":{"number":12,"title":"Domain","url":"u","state":"OPEN","isDraft":false,"baseRefName":"main",
+                      "additions":120,"deletions":30,"changedFiles":8,"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY"},
+              "pr13":{"number":13,"title":"API","url":"u","state":"OPEN","isDraft":false,"baseRefName":"feat/domain",
+                      "additions":5,"deletions":0,"changedFiles":1,"mergeable":"MERGEABLE","mergeStateStatus":"BEHIND"},
+              "pr14":{"number":14,"title":"UI","url":"u","state":"OPEN","isDraft":false,"baseRefName":"feat/api",
+                      "mergeable":"UNKNOWN","mergeStateStatus":"UNKNOWN"}}}}
+        """.trimIndent()
+        val details = StackJson.parsePrDetails(text)
+        val domain = details.getValue(12)
+        assertEquals(PrSize(120, 30, 8), domain.size)
+        assertTrue(domain.hasConflicts)
+        assertFalse(domain.isBehind)
+        val api = details.getValue(13)
+        assertFalse(api.hasConflicts)
+        assertTrue(api.isBehind)
+        // Mientras GitHub lo calcula no se sabe nada: ni tamano ni avisos.
+        val ui = details.getValue(14)
+        assertNull(ui.size)
+        assertFalse(ui.hasConflicts)
+        assertFalse(ui.isBehind)
+    }
+
+    @Test
     fun `details of an error response are empty`() {
         assertTrue(StackJson.parsePrDetails("gh: To get started with GitHub CLI, please run:  gh auth login").isEmpty())
     }

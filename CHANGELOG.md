@@ -3,6 +3,30 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.7.0 — Cada capa, de un vistazo
+
+Salió de revisar el roadmap tras la `0.6.0`: la consulta a GitHub ya traía la base de cada
+PR y no se usaba, y faltaba ver el diff de una capa sola, que es el sentido de apilar.
+
+- **Show Layer Changes**, en el menú de una capa: el diff del IDE con lo que añade la capa
+  sobre la de debajo, lo mismo que enseña su PR. Si la de debajo avanzó después, compara
+  desde su último commit común (como `git diff abajo...capa`), así lo nuevo de abajo no sale
+  como si la capa lo quitara.
+- **Wrong base**: si el PR de una capa apunta en GitHub a otra rama que la de debajo (se
+  cambió a mano, o se fusionó la de debajo sin borrar su rama), la fila lo marca y el
+  tooltip dice a cuál apunta. *Change Pull Request Base to …* se la cambia con
+  `gh pr edit <url> --base <rama>`: solo ese PR, y el aviso dice cuál tenía.
+- **Tamaño y conflictos**: `+120 −30` en cada capa con PR (los ficheros, en el tooltip),
+  *Conflicts* si GitHub no puede fusionarla sin conflictos y *Behind* si la protección de su
+  base exige ponerla al día.
+- **Tooltips más estrechos** (unos 520 px): cada comando va en su bloque con fondo, como el
+  código en Markdown, y las URLs en azul, como enlaces.
+- El tooltip de una capa dice cuál es (`layer 2 of 3`).
+- Las capas sin PR ya no dicen dos veces que no están publicadas: queda la pastilla *No PR*.
+- La línea del grafo se ve en tema oscuro.
+- *Check Out Stack Locally*, desde Pull Requests, enseña `#13` en el progreso y no la URL.
+- Los ajustes pasan a *Settings → Version Control → Stacklane*, junto a Git y GitHub.
+
 ## 0.6.0 — Qué hace cada opción y qué es lo siguiente
 
 Salió de usar el menú de una capa: no se sabía qué hacía cada opción ni si actuaba sobre la

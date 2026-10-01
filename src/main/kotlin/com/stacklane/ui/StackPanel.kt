@@ -194,13 +194,16 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         is StackState.Loaded -> {
             val snapshot = state.snapshot
             val layers = snapshot.layers.mapIndexed { index, layer ->
+                val details = state.detailsOf(layer)
                 StackRow.Layer(
                     layer = layer,
-                    details = state.detailsOf(layer),
+                    details = details,
                     parent = snapshot.parentOf(layer),
                     position = index + 1,
+                    total = snapshot.layers.size,
                     isTop = index == snapshot.layers.lastIndex,
                     detailsLoading = state.detailsLoading,
+                    wrongBase = snapshot.wrongBase(layer, details),
                 )
             }
             layers.asReversed() + StackRow.Trunk(snapshot.trunk, snapshot.currentBranch == snapshot.trunk)

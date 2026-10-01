@@ -12,7 +12,7 @@ import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.stacklane.StacklaneBundle.message
 import com.stacklane.gh.GhCli
 
-/** Settings | Tools | Stacklane. */
+/** Settings | Version Control | Stacklane. */
 class StacklaneConfigurable : BoundConfigurable(message("settings.title")) {
 
     override fun createPanel(): DialogPanel {

@@ -60,6 +60,8 @@ object StackJson {
             val rollup = (((pr["commits"] as? JsonObject)?.get("nodes") as? JsonArray)
                 ?.firstOrNull() as? JsonObject)
                 ?.obj("commit")?.obj("statusCheckRollup")?.string("state")
+            val additions = pr.int("additions")
+            val deletions = pr.int("deletions")
             PrDetails(
                 number = number,
                 title = pr.string("title").orEmpty(),
@@ -70,6 +72,10 @@ object StackJson {
                 checks = ChecksState.parse(rollup),
                 labels = labels,
                 baseRef = pr.string("baseRefName").orEmpty(),
+                size = if (additions != null && deletions != null) PrSize(additions, deletions, pr.int("changedFiles") ?: 0) else null,
+                // GitHub calcula las dos cosas en segundo plano: mientras tanto dice UNKNOWN.
+                hasConflicts = pr.string("mergeable") == "CONFLICTING",
+                isBehind = pr.string("mergeStateStatus") == "BEHIND",
             )
         }.associateBy { it.number }
     }

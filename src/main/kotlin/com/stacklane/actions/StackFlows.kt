@@ -33,6 +33,7 @@ import com.stacklane.ui.InitStackDialog
 import com.stacklane.ui.LabelsDialog
 import com.stacklane.ui.PublishDialog
 import com.stacklane.ui.StackToolWindow
+import git4idea.branch.GitBrancher
 import git4idea.repo.GitRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -48,6 +49,9 @@ internal object StackFlows {
 
     // Ramas que casi nunca se quieren adoptar como primera capa de una pila.
     private val TRUNK_NAMES = setOf("main", "master", "develop", "development", "trunk")
+
+    // Lo que se ensena del ultimo commit comun en el titulo del diff de una capa.
+    private const val SHORT_HASH = 10
 
     // ------------------------------------------------------------------ pila
 
@@ -280,11 +284,14 @@ internal object StackFlows {
         service.rebaseUpstackFrom(repository, from)
     }
 
-    /** `gh stack checkout`: si la pila solo existe en GitHub, gh-stack la trae y la registra. */
-    fun checkoutStack(project: Project, target: String, repository: GitRepository? = null) {
+    /**
+     * `gh stack checkout`: si la pila solo existe en GitHub, gh-stack la trae y la registra.
+     * [label]: como se nombra en el progreso; un PR, por su numero y no por su URL.
+     */
+    fun checkoutStack(project: Project, target: String, repository: GitRepository? = null, label: String = target) {
         StackService.getInstance(project).execute(
             Operation(
-                title = message("op.checkout.stack", target),
+                title = message("op.checkout.stack", label),
                 calls = listOf(GhCall(GhCommands.checkout(target))),
                 repository = repository,
                 onSuccess = { withContext(Dispatchers.EDT) { StackToolWindow.show(project) } },
@@ -422,7 +429,43 @@ internal object StackFlows {
             Notifier.error(project, message("op.checkout.stack", "#${target.number}"), message("checkout.no.repository", target.github.cliName))
             return
         }
-        checkoutStack(project, target.url, repository)
+        checkoutStack(project, target.url, repository, label = "#${target.number}")
+    }
+
+    /**
+     * El PR de la capa apunta a otra rama que la de debajo ([base]): se le pone esa. Solo
+     * cambia este PR; el aviso dice cual tenia, por si era la buena.
+     */
+    fun changeBase(project: Project, target: PrTarget, base: String) {
+        val previous = target.details?.baseRef.orEmpty()
+        executeOnPr(
+            project, target,
+            title = message("op.base", target.number, base),
+            calls = listOf(GhCall(GhCommands.editBase(target.url, base))),
+            success = message("op.base.done", target.number, base, previous),
+        )
+    }
+
+    /**
+     * Lo que anade la capa sobre la de debajo, como lo ensena su PR, en el diff del IDE. Si la
+     * de debajo avanzo despues (la capa necesita rebase), desde su ultimo commit comun: si no,
+     * lo nuevo de abajo saldria como si esta capa lo quitara.
+     */
+    fun showLayerChanges(project: Project, selection: LayerSelection) {
+        val service = StackService.getInstance(project)
+        val repository = service.repositoryFor(selection.state.repo) ?: return
+        val layer = selection.layer
+        val branch = gitRef(repository, layer.branch)
+        val parent = gitRef(repository, selection.state.snapshot.parentOf(layer))
+        service.launch {
+            val base = if (!layer.needsRebase) parent else try {
+                GhCli.run(repository.root.toNioPath(), GitCommands.mergeBase(parent, branch), tool = Tool.GIT)
+                    .takeIf { it.ok }?.stdout?.trim()?.takeIf { it.isNotEmpty() }?.take(SHORT_HASH)
+            } catch (_: GhNotFoundException) {
+                null
+            } ?: parent
+            withContext(Dispatchers.EDT) { GitBrancher.getInstance(project).showDiff(base, branch, listOf(repository)) }
+        }
     }
 
     private fun executeOnPr(

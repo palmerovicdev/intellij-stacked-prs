@@ -10,6 +10,7 @@ import com.intellij.util.ui.NamedColorUtil
 import com.stacklane.StacklaneBundle.message
 import com.stacklane.stack.ChecksState
 import com.stacklane.stack.PrDetails
+import com.stacklane.stack.PrSize
 import com.stacklane.stack.ReviewDecision
 import java.awt.BasicStroke
 import java.awt.BorderLayout
@@ -79,18 +80,19 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
             layer.pr?.let { pr -> JLabel("#${pr.number}").apply { foreground = colors.secondary } },
             Chip.status(status.text, status.color),
             if (layer.needsRebase) Chip.status(message("layer.needs.rebase"), StackColors.WARNING) else null,
+            if (row.wrongBase != null) Chip.status(message("layer.wrong.base"), StackColors.WARNING) else null,
         )
         val head = if (layer.isCurrent) Chip.status(message("layer.head"), colors.secondary) else null
         val first = headline(name, badges, head, width)
 
+        // Sin PR, la pastilla ya lo dice: no hay segunda linea.
         val title = when {
-            layer.pr == null -> message("layer.unpublished")
+            layer.pr == null -> ""
             row.details != null -> row.details.title
             row.detailsLoading -> message("layer.loading")
             else -> ""
         }
-        val titleFont = if (layer.pr == null) JBFont.small().asItalic() else JBFont.small()
-        val second = description(title, titleFont, colors.secondary, row.details?.let(::badges).orEmpty(), width, expanded)
+        val second = description(title, JBFont.small(), colors.secondary, row.details?.let(::badges).orEmpty(), width, expanded)
 
         return graphRow(
             first, second, colors.background,
@@ -102,6 +104,7 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
 
     private fun badges(details: PrDetails): List<JComponent> {
         val badges = mutableListOf<JComponent>()
+        details.size?.let { badges += size(it) }
         val visible = details.labels.take(MAX_LABELS)
         visible.forEach { badges += Chip.label(it.name, it.color) }
         if (details.labels.size > visible.size) {
@@ -123,7 +126,16 @@ internal class StackRowRenderer(private val isExpanded: (StackRow) -> Boolean) :
             }
             badges += Chip.status(checksText(checks), color)
         }
+        if (details.hasConflicts) badges += Chip.status(message("pr.conflicts"), StackColors.CLOSED)
+        if (details.isBehind) badges += Chip.status(message("pr.behind"), StackColors.QUEUED)
         return badges
+    }
+
+    /** `+120 −30`, en verde y rojo como en GitHub. Los ficheros, en el tooltip. */
+    private fun size(size: PrSize): JComponent = JPanel(HorizontalLayout(JBUI.scale(3))).apply {
+        isOpaque = false
+        add(JLabel("+${size.additions}").apply { font = JBFont.small(); foreground = StackColors.READY })
+        add(JLabel("−${size.deletions}").apply { font = JBFont.small(); foreground = StackColors.CLOSED })
     }
 
     private fun trunkRow(row: StackRow.Trunk, colors: RowColors, width: Int): JComponent {

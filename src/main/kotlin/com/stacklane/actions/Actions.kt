@@ -242,6 +242,23 @@ internal class CheckoutLayerAction : StacklaneAction(AllIcons.Actions.CheckOut) 
     }
 }
 
+/** Lo que anade esta capa sobre la de debajo, en el diff del IDE (ver StackFlows.showLayerChanges). */
+internal class ShowLayerChangesAction : StacklaneAction(AllIcons.Actions.Diff) {
+
+    override fun updateState(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        e.presentation.isEnabledAndVisible = selection != null && !selection.layer.isMerged
+    }
+
+    override fun help(e: AnActionEvent): Help =
+        e.getData(StackDataKeys.LAYER)?.let { Helps.layerChanges(it.state.snapshot, it.layer) } ?: super.help(e)
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        StackFlows.showLayerChanges(project, e.getData(StackDataKeys.LAYER) ?: return)
+    }
+}
+
 /** `gh stack rebase --upstack --no-trunk` desde esta capa, con checkout antes si no es la actual. */
 internal class RebaseUpstackFromLayerAction : StacklaneAction(AllIcons.Actions.MoveUp) {
 
@@ -368,6 +385,32 @@ internal class MarkDraftAction : PrAction(AllIcons.Actions.Undo) {
     override fun isVisible(target: PrTarget): Boolean = isOpen(target) && target.details?.isDraft != true
     override fun commands(target: PrTarget): List<String> = listOf(Help.gh(GhCommands.markDraft(target.url)))
     override fun perform(project: Project, target: PrTarget) = StackFlows.setDraft(project, target, draft = true)
+}
+
+/**
+ * Solo en Stacks, y solo si el PR apunta en GitHub a otra rama que la capa de debajo: se le
+ * pone esa (ver StackSnapshot.wrongBase).
+ */
+internal class ChangePrBaseAction : PrAction(AllIcons.Actions.Edit) {
+
+    override fun isVisible(target: PrTarget): Boolean = wrongBase(target) != null
+
+    override fun updateText(e: AnActionEvent, target: PrTarget) {
+        parent(target)?.let { e.presentation.text = message("action.change.base", it) }
+    }
+
+    override fun help(target: PrTarget): Help {
+        val parent = parent(target) ?: return super.help(target)
+        return Help(message("help.change.base", wrongBase(target).orEmpty(), parent), listOf(Help.gh(GhCommands.editBase(target.url, parent))))
+    }
+
+    override fun perform(project: Project, target: PrTarget) {
+        StackFlows.changeBase(project, target, parent(target) ?: return)
+    }
+
+    private fun wrongBase(target: PrTarget): String? = target.selection?.let { it.state.snapshot.wrongBase(it.layer, it.details) }
+
+    private fun parent(target: PrTarget): String? = target.selection?.let { it.state.snapshot.parentOf(it.layer) }
 }
 
 internal class EditLabelsAction : PrAction(AllIcons.Nodes.Tag) {

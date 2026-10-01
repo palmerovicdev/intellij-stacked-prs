@@ -31,6 +31,26 @@ class RestackTest {
     }
 
     @Test
+    fun `a pull request whose base is not the layer below`() {
+        fun details(base: String, state: PrState = PrState.OPEN) =
+            PrDetails(1, "t", "u", state, isDraft = false, review = null, checks = null, labels = emptyList(), baseRef = base)
+        val a = layer("a", merged = true)
+        val b = layer("b")
+        val c = layer("c")
+        val snapshot = stack(a, b, c)
+        assertNull(snapshot.wrongBase(c, details("b")))
+        assertEquals("main", snapshot.wrongBase(c, details("main")))
+        // a esta fusionada: la base de b es el trunk. Si su PR sigue en a, esta mal.
+        assertNull(snapshot.wrongBase(b, details("main")))
+        assertEquals("a", snapshot.wrongBase(b, details("a")))
+        // PRs cerrados o fusionados, capas fusionadas y datos sin base no cuentan.
+        assertNull(snapshot.wrongBase(c, details("main", PrState.CLOSED)))
+        assertNull(snapshot.wrongBase(a, details("dev")))
+        assertNull(snapshot.wrongBase(c, details("")))
+        assertNull(snapshot.wrongBase(c, null))
+    }
+
+    @Test
     fun `nothing is behind on the top layer`() {
         val snapshot = stack(layer("a"), layer("b", current = true))
         assertTrue(snapshot.outdatedLayers.isEmpty())

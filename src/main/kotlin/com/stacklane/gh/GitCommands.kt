@@ -3,9 +3,12 @@ package com.stacklane.gh
 /**
  * Los pocos comandos de git que ejecuta el plugin: los que escriben, siempre dentro de un
  * plan que los explica (ver StackPlans) o de la pregunta de rerere (ver Rerere); [log],
- * [statusTracked] y [rerereConfig], solo para leer. Todo lo demas pasa por gh.
+ * [statusTracked], [rerereConfig] y [mergeBase], solo para leer. Todo lo demas pasa por gh.
  */
 object GitCommands {
+
+    /** El ultimo commit comun: desde ahi, lo que anade [branch] es solo suyo. Solo lee. */
+    fun mergeBase(base: String, branch: String): List<String> = listOf("merge-base", base, branch)
 
     /**
      * Los commits de [branch] que no estan en [base], del mas antiguo al mas nuevo. Cada uno

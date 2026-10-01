@@ -101,6 +101,9 @@ object GhCommands {
     fun editPr(pr: String, repo: GitHubRepo?, title: String, body: String): List<String> =
         listOf("pr", "edit") + prSelector(pr, repo) + listOf("--title", title, "--body", body)
 
+    /** La rama sobre la que se fusionaria el PR. */
+    fun editBase(prUrl: String, base: String): List<String> = listOf("pr", "edit", prUrl, "--base", base)
+
     /**
      * Un PR por rama es el que acaba de crear `gh stack submit`, que aun no tiene URL conocida.
      * Con `--repo` gh no tiene que adivinar el repositorio cuando hay varios remotos.
@@ -153,6 +156,7 @@ object GhCommands {
         append(" } } ")
         append(
             "fragment Layer on PullRequest { number title url state isDraft reviewDecision baseRefName " +
+                "additions deletions changedFiles mergeable mergeStateStatus " +
                 "labels(first: 30) { nodes { name color } } " +
                 "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }"
         )

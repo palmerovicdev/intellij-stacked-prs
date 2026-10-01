@@ -55,10 +55,12 @@
         <notificationGroup id="Stacklane" displayType="BALLOON" key="notification.group"/>
         <!-- Tras un commit en una capa intermedia, ofrecer el rebase upstack. -->
         <checkinHandlerFactory implementation="com.stacklane.stack.RestackCheckinHandlerFactory"/>
-        <applicationConfigurable parentId="tools"
-                                 id="com.stacklane.settings"
-                                 instance="com.stacklane.settings.StacklaneConfigurable"
-                                 key="settings.title"/>
+        <!-- Junto a Git y GitHub, en Version Control. Solo hay paginas de proyecto en ese grupo;
+             los ajustes siguen siendo globales (StacklaneSettings). -->
+        <projectConfigurable parentId="project.propVCSSupport.Mappings"
+                             id="com.stacklane.settings"
+                             instance="com.stacklane.settings.StacklaneConfigurable"
+                             key="settings.title"/>
     </extensions>
 
     <projectListeners>
@@ -103,10 +105,13 @@
             <action id="Stacklane.RecreateStack" class="com.stacklane.actions.RecreateStackAction"/>
             <action id="Stacklane.ForgetStack" class="com.stacklane.actions.ForgetStackAction"/>
             <action id="Stacklane.CheckoutLayer" class="com.stacklane.actions.CheckoutLayerAction"/>
+            <action id="Stacklane.ShowLayerChanges" class="com.stacklane.actions.ShowLayerChangesAction"/>
             <action id="Stacklane.OpenPr" class="com.stacklane.actions.OpenPrAction"/>
             <action id="Stacklane.CopyPrLink" class="com.stacklane.actions.CopyPrLinkAction"/>
             <separator/>
             <action id="Stacklane.RebaseUpstackFromLayer" class="com.stacklane.actions.RebaseUpstackFromLayerAction"/>
+            <!-- Solo si el PR apunta en GitHub a otra rama que la capa de debajo. -->
+            <action id="Stacklane.ChangePrBase" class="com.stacklane.actions.ChangePrBaseAction"/>
             <separator/>
             <reference ref="Stacklane.MarkReady"/>
             <reference ref="Stacklane.MarkDraft"/>

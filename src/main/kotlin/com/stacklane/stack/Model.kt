@@ -18,6 +18,16 @@ data class StackSnapshot(
         return layers.subList(0, index.coerceAtLeast(0)).lastOrNull { !it.isMerged }?.branch ?: trunk
     }
 
+    /**
+     * La rama a la que apunta en GitHub el PR de [layer] si no es la de [parentOf]: alguien
+     * cambio la base a mano, o se fusiono la capa de debajo sin borrar su rama. Solo de PRs
+     * abiertos de capas activas; null si coinciden o no se sabe.
+     */
+    fun wrongBase(layer: StackLayer, details: PrDetails?): String? {
+        if (details == null || details.state != PrState.OPEN || layer.isMerged || layer.isQueued) return null
+        return details.baseRef.takeIf { it.isNotEmpty() && it != parentOf(layer) }
+    }
+
     /** La capa activa de mas abajo: la unica cuya base es el trunk. */
     val bottom: StackLayer? get() = layers.firstOrNull { !it.isMerged }
 
@@ -89,9 +99,21 @@ data class PrDetails(
     val checks: ChecksState?,
     val labels: List<PrLabel>,
     val baseRef: String,
+    /** null si GitHub no lo dio. */
+    val size: PrSize? = null,
+    /** GitHub no puede fusionarlo con su base sin conflictos (`mergeable: CONFLICTING`). */
+    val hasConflicts: Boolean = false,
+    /**
+     * Su rama no tiene lo ultimo de su base y la proteccion de la base lo exige para fusionar
+     * (`mergeStateStatus: BEHIND`).
+     */
+    val isBehind: Boolean = false,
 ) {
     fun hasLabel(name: String): Boolean = labels.any { it.name.equals(name, ignoreCase = true) }
 }
+
+/** Lo que cambia un PR respecto a su base, como lo cuenta GitHub. */
+data class PrSize(val additions: Int, val deletions: Int, val files: Int)
 
 enum class PrState { OPEN, CLOSED, MERGED;
 

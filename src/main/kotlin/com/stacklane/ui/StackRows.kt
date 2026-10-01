@@ -24,8 +24,12 @@ internal sealed interface StackRow {
         val parent: String,
         /** 1 = la mas cercana al trunk, como numera gh-stack. */
         val position: Int,
+        /** Capas de la pila, fusionadas incluidas: la de arriba es la [position] `total`. */
+        val total: Int,
         val isTop: Boolean,
         val detailsLoading: Boolean,
+        /** La base del PR en GitHub, si no es [parent]. Ver `StackSnapshot.wrongBase`. */
+        val wrongBase: String? = null,
     ) : StackRow {
         val status: LayerStatus get() = LayerStatus.of(layer, details)
 
@@ -41,9 +45,14 @@ internal sealed interface StackRow {
                 details?.let { append(escape(it.title)) }
                 append("<br>")
             }
-            append(escape(layer.branch)).append(" &rarr; ").append(escape(parent)).append("<br>")
+            append(escape(layer.branch)).append(" &rarr; ").append(escape(parent))
+            append(" · ").append(escape(message("tooltip.position", position, total))).append("<br>")
             append(escape(listOfNotNull(status.text, details?.review?.let(::reviewText), details?.checks?.let(::checksText)).joinToString(" · ")))
+            details?.size?.let { append("<br>").append(escape(message("tooltip.size", it.additions, it.deletions, it.files))) }
             if (layer.needsRebase) append("<br>").append(escape(message("layer.needs.rebase")))
+            wrongBase?.let { append("<br>").append(escape(message("tooltip.wrong.base", it, parent))) }
+            if (details?.hasConflicts == true) append("<br>").append(escape(message("tooltip.conflicts", details.baseRef)))
+            if (details?.isBehind == true) append("<br>").append(escape(message("tooltip.behind", details.baseRef)))
             details?.labels?.takeIf { it.isNotEmpty() }?.let { labels ->
                 append("<br>").append(escape(message("tooltip.labels", labels.joinToString(", ") { it.name })))
             }

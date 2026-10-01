@@ -10,18 +10,24 @@ puede alternar entre IDE y terminal en cualquier momento.
 **Ventana Stacks** (a la derecha):
 
 - La pila como un grafo, desde la capa superior hasta el trunk. Por capa: rama, número de
-  PR, estado (draft, listo, fusionado, en cola, cerrado o sin PR), título, labels, decisión
-  de review y CI. También indica la rama actual (HEAD) y las capas que necesitan rebase.
+  PR, estado (draft, listo, fusionado, en cola, cerrado o sin PR), título, tamaño
+  (`+120 −30`), labels, decisión de review y CI. También indica la rama actual (HEAD), las
+  capas que necesitan rebase, los PRs cuya base en GitHub no es la capa de debajo
+  (*Wrong base*) y los que GitHub no puede fusionar sin conflictos (*Conflicts*) o sin
+  ponerse al día con su base (*Behind*).
 - Barra: refrescar, **nueva pila**, **añadir capa encima**, **publicar como drafts**,
   **publicar listos para revisión**, **sync**, **rebase** (desplegable: upstack desde la
   capa actual, pila entera, downstack y capas entre sí) y ajustes.
-- Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. Checkout, abrir o
-  copiar el PR, **rebase upstack desde aquí**, **marcar listo / volver a draft**,
+- Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. Checkout, **ver los
+  cambios de la capa** (el diff del IDE contra la de debajo, lo mismo que enseña su PR),
+  abrir o copiar el PR, **rebase upstack desde aquí**, **cambiar la base del PR** a la capa
+  de debajo cuando no coincide, **marcar listo / volver a draft**,
   **labels…** y **marcar como capa final** (`stack-final`). Clic derecho fuera de las filas
   o sobre la base: lo de toda la pila (añadir capa y publicar).
 - **Cada opción explica lo que hace y el comando que ejecuta** al pasar el ratón: barra,
   menús, botones de las bandas y opciones de los diálogos. Los comandos llevan los datos
-  reales (rama, URL del PR); los enlaces de la ventana vacía lo enseñan debajo, en gris.
+  reales (rama, URL del PR), cada uno en su bloque con fondo, y las URLs en azul; los
+  enlaces de la ventana vacía lo enseñan debajo, en gris.
 - **Rebase upstack**: tras cambiar una capa intermedia, lleva sus commits a las de encima
   sin fetch y sin tocar el trunk, así que solo salen los conflictos de ese cambio. Se ofrece
   al commitear desde el IDE en una capa que no es la cima (o se hace siempre, según los
@@ -51,6 +57,8 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Publicar como drafts | `gh stack submit --auto` |
 | Publicar listos | `gh stack submit --auto --open` (antes muestra qué PRs cambian: `--open` también marca listos los drafts existentes) |
 | Listo / draft | `gh pr ready <url>` / `gh pr ready <url> --undo` |
+| Cambiar la base del PR | `gh pr edit <url> --base <capa de debajo>` |
+| Ver los cambios de una capa | el diff del IDE, equivalente a `git diff <capa de debajo>...<capa>` (con `git merge-base` antes si la de debajo avanzó) |
 | Labels | `gh pr edit <url> --add-label … --remove-label …` |
 | Capa final | igual, con la label configurada (por defecto `stack-final`) |
 | Sync / rebase | `gh stack sync` / `gh stack rebase` (`--continue`, `--abort`) |
@@ -68,7 +76,7 @@ uso de API interna, deprecada, experimental, *override-only* o *non-extendable*.
 contra la IDEA instalada, sin descargar nada:
 
 ```text
-Plugin com.stacklane:0.5.0 against IU-262.10315.125: Compatible
+Plugin com.stacklane:0.7.0 against IU-262.10315.125: Compatible
 ```
 
 La integración con la ventana Pull Requests no compila contra el plugin GitHub: ninguna de
@@ -125,7 +133,7 @@ settings/  ruta de gh, nombre de la label final, qué hacer tras un commit, remo
 ```
 
 `StackService` lee con `gh stack view --json` más una consulta GraphQL para draft, labels,
-review y CI de todos los PRs a la vez. Refresca cuando git cambia de verdad: rama, commits o
+review, CI, base, tamaño y estado de merge de todos los PRs a la vez. Refresca cuando git cambia de verdad: rama, commits o
 refs. Las escrituras van de una en una, con progreso cancelable, registro en Log y refresco
 del VFS y de Git4Idea al terminar.
 
@@ -133,7 +141,7 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 58 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 67 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - El rebase upstack, con gh-stack v0.1.1 real sobre un repositorio de prueba: tras avanzar
   `main` y commitear en la capa del medio, la de encima recibe el commit y ninguna capa se
   rebasa sobre `main`. La de abajo sigue marcada, porque eso solo lo arregla el rebase
@@ -156,6 +164,11 @@ del VFS y de Git4Idea al terminar.
   comprobaron con gh-stack real, el pintado todavía no.
 - *Publish Stack…* (`0.4.0`) contra GitHub: los comandos tienen tests, el diálogo y la
   secuencia real todavía no.
+- La `0.7.0` en el IDE de prueba: las pastillas nuevas de cada fila, *Show Layer Changes* y
+  *Change Pull Request Base*. El tooltip nuevo se comprobó pintando su HTML con el kit HTML
+  del IDE, no dentro del IDE. *Change Pull Request Base* sobre un PR de una pila registrada
+  en GitHub: gh-stack no toca esas bases (la API de pilas las gestiona) y no se sabe si
+  GitHub acepta el cambio.
 
 ## Decisiones
 
@@ -187,7 +200,7 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.3.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.7.0**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

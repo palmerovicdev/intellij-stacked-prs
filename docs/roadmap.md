@@ -54,22 +54,30 @@ hecha y el plugin salga al Marketplace (P40).
 | Cada opción explica qué hace y el comando que ejecuta, con sus datos reales (P48) | `0.6.0` |
 | Banda *Push Stack* tras un rebase, hasta que las ramas se suben (P49) | `0.6.0` |
 | Menú de una capa solo con lo de esa capa; lo de la pila, fuera de las filas (C11) | `0.6.0` |
+| *Wrong base* y *Change Pull Request Base* cuando el PR no apunta a la capa de debajo (P21) | `0.7.0` |
+| Tamaño, *Conflicts* y *Behind* de cada capa (P22) | `0.7.0` |
+| *Show Layer Changes*: el diff de una capa contra la de debajo (P25) | `0.7.0` |
+| Tooltips más estrechos, comandos en bloque con fondo y URLs en azul (C12); C1–C4 y C6 | `0.7.0` |
 
 ---
 
 ## Orden sugerido
 
-1. **P1** — probar con PRs reales antes de construir encima.
-2. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
+Revisado el 2026-09-30, tras la `0.6.0`. Criterio: lo que ya dolió usando el plugin, lo que
+cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se deshacen.
+
+1. ~~**P21 + P22 + P25**, con **C1–C4** y **C6**~~ — hechas en la `0.7.0`.
+2. **P2**, acotada a los flujos que escriben en GitHub — red de seguridad antes de P15 y P9,
+   las primeras operaciones que cierran PRs, borran ramas o fusionan.
+3. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
    a mano, dejó la pila huérfana que motivó la `0.2.0`.
-3. **P44** — lo mismo para una capa suelta cuya rama desaparece dentro de una pila activa.
-4. **P2** — red de seguridad para todo lo que venga.
-5. ~~**P8**~~ — hecha en la `0.4.0`.
-6. **P21 + P22** — base rota, tamaño y conflictos de cada capa; ya llega casi todo en la
-   consulta que se hace hoy.
-7. **P25** — ver el diff de una capa sola, que es el sentido de trabajar con pilas.
-8. **P10 + P29** — moverse por la pila sin abrir la ventana.
-9. **P9** — merge de la pila.
+4. **P9** — merge de la pila; con P15 completa el ciclo de vida.
+5. **P12** — conflictos guiados, si los rebases con conflictos siguen siendo habituales.
+6. **P44** — una capa suelta cuya rama desaparece dentro de una pila activa; después de P15.
+
+Fuera del orden, pero no descartadas: **P10 + P29** (el doble clic ya cubre lo básico),
+**P4, P40, P41 y P42** (van con la `1.0.0` y el Marketplace) y **P1**, que sigue siendo
+condición para la `1.0.0` (ver P1).
 
 ---
 
@@ -96,12 +104,22 @@ Primer contacto real (2026-09-30, repositorio `staffMobileApp`): la ventana, el 
 lista de pilas locales funcionaron; el checkout de una pila cuyo PR se había cerrado y
 cuya rama se borró falló. De ahí salió la `0.2.0`.
 
-### P2 · Tests de flujo con un `gh` falso ⏸️
+Desde entonces, la `0.4.0`, la `0.5.0` y la `0.6.0` salieron de usar el plugin con PRs
+reales, así que parte de la lista ya se ha visto funcionar. Sale del orden sugerido, pero
+la `1.0.0` sigue esperando a la lista escrita: lo que falta está en *Pendiente de probar*
+del README.
 
-Hoy hay 39 tests de funciones puras (JSON, URLs, comandos, los planes de la `0.2.0`, el
-ajuste de texto de la `0.2.1` y las pilas locales de la `0.3.0`). `StackService` —estados,
+### P2 · Tests de flujo con un `gh` falso 👾
+
+Hoy hay 63 tests de funciones puras (JSON, URLs, comandos, los planes de la `0.2.0`, el
+ajuste de texto de la `0.2.1`, las pilas locales de la `0.3.0`, la publicación de la
+`0.4.0`, el restack de la `0.5.0` y la ayuda de la `0.6.0`). `StackService` —estados,
 reintento con `--remote`, avisos por código de salida, una escritura a la vez— no tiene
-ninguno. `GhCli.locate()` ya da prioridad a la ruta de los ajustes, así que un script
+ninguno.
+
+Vuelve al orden (2026-09-30), acotada: antes de P15 y P9, que cierran PRs, borran ramas y
+fusionan, hacen falta al menos los tests de esos flujos y de los avisos por código de
+salida. `GhCli.locate()` ya da prioridad a la ruta de los ajustes, así que un script
 que apunte los argumentos y conteste con salidas grabadas (códigos 2, 3, 6, 8, 9) sirve
 de `gh` sin red.
 
@@ -178,6 +196,20 @@ interactivo:
 
 Primera entrega: abrir issues (o PRs pequeños) en `github/gh-stack` con cada caso y el uso
 concreto en un IDE. Se apunta aquí qué se aceptó para quitar los rodeos del plugin.
+
+Revisado el 2026-09-30 (gh-stack sigue en la v0.1.1, del 2026-09-02). Varios ya están
+pedidos por otros; basta con apoyarlos y contar el caso del IDE:
+
+| Caso | Issue |
+|---|---|
+| Número de la pila en `view --json` | [#416](https://github.com/github/gh-stack/issues/416) |
+| Elegir pila sin terminal cuando la rama está en varias | [#415](https://github.com/github/gh-stack/issues/415) |
+| `view` ignora el número de pila que se le pasa | [#414](https://github.com/github/gh-stack/issues/414) |
+| Insertar una capa en medio sin `unstack` + `link` | [#382](https://github.com/github/gh-stack/issues/382) |
+| Las pilas no se comparten entre worktrees (P43) | [#459](https://github.com/github/gh-stack/issues/459) |
+
+Quedan por abrir: listar las pilas locales en JSON, `isDraft` en el JSON y
+`unstack --local <rama>`.
 
 ### P7 · El estado interno de gh-stack, solo como último recurso 🟡
 
@@ -299,7 +331,7 @@ Primera entrega: un diálogo con los PRs abiertos (`gh pr list --json`), elegido
 ordenados de abajo arriba, con la base opcional. También *Add to Stack…* desde el menú de
 Pull Requests, con la misma clave de URL que ya se usa.
 
-### P15 · Cerrar una pila entera: la pila, sus PRs y sus ramas 🟡
+### P15 · Cerrar una pila entera: la pila, sus PRs y sus ramas 👾
 
 Lo que hay, leído del código de gh-stack v0.1.1 y de `gh`:
 
@@ -384,7 +416,7 @@ plantilla y deja editar el resultado.
 
 ## Ronda del 2026-09-30 · El estado de los PRs
 
-### P21 · Base del PR que no coincide con la capa de abajo 🟡
+### P21 · Base del PR que no coincide con la capa de abajo ✅ `0.7.0`
 
 La consulta GraphQL ya trae `baseRefName` y no se usa. Si la base de un PR no es la capa
 de debajo (`StackSnapshot.parentOf`), la pila en GitHub está rota: alguien cambió la base
@@ -394,7 +426,24 @@ apuntaba a `dev`.
 Primera entrega: una pastilla *Base mismatch* en la capa, con el detalle en el tooltip, y
 *Fix* que ejecuta `gh stack submit --auto` (actualiza las bases). Sale casi gratis.
 
-### P22 · Tamaño y conflictos de cada capa 🟡
+Corregido al revisar (2026-09-30): `submit` solo cambia la base de un PR que no está en una
+pila de GitHub. En `cmd/submit.go` de la v0.1.1, `ensurePR` solo avisa (*cannot update while
+stacked*) si la pila tiene ID, porque la API de pilas gestiona esas bases. Además crearía los
+PRs que falten, que no es lo que se pide al arreglar una base.
+
+Hecha en la `0.7.0` (`StackSnapshot.wrongBase`, `ChangePrBaseAction`):
+
+- Pastilla *Wrong base* en la primera línea, junto a *Needs rebase*, y en el tooltip a qué
+  rama apunta el PR. Solo PRs abiertos de capas activas que no están en la cola de merge.
+  La capa de debajo es la de `parentOf`, que salta las fusionadas: un PR que sigue apuntando
+  a una capa fusionada sale marcado.
+- *Change Pull Request Base to …*, en el menú de la capa y solo cuando no coincide:
+  `gh pr edit <url> --base <capa de debajo>`. Solo ese PR, y el aviso dice qué base tenía.
+  El nombre dice hacia dónde va: si la base buena era la del PR, lo que sobra es la pila.
+- Sin probar contra un PR de una pila registrada en GitHub: no se sabe si GitHub acepta el
+  cambio (P1).
+
+### P22 · Tamaño y conflictos de cada capa ✅ `0.7.0`
 
 La gracia de apilar es que cada PR sea pequeño, pero la ventana no enseña tamaños.
 GitHub da `additions`, `deletions`, `changedFiles`, `mergeable` y `mergeStateStatus` en la
@@ -403,6 +452,15 @@ misma consulta.
 Primera entrega: `+120 −30 · 8 files` en la segunda línea, una pastilla *Conflicts* si
 `mergeable` es `CONFLICTING` y *Behind* o *Blocked* según `mergeStateStatus`. Opcional:
 un aviso de tamaño a partir de un umbral configurable.
+
+Hecha en la `0.7.0`, con cambios:
+
+- `+120 −30` en verde y rojo en la segunda línea; los ficheros, en el tooltip, que la
+  ventana es estrecha.
+- *Conflicts* con `mergeable: CONFLICTING` y *Behind* con `mergeStateStatus: BEHIND`.
+  *Blocked* no: sale en casi todo PR con review o CI obligatorios y repetía las pastillas de
+  review y CI. Mientras GitHub lo calcula (`UNKNOWN`) no se enseña nada.
+- El aviso de tamaño por umbral queda pendiente (P38).
 
 ### P23 · Revisores y conversaciones 🟡
 
@@ -421,7 +479,7 @@ Primera entrega: al pulsar la pastilla, un popup con `gh pr checks <url> --json
 name,state,link,workflow`, cada check con su enlace, y *Re-run Failed* con
 `gh run rerun <id> --failed`.
 
-### P25 · El diff de una capa contra su base 🟡
+### P25 · El diff de una capa contra su base ✅ `0.7.0`
 
 Revisar una capa sola —solo lo que añade sobre la de abajo— es el sentido de apilar. Git4Idea
 tiene `GitBrancher.compareAny(rama, otra, repos)` y `showDiff(rama, otra, repos)`
@@ -430,6 +488,16 @@ tiene `GitBrancher.compareAny(rama, otra, repos)` y `showDiff(rama, otra, repos)
 Primera entrega: *Show Layer Changes* en el menú de capa (y Ctrl+doble clic), que compara
 la capa con `parentOf(capa)`. Verificar con `verifyPlugin` que esos métodos no llevan
 anotaciones internas antes de prometerlo.
+
+Hecha en la `0.7.0` (`ShowLayerChangesAction`, `StackFlows.showLayerChanges`):
+
+- `GitBrancher.showDiff(base, capa, repos)`: pública, sin anotaciones (lo único deprecado de
+  `GitBrancher` es un `merge`), y `verifyPlugin` limpio. Compara los dos árboles
+  (`git diff A B`), no desde el commit común.
+- Por eso, si la capa necesita rebase (la de debajo avanzó), la base es
+  `git merge-base abajo capa`: lo mismo que `git diff abajo...capa` y que enseña el PR. Si
+  no, la rama de debajo tal cual, que da el mismo diff con un título legible.
+- Sin Ctrl+doble clic: en macOS Ctrl+clic es el clic derecho.
 
 ### P26 · Abrir el PR en la ventana Pull Requests del IDE 🟡
 
@@ -526,14 +594,17 @@ Primera entrega, con ámbito de proyecto:
 - la label final: única por pila (hoy es fija), moverla a la capa nueva al añadir una, o
   ponerla sola en la cima al publicar.
 
-### P36 · Ajustes de sync y rebase 🟡
+### P36 · `--committer-date-is-author-date` al rebasar 🟡
 
-`--prune` al sincronizar, `--committer-date-is-author-date` al rebasar, el alcance por
-defecto del rebase (P11) y *Always* para el restack tras commit (P19).
+Era «Ajustes de sync y rebase»: `--prune` al sincronizar, `--committer-date-is-author-date`
+al rebasar, el alcance por defecto del rebase (P11) y *Always* para el restack tras commit
+(P19).
 
-El último ya está desde la `0.5.0`: *After a commit on a lower layer* (preguntar, rebasar
-sin preguntar o nada). El alcance por defecto ya no hace falta: el desplegable pone el
-upstack primero.
+Revisada el 2026-09-30. *Always* ya está desde la `0.5.0` (*After a commit on a lower
+layer*: preguntar, rebasar sin preguntar o nada). El alcance por defecto ya no hace falta:
+el desplegable pone el upstack primero. `--prune` pasa a P9 y P15, que lo ofrecen justo
+cuando hay ramas fusionadas o cerradas que borrar. Queda solo la casilla de
+`--committer-date-is-author-date`.
 
 ### P37 · El remoto, visible y editable 🟡
 
@@ -594,14 +665,15 @@ el Log.
 
 Al probar la `0.2.0` se vio que gh-stack guarda su estado en el directorio git **del
 worktree** (`.git/worktrees/<nombre>/`), no en el del repositorio: desde un worktree no se
-ven las pilas del checkout principal, ni al revés. El plugin lee `.git/gh-stack` del
-checkout donde está abierto el proyecto, así que en un worktree la lista de pilas locales
-sale vacía o distinta.
+ven las pilas del checkout principal, ni al revés.
 
-Primera entrega: comprobarlo con los comandos de escritura (init, add, submit) desde un
-worktree, documentar el comportamiento en el README y hacer que el plugin lea el fichero
-del mismo directorio git que usa gh-stack (`git rev-parse --git-dir`). Si hace falta
-compartir pilas entre worktrees, pasa a P6.
+Revisada el 2026-09-30: el plugin ya lee el mismo fichero que gh-stack. `StackService.gitDir`
+sigue la línea `gitdir:` del fichero `.git` de un worktree desde el primer commit, así que
+la lista enseña lo mismo que `gh stack` en ese worktree. Compartir pilas entre worktrees ya
+está pedido en gh-stack ([#459](https://github.com/github/gh-stack/issues/459), ver P6).
+
+Queda una entrega pequeña: comprobar init, add y submit desde un worktree y explicarlo en
+el README.
 
 ### P44 · Una capa cuya rama desaparece dentro de una pila activa 🟡
 
@@ -687,14 +759,15 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 
 | | Qué | Dónde |
 |---|---|---|
-| 🟡 C1 | Las capas sin PR dicen lo mismo dos veces: pastilla *No PR* y *Not published yet*. Dejar una sola | `StackRowRenderer.layerRow` |
-| 🟡 C2 | La línea del grafo casi no se ve en tema oscuro (`RAIL` `0x3D444D`) | `StackColors` |
-| 🟡 C3 | El progreso de *Check Out Stack* enseña la URL entera del PR; mejor `#13` | `StackFlows.checkoutFromPullRequest` |
-| 🟡 C4 | `StackRow.Layer.position` no se usa: enseñar `2/3` en el tooltip o en la fila | `StackRows` |
+| ✅ C1 | Las capas sin PR decían lo mismo dos veces: pastilla *No PR* y *Not published yet*. Queda la pastilla `0.7.0` | `StackRowRenderer.layerRow` |
+| ✅ C2 | La línea del grafo casi no se veía en tema oscuro: `0x3D444D` pasa a `0x656C76`, el borde enfatizado de GitHub `0.7.0` | `StackColors` |
+| ✅ C3 | El progreso de *Check Out Stack* enseñaba la URL entera del PR; ahora `#13` `0.7.0` | `StackFlows.checkoutFromPullRequest` |
+| ✅ C4 | `StackRow.Layer.position` no se usaba: el tooltip dice `layer 2 of 3` `0.7.0` | `StackRows` |
 | ✅ C5 | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra: quitado al rehacer la banda `0.5.0` | `StackPanel.renderBanners` |
-| 🟡 C6 | La página de ajustes está en *Tools*; encaja mejor en *Version Control* | `plugin.xml` |
+| ✅ C6 | La página de ajustes estaba en *Tools*; pasa a *Version Control*. En ese grupo solo hay páginas de proyecto, así que es `projectConfigurable`; los ajustes siguen siendo globales `0.7.0` | `plugin.xml` |
 | ✅ C7 | La caché de build de Gradle devolvía clases de test compiladas contra firmas viejas (fallos falsos, incluso tras `clean`): desactivada `0.2.0` | `gradle.properties` |
 | ✅ C8 | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0`. Superada por C11 | `StacklaneBundle` |
 | ✅ C9 | *Mark Ready*, *Convert to Draft*, *Labels…* y *Mark as Final Layer* no tenían icono `0.4.0` | `Actions` |
 | ✅ C10 | El clic derecho enseñaba el menú de la fila seleccionada, no el de la fila bajo el ratón; fuera de las filas, igual. Ahora selecciona esa fila, o quita la selección `0.4.0` | `StackPanel` |
+| ✅ C12 | Los tooltips medían lo que el comando más largo (casi 900 px con una URL de PR). Ahora, unos 520 px; cada comando en su bloque con fondo, como el código en Markdown, y las URLs en azul. Swing lee los `px` de CSS como puntos (×1,3): el ancho se escribe dividido `0.7.0` | `Help`, `TooltipStyle` |
 | ✅ C11 | Aun diciendo *Stack*, ver *Publish Stack as Drafts* en el menú de una capa sin PR confundía. El menú de una capa solo tiene lo suyo; lo de la pila sale al hacer clic fuera de las filas o sobre la base `0.6.0` | `plugin.xml`, `StackPanel` |

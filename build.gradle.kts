@@ -79,6 +79,20 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.7.0 &mdash; each layer at a glance</h3>
+            <ul>
+              <li><b>Show Layer Changes</b> in a layer's menu: the IDE diff with what the layer adds on top
+                of the one below, the same changes its pull request shows, even if the layer below moved
+                on.</li>
+              <li><b>Wrong base</b>: a layer whose pull request targets another branch than the layer below
+                is marked, and <i>Change Pull Request Base</i> points it back
+                (<code>gh pr edit &lt;url&gt; --base &lt;branch&gt;</code>).</li>
+              <li>Each layer shows its size (<code>+120 &minus;30</code>), and <i>Conflicts</i> or
+                <i>Behind</i> when GitHub cannot merge it as is.</li>
+              <li>Narrower tooltips, with each command in its own code block and links in blue.</li>
+              <li>Layers without a pull request say so once; the graph line is visible in dark themes;
+                settings moved to Settings | Version Control | Stacklane.</li>
+            </ul>
             <h3>0.6.0 &mdash; what each option does, and what comes next</h3>
             <ul>
               <li>Every toolbar button, menu item, banner button and dialog option explains on hover what it

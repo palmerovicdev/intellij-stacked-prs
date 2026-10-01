@@ -73,6 +73,7 @@ class GhCommandsTest {
         val query = args.last().removePrefix("query=")
         assertTrue(query.contains("pr12: pullRequest(number: 12)"))
         assertTrue(query.contains("pr13: pullRequest(number: 13)"))
+        assertTrue(query.contains("baseRefName additions deletions changedFiles mergeable mergeStateStatus"))
         assertEquals(1, Regex("pr12:").findAll(query).count())
         assertTrue(args.containsAll(listOf("--hostname", "github.com", "owner=acme", "name=shop")))
         assertTrue(GhCommands.display(args).endsWith("query='…'"))

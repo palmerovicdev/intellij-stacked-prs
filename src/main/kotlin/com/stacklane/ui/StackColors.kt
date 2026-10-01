@@ -22,7 +22,8 @@ internal object StackColors {
     val QUEUED = JBColor(0x9A6700, 0xD29922)
     val CLOSED = JBColor(0xCF222E, 0xF85149)
     val WARNING = JBColor(0xBC4C00, 0xDB6D28)
-    val RAIL = JBColor(0xD0D7DE, 0x3D444D)
+    // En oscuro, el borde enfatizado de GitHub: el normal (0x3D444D) casi no se veia.
+    val RAIL = JBColor(0xD0D7DE, 0x656C76)
 }
 
 /** El estado de una capa tal y como se pinta: mezcla lo que sabe gh-stack con lo de GitHub. */
