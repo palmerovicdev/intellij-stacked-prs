@@ -53,6 +53,31 @@ object PublishPlans {
     }
 
     /**
+     * Las capas activas sin PR por encima de [layer]. `gh stack submit` publica todas las que no
+     * tienen PR: si hay alguna encima, publicar solo esta no se puede.
+     */
+    fun unpublishedAbove(snapshot: StackSnapshot, layer: StackLayer): List<StackLayer> =
+        snapshot.activeAbove(layer).filter { it.pr == null }
+
+    /**
+     * Las capas activas sin PR por debajo de [layer]: su PR hace falta como base del suyo, y
+     * `gh stack submit` los crea a la vez, como draft y con el titulo que genera.
+     */
+    fun unpublishedBelow(snapshot: StackSnapshot, layer: StackLayer): List<StackLayer> =
+        snapshot.layers.take(snapshot.layers.indexOf(layer)).filter { !it.isMerged && it.pr == null }
+
+    /**
+     * Publicar [layer] desde su menu: lo de [calls] solo con las capas que crea `submit`, las de
+     * debajo como draft y esta con [text] y, si [ready], lista para review.
+     */
+    fun layerCalls(snapshot: StackSnapshot, layer: StackLayer, text: PrText, ready: Boolean, repo: GitHubRepo?): List<GhCall> =
+        calls(
+            unpublishedBelow(snapshot, layer).map { PublishLayer(it.branch, null, null, ready = false) } +
+                PublishLayer(layer.branch, null, null, ready = ready, text = text),
+            repo,
+        )
+
+    /**
      * Titulo y descripcion propuestos para el PR de [branch]. Con un commit, su asunto y su
      * cuerpo. Con varios, el asunto del primero, que suele decir de que va la capa, y la lista
      * de todos en la descripcion. Sin commits propios, el nombre de la rama.

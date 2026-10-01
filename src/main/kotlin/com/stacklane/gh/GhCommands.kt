@@ -144,6 +144,17 @@ object GhCommands {
     fun closePr(prUrl: String, comment: String?): List<String> =
         listOf("pr", "close", prUrl) + if (comment.isNullOrBlank()) emptyList() else listOf("--comment", comment)
 
+    fun editTitle(prUrl: String, title: String): List<String> = listOf("pr", "edit", prUrl, "--title", title)
+
+    /**
+     * Renombra la rama [old] en GitHub. GitHub reapunta a [new] los PRs que la tienen como base, pero
+     * **cierra** el PR cuya rama de origen es [old]: solo se usa con capas sin PR. Con un alias de
+     * `~/.ssh/config` no se sabe el host: va sin `--hostname`, a github.com (o `GH_HOST`).
+     */
+    fun renameRemoteBranch(repo: GitHubRepo, old: String, new: String): List<String> =
+        listOf("api", "--method", "POST", "repos/${repo.owner}/${repo.name}/branches/$old/rename", "-f", "new_name=$new") +
+            if (repo.isSshAlias || repo.host == "github.com") emptyList() else listOf("--hostname", repo.host)
+
     /** La rama sobre la que se fusionaria el PR. */
     fun editBase(prUrl: String, base: String): List<String> = listOf("pr", "edit", prUrl, "--base", base)
 

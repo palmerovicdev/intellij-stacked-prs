@@ -3,10 +3,11 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
-## 0.11.0 — Capas sin rama y borrar la capa de arriba
+## 0.11.0 — Capas sin rama, borrar, renombrar y publicar una capa
 
-Salió del roadmap (P44) y de una petición al usarlo: una capa sin PR en la cima no se podía
-borrar.
+Salió del roadmap (P44 y parte de P16) y de lo que se pidió al usarlo: una capa sin PR en la
+cima no se podía borrar, ni renombrar una rama o el título de un PR, ni publicar una capa
+desde su menú.
 
 - **Una capa cuya rama ya no está en el repositorio** se marca *Branch deleted* (o *Only on
   origin* si sigue en un remoto). gh-stack v0.1.1 la sigue listando, pero `rebase`, `sync`,
@@ -23,6 +24,19 @@ borrar.
   ella, `gh stack unstack --local`, `gh stack init` con las demás capas y `git branch -D`
   (y, si se marca, `git push --delete`). Desactivada, con el porqué, si hay capas fusionadas
   o en cola o si es la única capa.
+- **Rename Branch…** en el menú de una capa sin PR: `gh stack unstack --local`,
+  `git branch -m` y `gh stack init` con el nombre nuevo, y vuelta a la rama en la que
+  estabas (`init` deja HEAD arriba). Si la rama estaba en GitHub, antes se renombra allí
+  (`gh api … /branches/<rama>/rename`), que reapunta los PRs de encima, y la local pasa a
+  seguir la nueva. Si algo falla, se deshacen los dos renombres y la pila vuelve a como
+  estaba. Con PR se ve desactivada: GitHub cierra el PR de una rama renombrada.
+- **Edit Title…** en el menú de una capa con PR y en el de la ventana Pull Requests:
+  `gh pr edit <url> --title …`.
+- **Publish as Draft…** y **Publish Ready for Review…** vuelven al menú de una capa sin PR,
+  ahora sobre esa capa: título y descripción propuestos desde sus commits, `gh stack submit
+  --auto`, `gh pr edit` y, si es lista, `gh pr ready`. Como `submit` publica todas las capas
+  sin PR, solo se activan si no hay ninguna encima; las de debajo salen como draft y el
+  diálogo lo dice.
 
 ## 0.10.0 — Conflictos guiados
 

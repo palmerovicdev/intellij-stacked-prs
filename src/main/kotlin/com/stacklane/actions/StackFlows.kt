@@ -31,6 +31,8 @@ import com.stacklane.stack.GitHubRepo
 import com.stacklane.stack.LocalStack
 import com.stacklane.stack.LayerPlans
 import com.stacklane.stack.LocalStackEntry
+import com.stacklane.stack.RemoteRename
+import com.stacklane.stack.RenameBlock
 import com.stacklane.stack.MissingBranch
 import com.stacklane.stack.Operation
 import com.stacklane.stack.Position
@@ -45,11 +47,14 @@ import com.stacklane.stack.repo
 import com.stacklane.ui.AddLayerDialog
 import com.stacklane.ui.CloseStackDialog
 import com.stacklane.ui.DeleteLayerDialog
+import com.stacklane.ui.EditTitleDialog
+import com.stacklane.ui.RenameBranchDialog
 import com.stacklane.ui.Help
 import com.stacklane.ui.Helps
 import com.stacklane.ui.InitStackDialog
 import com.stacklane.ui.LabelsDialog
 import com.stacklane.ui.PublishDialog
+import com.stacklane.ui.PublishLayerDialog
 import com.stacklane.ui.StackToolWindow
 import git4idea.branch.GitBrancher
 import git4idea.repo.GitRepository
@@ -342,7 +347,7 @@ internal object StackFlows {
     }
 
     /** Donde estan los PRs de la pila. Un alias de ~/.ssh/config no es un host que gh entienda. */
-    private fun githubOf(state: StackState.Loaded): GitHubRepo? =
+    fun githubOf(state: StackState.Loaded): GitHubRepo? =
         state.snapshot.layers.firstNotNullOfOrNull { layer -> layer.pr?.url?.let(GitHubRepo::fromPullRequestUrl) }
             ?: state.repo.github?.takeUnless { it.isSshAlias }
 
@@ -427,6 +432,45 @@ internal object StackFlows {
                     calls = PublishPlans.calls(layers, github),
                     repository = repository,
                     successMessage = message("op.publish.done"),
+                )
+            )
+        }
+    }
+
+    /**
+     * Publicar una capa sin PR desde su menu, como draft o lista para review (ver
+     * [PublishPlans.layerCalls]). `gh stack submit` publica todas las que no tienen PR: no se
+     * ofrece si hay alguna encima.
+     */
+    fun publishLayer(project: Project, layer: StackLayer, ready: Boolean) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        if (layer.pr != null || PublishPlans.unpublishedAbove(snapshot, layer).isNotEmpty()) return
+        val github = githubOf(state)
+        service.launch {
+            val proposal = try {
+                withBackgroundProgress(project, message("publish.reading")) {
+                    val log = GitCommands.log(gitRef(repository, snapshot.parentOf(layer)), layer.branch)
+                    val result = GhCli.run(repository.root.toNioPath(), log, tool = Tool.GIT)
+                    PublishPlans.proposal(layer.branch, if (result.ok) PublishPlans.parseLog(result.stdout) else emptyList())
+                }
+            } catch (_: GhNotFoundException) {
+                PublishPlans.proposal(layer.branch, emptyList())
+            }
+            val text = withContext(Dispatchers.EDT) {
+                val dialog = PublishLayerDialog(project, snapshot, layer, proposal, ready, github)
+                // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+                dialog.show()
+                if (dialog.isOK) dialog.text else null
+            } ?: return@launch
+            service.execute(
+                Operation(
+                    title = message("op.publish.layer", layer.branch),
+                    calls = PublishPlans.layerCalls(snapshot, layer, text, ready, github),
+                    repository = repository,
+                    successMessage = message(if (ready) "op.publish.layer.ready" else "op.publish.layer.draft", layer.branch),
                 )
             )
         }
@@ -609,6 +653,55 @@ internal object StackFlows {
         )
     }
 
+    /**
+     * Donde esta la rama de [layer] fuera de aqui: en el remoto de la pila (segun lo que git sabe en
+     * local) y en que repositorio de GitHub. De eso depende si renombrarla toca GitHub.
+     */
+    class RenameTarget(val remoteName: String?, val onRemote: Boolean, val github: GitHubRepo?) {
+        val remote: RemoteRename? get() = if (onRemote && remoteName != null && github != null) RemoteRename(remoteName, github) else null
+    }
+
+    fun renameTarget(service: StackService, repository: GitRepository, snapshot: StackSnapshot, layer: StackLayer): RenameTarget {
+        val remoteName = service.stackRemote(repository, snapshot)
+        val onRemote = remoteName != null &&
+            repository.branches.remoteBranches.any { it.remote.name == remoteName && it.nameForRemoteOperations == layer.branch }
+        val github = repository.remotes.firstOrNull { it.name == remoteName }?.urls?.firstNotNullOfOrNull(GitHubRepo::fromRemoteUrl)
+        return RenameTarget(remoteName, onRemote, github)
+    }
+
+    fun renameBlock(service: StackService, state: StackState.Loaded, layer: StackLayer): RenameBlock? {
+        val repository = service.repositoryFor(state.repo) ?: return RenameBlock.NO_GITHUB
+        val target = renameTarget(service, repository, state.snapshot, layer)
+        return LayerPlans.renameBlock(state.snapshot, layer, target.onRemote, target.github)
+    }
+
+    /** Renombrar la rama de una capa sin PR (ver [LayerPlans.rename]). */
+    fun renameBranch(project: Project, layer: StackLayer) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        val target = renameTarget(service, repository, snapshot, layer)
+        if (LayerPlans.renameBlock(snapshot, layer, target.onRemote, target.github) != null) return
+        val branches = repository.branches
+        val taken = branches.localBranches.mapTo(HashSet()) { it.name } +
+            branches.remoteBranches.filter { it.remote.name == target.remoteName }.map { it.nameForRemoteOperations }
+        val dialog = RenameBranchDialog(project, snapshot, layer, repository.currentBranchName, target.remote, taken)
+        // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+        dialog.show()
+        if (!dialog.isOK) return
+        val plan = dialog.plan
+        service.execute(
+            Operation(
+                title = message("op.rename", layer.branch),
+                calls = plan.calls,
+                repository = repository,
+                successMessage = message("op.rename.done", layer.branch, dialog.newName),
+                cleanup = plan.cleanup,
+            )
+        )
+    }
+
     /** `gh stack modify`, al portapapeles: solo se puede usar en la terminal. */
     fun copyModify() = CopyPasteManager.getInstance().setContents(StringSelection(Help.gh(GhCommands.modify())))
 
@@ -621,6 +714,19 @@ internal object StackFlows {
             title = message(if (draft) "op.draft" else "op.ready", target.number),
             calls = listOf(GhCall(args)),
             success = message(if (draft) "op.draft.done" else "op.ready.done", target.number),
+        )
+    }
+
+    /** El titulo del PR, con `gh pr edit --title`. Desde Pull Requests no se sabe el actual: el campo sale vacio. */
+    fun editTitle(project: Project, target: PrTarget) {
+        val dialog = EditTitleDialog(project, target.number, target.url, target.details?.title.orEmpty())
+        dialog.show()
+        if (!dialog.isOK) return
+        executeOnPr(
+            project, target,
+            title = message("op.title", target.number),
+            calls = listOf(GhCall(GhCommands.editTitle(target.url, dialog.newTitle))),
+            success = message("op.title.done", target.number, dialog.newTitle),
         )
     }
 

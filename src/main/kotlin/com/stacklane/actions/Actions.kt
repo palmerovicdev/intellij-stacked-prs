@@ -19,12 +19,15 @@ import com.stacklane.settings.StacklaneSettings
 import com.stacklane.stack.CloseChoice
 import com.stacklane.stack.DropBlock
 import com.stacklane.stack.LayerPlans
+import com.stacklane.stack.RenameBlock
 import com.stacklane.stack.ClosePlans
 import com.stacklane.stack.LocalStackEntry
 import com.stacklane.stack.MergePlans
 import com.stacklane.stack.MissingBranch
 import com.stacklane.stack.Position
 import com.stacklane.stack.PrState
+import com.stacklane.stack.PrText
+import com.stacklane.stack.PublishPlans
 import com.stacklane.stack.StackLayer
 import com.stacklane.stack.StackPlans
 import com.stacklane.stack.StackService
@@ -413,6 +416,75 @@ internal class DeleteLayerAction : StacklaneAction(AllIcons.General.Delete) {
     }
 }
 
+/**
+ * Publicar esta capa, sin PR, como draft o lista (ver StackFlows.publishLayer). Si hay capas sin PR
+ * encima se ve desactivada: `gh stack submit` las publicaria tambien.
+ */
+internal abstract class PublishLayerAction(icon: Icon, private val ready: Boolean) : StacklaneAction(icon) {
+
+    override fun updateState(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        e.presentation.isVisible = selection != null && !selection.layer.isMerged && selection.layer.pr == null && selection.missing == null
+        e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) && selection != null &&
+            !selection.state.repo.stackRebaseInProgress && PublishPlans.unpublishedAbove(selection.state.snapshot, selection.layer).isEmpty()
+    }
+
+    override fun help(e: AnActionEvent): Help {
+        val selection = e.getData(StackDataKeys.LAYER) ?: return super.help(e)
+        val snapshot = selection.state.snapshot
+        val above = PublishPlans.unpublishedAbove(snapshot, selection.layer)
+        if (above.isNotEmpty()) return Help(message("help.publish.layer.above", above.joinToString(", ") { it.branch }))
+        val calls = PublishPlans.layerCalls(snapshot, selection.layer, PrText("TITLE", "BODY"), ready, StackFlows.githubOf(selection.state))
+        return Help(templatePresentation.description.orEmpty(), Help.of(calls))
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        StackFlows.publishLayer(project, e.getData(StackDataKeys.LAYER)?.layer ?: return, ready)
+    }
+}
+
+internal class PublishLayerDraftAction : PublishLayerAction(AllIcons.Vcs.Push, ready = false)
+
+internal class PublishLayerReadyAction : PublishLayerAction(AllIcons.General.InspectionsOK, ready = true)
+
+/**
+ * Renombrar la rama de una capa sin PR (ver LayerPlans.rename). Con PR se ve desactivada: GitHub
+ * cierra el PR cuya rama se renombra. Sin rama (P44) no se ofrece.
+ */
+internal class RenameBranchAction : StacklaneAction(AllIcons.Actions.Edit) {
+
+    override fun updateState(e: AnActionEvent) {
+        val selection = e.getData(StackDataKeys.LAYER)
+        e.presentation.isVisible = selection != null && !selection.layer.isMerged && selection.missing == null
+        val service = e.project?.getServiceIfCreated(StackService::class.java)
+        e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) && selection != null && service != null &&
+            !selection.state.repo.stackRebaseInProgress && StackFlows.renameBlock(service, selection.state, selection.layer) == null
+    }
+
+    override fun help(e: AnActionEvent): Help {
+        val selection = e.getData(StackDataKeys.LAYER) ?: return super.help(e)
+        val service = e.project?.getServiceIfCreated(StackService::class.java) ?: return super.help(e)
+        return when (StackFlows.renameBlock(service, selection.state, selection.layer)) {
+            null -> {
+                val repository = service.repositoryFor(selection.state.repo) ?: return super.help(e)
+                val snapshot = selection.state.snapshot
+                val target = StackFlows.renameTarget(service, repository, snapshot, selection.layer)
+                val plan = LayerPlans.rename(snapshot, selection.layer, "NEW_NAME", target.remote, snapshot.currentBranch)
+                Help(templatePresentation.description.orEmpty(), Help.of(plan.calls))
+            }
+            RenameBlock.HAS_PR -> Help(message("help.rename.pr", selection.layer.pr?.number ?: 0))
+            RenameBlock.MERGED_LAYERS -> Help(message("help.rename.merged"), listOf(Help.gh(GhCommands.modify())))
+            RenameBlock.NO_GITHUB -> Help(message("help.rename.no.github"))
+        }
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        StackFlows.renameBranch(project, e.getData(StackDataKeys.LAYER)?.layer ?: return)
+    }
+}
+
 // ---------------------------------------------------------------------- una capa sin rama
 
 /** Acciones sobre una capa activa cuya rama ya no esta en local (ver StackSnapshot.missingBranches). */
@@ -583,6 +655,11 @@ internal class ChangePrBaseAction : PrAction(AllIcons.Actions.Edit) {
     private fun wrongBase(target: PrTarget): String? = target.selection?.let { it.state.snapshot.wrongBase(it.layer, it.details) }
 
     private fun parent(target: PrTarget): String? = target.selection?.let { it.state.snapshot.parentOf(it.layer) }
+}
+
+internal class EditTitleAction : PrAction(AllIcons.Actions.Edit) {
+    override fun commands(target: PrTarget): List<String> = listOf(Help.gh(GhCommands.editTitle(target.url, "TITLE")))
+    override fun perform(project: Project, target: PrTarget) = StackFlows.editTitle(project, target)
 }
 
 internal class EditLabelsAction : PrAction(AllIcons.Nodes.Tag) {

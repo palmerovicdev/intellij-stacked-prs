@@ -108,6 +108,7 @@
              (stacklane-github.xml). Cada una resuelve su PR segun donde se abra el menu. -->
         <action id="Stacklane.MarkReady" class="com.stacklane.actions.MarkReadyAction"/>
         <action id="Stacklane.MarkDraft" class="com.stacklane.actions.MarkDraftAction"/>
+        <action id="Stacklane.EditTitle" class="com.stacklane.actions.EditTitleAction"/>
         <action id="Stacklane.EditLabels" class="com.stacklane.actions.EditLabelsAction"/>
         <action id="Stacklane.ToggleFinal" class="com.stacklane.actions.ToggleFinalAction"/>
 
@@ -123,9 +124,14 @@
             <action id="Stacklane.CheckoutLayer" class="com.stacklane.actions.CheckoutLayerAction"/>
             <action id="Stacklane.ShowLayerChanges" class="com.stacklane.actions.ShowLayerChangesAction"/>
             <action id="Stacklane.OpenPr" class="com.stacklane.actions.OpenPrAction"/>
+            <!-- Solo en una capa sin PR: publicarla a ella, no la pila (eso es Publish Stack…, fuera de las filas). -->
+            <action id="Stacklane.PublishLayerDraft" class="com.stacklane.actions.PublishLayerDraftAction"/>
+            <action id="Stacklane.PublishLayerReady" class="com.stacklane.actions.PublishLayerReadyAction"/>
             <action id="Stacklane.CopyPrLink" class="com.stacklane.actions.CopyPrLinkAction"/>
             <separator/>
             <action id="Stacklane.RebaseUpstackFromLayer" class="com.stacklane.actions.RebaseUpstackFromLayerAction"/>
+            <!-- Solo en una capa sin PR; con PR, desactivada y diciendo por que. -->
+            <action id="Stacklane.RenameBranch" class="com.stacklane.actions.RenameBranchAction"/>
             <!-- Solo en la capa de arriba sin PR. -->
             <action id="Stacklane.DeleteLayer" class="com.stacklane.actions.DeleteLayerAction"/>
             <!-- Solo si el PR apunta en GitHub a otra rama que la capa de debajo. -->
@@ -136,6 +142,7 @@
             <reference ref="Stacklane.MarkReady"/>
             <reference ref="Stacklane.MarkDraft"/>
             <separator/>
+            <reference ref="Stacklane.EditTitle"/>
             <reference ref="Stacklane.EditLabels"/>
             <reference ref="Stacklane.ToggleFinal"/>
         </group>

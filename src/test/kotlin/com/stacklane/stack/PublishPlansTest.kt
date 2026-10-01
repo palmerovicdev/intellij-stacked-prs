@@ -14,6 +14,29 @@ class PublishPlansTest {
 
     private fun lines(calls: List<GhCall>) = calls.map { GhCommands.display(it.args, it.tool) }
 
+    private fun layer(name: String, pr: Int? = null) =
+        StackLayer(name, isCurrent = false, isMerged = false, isQueued = false, needsRebase = false, pr = pr?.let { PrRef(it, "", "OPEN") })
+
+    @Test
+    fun `a layer is published alone only with no unpublished layer above, and the ones below go as drafts`() {
+        val stack = StackSnapshot("main", "feat/c", listOf(layer("feat/a", 1019), layer("feat/b"), layer("feat/c")))
+        assertEquals(listOf("feat/c"), PublishPlans.unpublishedAbove(stack, stack.layers[1]).map { it.branch })
+        assertEquals(emptyList<StackLayer>(), PublishPlans.unpublishedAbove(stack, stack.layers[2]))
+        assertEquals(listOf("feat/b"), PublishPlans.unpublishedBelow(stack, stack.layers[2]).map { it.branch })
+        assertEquals(
+            listOf(
+                "gh stack submit --auto",
+                "gh pr edit feat/c --repo acme/app --title Flows --body ''",
+                "gh pr ready feat/c --repo acme/app",
+            ),
+            lines(PublishPlans.layerCalls(stack, stack.layers[2], PrText("Flows", ""), ready = true, repo)),
+        )
+        assertEquals(
+            listOf("gh stack submit --auto", "gh pr edit feat/c --repo acme/app --title Flows --body ''"),
+            lines(PublishPlans.layerCalls(stack, stack.layers[2], PrText("Flows", ""), ready = false, repo)),
+        )
+    }
+
     @Test
     fun `submits first, then titles the new pull requests and changes only what differs`() {
         val calls = PublishPlans.calls(

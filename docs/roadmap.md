@@ -63,6 +63,7 @@ hecha y el plugin salga al Marketplace (P40).
 | *Merge Stack…* y *Merge Up to Here…*: merge atómico hasta una capa y *Sync and Prune* (P9)                                                             | `0.9.0`                 |
 | Rebase parado: diálogo de conflictos solo, capa y commit en la banda, *Continue* al resolver y *Abort* con confirmación (P12)                           | `0.10.0`                |
 | Capa sin rama: *Branch deleted*, *Restore Branch* y *Remove From Stack…*; *Delete Layer…* en la de arriba sin PR (P44)                                 | `0.11.0`                |
+| *Rename Branch…* (capas sin PR), *Edit Title…* y *Publish as Draft / Ready…* desde el menú de una capa (P16, en parte)                                 | `0.11.0`                |
 
 ---
 
@@ -81,8 +82,8 @@ cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se desh
    hecha en la `0.10.0`.
 6. ~~**P44** — una capa suelta cuya rama desaparece dentro de una pila activa~~ — hecha en
    la `0.11.0`, con *Delete Layer…* para la capa de arriba sin PR.
-7. **P16, renombrar** — pedido al usar la `0.11.0`: cambiar el nombre de una capa, su rama y
-   su PR.
+7. ~~**P16, renombrar** — cambiar el nombre de una rama y el título de su PR~~ — hecha en la
+   `0.11.0`, por separado y solo ramas sin PR (ver P16).
 
 Fuera del orden, pero no descartadas: **P10 + P29** (el doble clic ya cubre lo básico), **P4, P40, P41 y P42** (van con
 la `1.0.0` y el Marketplace) y **P1**, que sigue siendo
@@ -460,6 +461,17 @@ hacerla, leído de `cmd/unstack.go` de la v0.1.1:
 
 Solo `gh stack modify` hace estas operaciones, y únicamente con su interfaz de terminal.
 Renombrar la rama con git rompe el seguimiento de gh-stack, que guarda los nombres.
+
+**Renombrar, hecho en la `0.11.0` para ramas sin PR** (`LayerPlans.rename`), con el rodeo de
+*Delete Layer…*: `unstack --local` primero (con los nombres aún buenos: gh-stack lo resuelve
+desde la rama actual), `git branch -m` y `init` con el nombre nuevo. `init` siempre deja HEAD
+en la capa de arriba (`init.go` de la v0.1.1), así que después se vuelve. Si la rama está en
+GitHub, antes se renombra con `POST /repos/{owner}/{repo}/branches/{branch}/rename`, que según
+la documentación de GitHub reapunta los PRs que la tienen como base y **cierra el PR cuya rama
+de origen es esa**: por eso no se ofrece con PR, y un PR no puede cambiar de rama. El título
+del PR es otra acción, *Edit Title…* (`gh pr edit --title`). Con PR, renombrar necesitaría
+cerrar el PR, recrear la pila en GitHub y publicar otro: queda aquí, junto a reordenar,
+insertar y plegar.
 
 Primera entrega: *Restructure in Terminal…* abre `gh stack modify` en una pestaña de la
 terminal del IDE (la dependencia de P4) y refresca al cerrarse. Hacerlo desde la propia

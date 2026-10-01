@@ -54,6 +54,7 @@ import javax.swing.JTextField
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
+import javax.swing.text.JTextComponent
 
 /**
  * Texto que se parte en lineas al ancho que le deja el dialogo, sin ensancharlo: el ancho lo
@@ -150,7 +151,7 @@ internal fun branchProblemText(problem: BranchNameProblem, name: String): String
     BranchNameProblem.SEQUENCE -> message("branch.problem.sequence", name)
 }
 
-private fun JTextField.onChange(block: () -> Unit) {
+internal fun JTextComponent.onChange(block: () -> Unit) {
     document.addDocumentListener(object : DocumentAdapter() {
         override fun textChanged(e: DocumentEvent) = block()
     })

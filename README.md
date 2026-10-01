@@ -52,6 +52,10 @@ puede alternar entre IDE y terminal en cualquier momento.
   `gh stack modify` en la terminal, que una banda guía hasta que la capa sale.
 - **Borrar la capa de arriba sin PR** (*Delete Layer…*): sale de la pila sin
   `gh stack modify`, con su rama local y, si se marca, la remota.
+- **Renombrar la rama de una capa sin PR** (*Rename Branch…*), aquí y en GitHub si se subió,
+  y **cambiar el título de un PR** (*Edit Title…*), por separado.
+- **Publicar una capa desde su menú** (*Publish as Draft…* / *Publish Ready for Review…*),
+  con título y descripción propuestos desde sus commits, si no hay capas sin PR encima.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
@@ -88,6 +92,9 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Tras fusionar | `gh stack sync --prune` |
 | Recuperar la rama de una capa | `git branch <rama> <último commit>` o `git branch --track <rama> origin/<rama>` |
 | Borrar la capa de arriba sin PR | `git switch <capa de debajo>` si estás en ella, `gh stack unstack --local`, `gh stack init --base <trunk> <demás capas>`, `git branch -D <rama>` (y `git push origin --delete <rama>`) |
+| Renombrar la rama de una capa sin PR | `gh stack unstack --local`, `gh api --method POST repos/OWNER/REPO/branches/<rama>/rename -f new_name=<nueva>` si está en GitHub, `git branch -m`, `gh stack init` con el nombre nuevo |
+| Título de un PR | `gh pr edit <url> --title …` |
+| Publicar una capa | `gh stack submit --auto`, `gh pr edit <rama> --title … --body …` y, si es lista, `gh pr ready <rama>` |
 | Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
 
 Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
@@ -170,7 +177,7 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 160 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 172 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - `StackService` y los flujos que escriben en GitHub, con un `gh` falso: los estados de la
   ventana, el reintento con `--remote` tras *multiple remotes*, los avisos por código de
   salida (3 con y sin rebase parado, 8, 9, 10), el corte de una secuencia y su limpieza, una
@@ -222,7 +229,11 @@ del VFS y de Git4Idea al terminar.
   Drafts* queda en el mismo diálogo. Para elegir PR a PR está *Publish Stack…*.
 - **El menú de una capa solo tiene acciones de esa capa.** Las de toda la pila dicen
   *Stack* y están en la barra y en el clic derecho fuera de las filas. gh-stack no publica
-  una capa suelta (`gh stack submit` sube todas), así que no hay un *Publish* por capa.
+  una capa suelta (`gh stack submit` sube todas): el *Publish* de una capa solo se activa si
+  no hay capas sin PR encima, y avisa de las de debajo que salen con ella.
+- **Renombrar solo ramas sin PR.** GitHub cierra el PR cuya rama se renombra, y un PR no
+  puede cambiar de rama. Con PR, la acción se ve desactivada y lo explica. El título es otra
+  acción, *Edit Title…*.
 - **Menús de lista, no `JPopupMenu`**, para que cada opción enseñe su tooltip. El menú
   *Stack* de Pull Requests es del plugin GitHub: ahí la explicación y el comando solo salen
   en la barra de estado.

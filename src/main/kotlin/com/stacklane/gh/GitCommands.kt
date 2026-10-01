@@ -25,6 +25,12 @@ object GitCommands {
 
     fun switch(branch: String): List<String> = listOf("switch", branch)
 
+    /** Renombra la rama local, con su configuracion; si es la actual, HEAD la sigue. */
+    fun renameBranch(old: String, new: String): List<String> = listOf("branch", "-m", old, new)
+
+    /** Borra la rama remota de seguimiento (`origin/rama`) en local; el remoto no se toca. */
+    fun deleteRemoteTracking(remoteBranch: String): List<String> = listOf("branch", "-r", "-d", remoteBranch)
+
     fun switchDetached(revision: String): List<String> = listOf("switch", "--detach", revision)
 
     fun deleteBranch(name: String): List<String> = listOf("branch", "-D", name)

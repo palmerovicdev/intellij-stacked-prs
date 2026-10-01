@@ -25,6 +25,22 @@ class GhCommandsTest {
     }
 
     @Test
+    fun `title and remote branch rename`() {
+        val url = "https://github.com/acme/shop/pull/13"
+        assertEquals("gh pr edit $url --title 'Payment API'", GhCommands.display(GhCommands.editTitle(url, "Payment API")))
+        assertEquals(
+            "gh api --method POST repos/acme/shop/branches/feat/a/rename -f new_name=feat/b",
+            GhCommands.display(GhCommands.renameRemoteBranch(GitHubRepo("github.com", "acme", "shop"), "feat/a", "feat/b")),
+        )
+        // Enterprise, con su host; un alias de ~/.ssh/config no es un host: sin --hostname.
+        assertEquals(
+            listOf("--hostname", "ghe.acme.io"),
+            GhCommands.renameRemoteBranch(GitHubRepo("ghe.acme.io", "acme", "shop"), "a", "b").takeLast(2),
+        )
+        assertFalse("--hostname" in GhCommands.renameRemoteBranch(GitHubRepo("github-personal", "acme", "shop"), "a", "b"))
+    }
+
+    @Test
     fun `init with trunk and add with commit`() {
         assertEquals(listOf("stack", "init", "--base", "develop", "a", "b"), GhCommands.init(listOf("a", "b"), "develop"))
         assertEquals(

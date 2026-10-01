@@ -11,6 +11,7 @@
             <reference ref="Stacklane.MarkReady"/>
             <reference ref="Stacklane.MarkDraft"/>
             <separator/>
+            <reference ref="Stacklane.EditTitle"/>
             <reference ref="Stacklane.EditLabels"/>
             <reference ref="Stacklane.ToggleFinal"/>
             <separator/>

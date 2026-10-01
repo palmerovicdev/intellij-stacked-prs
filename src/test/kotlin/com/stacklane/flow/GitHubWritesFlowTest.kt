@@ -1,12 +1,15 @@
 package com.stacklane.flow
 
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
+import com.intellij.ui.UiInterceptors
 import com.stacklane.actions.LayerSelection
 import com.stacklane.actions.PrTarget
 import com.stacklane.actions.StackFlows
 import com.stacklane.stack.GitHubRepo
 import com.stacklane.stack.StackState
+import com.stacklane.ui.EditTitleDialog
 
 /**
  * Los flujos que escriben en GitHub, de la accion al comando: que se ejecuta exactamente, en
@@ -83,6 +86,24 @@ class GitHubWritesFlowTest : FlowTestCase() {
         onEdt { StackFlows.setDraft(project, fromPullRequests(Samples.URL_B, 12), draft = true) }
         awaitNotificationWith(msg("op.draft.done", 12))
         assertEquals(listOf(listOf("pr", "ready", Samples.URL_B, "--undo")), gh.writes())
+    }
+
+    fun `test editing the title starts from the current one and changes only that`() {
+        val state = loadStack()
+        val edit = listOf("pr", "edit", Samples.URL_B, "--title", "Payment API")
+        gh.respond(edit)
+        UiInterceptors.register(object : UiInterceptors.UiInterceptor<EditTitleDialog>(EditTitleDialog::class.java) {
+            override fun doIntercept(component: EditTitleDialog) {
+                assertEquals("API", component.newTitle)
+                component.enterTitle("Payment API")
+                assertNull(component.doValidate())
+                component.close(DialogWrapper.OK_EXIT_CODE)
+            }
+        })
+
+        onEdt { StackFlows.editTitle(project, fromStacks(state, "feat/b")) }
+        awaitNotificationWith(msg("op.title.done", 12, "Payment API"))
+        assertEquals(listOf(edit), gh.writes())
     }
 
     fun `test changing the base says which one it had`() {
