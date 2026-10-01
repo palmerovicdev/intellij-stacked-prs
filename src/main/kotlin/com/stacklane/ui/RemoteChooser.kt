@@ -29,6 +29,9 @@ internal object RemoteChooser {
                 row(message("remote.label")) { cell(combo) }
             }
         }
-        return if (dialog.showAndGet()) combo.selectedItem as? String else null
+        // show() y no showAndGet(): en un dialogo modal es lo mismo, y show() es lo que pueden
+        // interceptar los tests (showAndGet() falla antes en el IDE headless de los tests).
+        dialog.show()
+        return if (dialog.isOK) combo.selectedItem as? String else null
     }
 }

@@ -113,7 +113,7 @@ Todo corre contra la IDEA instalada en `/Applications/IntelliJ IDEA.app` (2026.2
 2.4.20 son las mismas versiones que ya usa Tasklane.
 
 ```bash
-./gradlew test                  # tests unitarios
+./gradlew test                  # tests unitarios y de flujo (con un gh falso, sin red)
 ./gradlew verifyPlugin          # Plugin Verifier estricto contra la IDEA local
 ./gradlew runIde -PrunIdeProject=/ruta/a/un/repo   # IDE de prueba con ese proyecto
 ./gradlew buildPlugin           # build/distributions/stacklane-<versión>.zip
@@ -132,6 +132,12 @@ actions/   acciones (barra, menú de capa, menú de Pull Requests), PrTarget, St
 settings/  ruta de gh, nombre de la label final, qué hacer tras un commit, remoto por proyecto
 ```
 
+Los tests de `src/test/.../flow` corren dentro de un IDE headless con el framework de pruebas de
+la plataforma: un repositorio git real en un directorio temporal y `gh` sustituido por
+`FakeGh`, un script que apunta los argumentos de cada llamada y contesta con salidas grabadas
+(se le pasa al plugin como ruta de `gh` en los ajustes). Comprueban de la acción al comando:
+qué se ejecuta, en qué orden y qué aviso sale. git es el real.
+
 `StackService` lee con `gh stack view --json` más una consulta GraphQL para draft, labels,
 review, CI, base, tamaño y estado de merge de todos los PRs a la vez. Refresca cuando git cambia de verdad: rama, commits o
 refs. Las escrituras van de una en una, con progreso cancelable, registro en Log y refresco
@@ -141,7 +147,12 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 67 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 99 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- `StackService` y los flujos que escriben en GitHub, con un `gh` falso: los estados de la
+  ventana, el reintento con `--remote` tras *multiple remotes*, los avisos por código de
+  salida (3 con y sin rebase parado, 8, 9, 10), el corte de una secuencia y su limpieza, una
+  escritura a la vez, la pregunta de rerere, publicar, ready/draft, cambiar la base y la label
+  de capa final.
 - El rebase upstack, con gh-stack v0.1.1 real sobre un repositorio de prueba: tras avanzar
   `main` y commitear en la capa del medio, la de encima recibe el commit y ninguna capa se
   rebasa sobre `main`. La de abajo sigue marcada, porque eso solo lo arregla el rebase
@@ -159,7 +170,8 @@ del VFS y de Git4Idea al terminar.
 
 - Con PRs reales: los menús de Pull Requests (necesitan una cuenta GitHub en el IDE),
   submit, sync y rebase contra GitHub, y el refresco nativo tras escribir.
-- Varios repositorios en un mismo proyecto y remotos múltiples.
+- Varios repositorios en un mismo proyecto. Los remotos múltiples tienen tests de flujo, pero
+  no se han visto contra GitHub.
 - La lista de una rama en varias pilas (`0.3.0`) en el IDE de prueba: los datos se
   comprobaron con gh-stack real, el pintado todavía no.
 - *Publish Stack…* (`0.4.0`) contra GitHub: los comandos tienen tests, el diálogo y la

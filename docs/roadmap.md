@@ -58,6 +58,7 @@ hecha y el plugin salga al Marketplace (P40).
 | Tamaño, *Conflicts* y *Behind* de cada capa (P22) | `0.7.0` |
 | *Show Layer Changes*: el diff de una capa contra la de debajo (P25) | `0.7.0` |
 | Tooltips más estrechos, comandos en bloque con fondo y URLs en azul (C12); C1–C4 y C6 | `0.7.0` |
+| Tests de flujo de `StackService` y de las escrituras en GitHub con un `gh` falso (P2) | sin versión: solo tests |
 
 ---
 
@@ -67,8 +68,8 @@ Revisado el 2026-09-30, tras la `0.6.0`. Criterio: lo que ya dolió usando el pl
 cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se deshacen.
 
 1. ~~**P21 + P22 + P25**, con **C1–C4** y **C6**~~ — hechas en la `0.7.0`.
-2. **P2**, acotada a los flujos que escriben en GitHub — red de seguridad antes de P15 y P9,
-   las primeras operaciones que cierran PRs, borran ramas o fusionan.
+2. ~~**P2**, acotada a los flujos que escriben en GitHub~~ — hecha (2026-09-30), sin versión:
+   solo tests.
 3. **P15** — cerrar una pila entera, PRs y ramas, en el orden correcto: justo lo que, hecho
    a mano, dejó la pila huérfana que motivó la `0.2.0`.
 4. **P9** — merge de la pila; con P15 completa el ciclo de vida.
@@ -109,7 +110,7 @@ reales, así que parte de la lista ya se ha visto funcionar. Sale del orden suge
 la `1.0.0` sigue esperando a la lista escrita: lo que falta está en *Pendiente de probar*
 del README.
 
-### P2 · Tests de flujo con un `gh` falso 👾
+### P2 · Tests de flujo con un `gh` falso ✅ sin versión
 
 Hoy hay 63 tests de funciones puras (JSON, URLs, comandos, los planes de la `0.2.0`, el
 ajuste de texto de la `0.2.1`, las pilas locales de la `0.3.0`, la publicación de la
@@ -127,6 +128,38 @@ Primera entrega: tests de `StackService` sobre ese script con el framework de pr
 la plataforma (`testFramework(TestFrameworkType.Platform)`; son unas librerías, no otro
 IDE). Casos mínimos: los estados de la ventana, el reintento tras *multiple remotes*, el
 aviso de conflicto con y sin `gh-stack-rebase-state`, y que una segunda escritura espere.
+
+Hecha (2026-09-30), sin subir versión: no cambia nada que vea el usuario. 32 tests en
+`src/test/.../flow` (99 en total), cada uno de unos 1 s:
+
+- `FakeGh`: un script de bash que apunta los argumentos de cada llamada y contesta por
+  coincidencia exacta o de prefijo, las primeras *n* veces o reteniendo la llamada hasta que
+  el test la suelte. El repositorio es git real en un directorio temporal, con dos remotos.
+- `StackStateFlowTest`: cargada con detalles, detalles que fallan, códigos 2 y 6, extensión
+  que falta, cualquier otro fallo y rebase parado.
+- `StackServiceFlowTest`: *multiple remotes* (se elige, se reintenta con `--remote` y se
+  recuerda; cancelado, no se reintenta; un remoto recordado que ya no existe no se pasa),
+  código 3 con y sin rebase parado (y *Abort Rebase* desde el aviso), 8, 9, 10 y cualquier
+  otro con la salida escapada, corte de la secuencia con su `cleanup`, `onFailure` que se
+  queda el aviso, una escritura a la vez, rebase → *Push Stack*, y rerere sí/no/cancelar.
+- `GitHubWritesFlowTest`: publicar listo (confirmado, como drafts o cancelado), ready/draft
+  sin `--remote`, cambiar la base, mover/quitar la label final y crearla si no existe.
+
+Lo que enseñó:
+
+- Una segunda escritura **no espera**: no arranca y avisa *Wait until … finishes*. El test
+  comprueba eso, que es lo que quiere el plugin.
+- Los avisos de fin salen antes de soltar la escritura (ver C13).
+- Contra la IDEA unificada (IU), abrir un proyecto en tests registra un error de una
+  actividad de inicio del módulo `ultimate` (la licencia). `FlowTestCase` ignora solo los
+  errores de ese módulo.
+- `DialogWrapper.showAndGet()` falla en el IDE headless de los tests antes de que un
+  `UiInterceptors` pueda contestar: `RemoteChooser` usa `show()` + `isOK`, que en un diálogo
+  modal es lo mismo.
+- La pregunta de rerere depende también de la configuración global de git: si ahí ya está
+  contestada, esos tres tests se saltan (`assume`).
+
+Pendiente para P15 y P9: sus tests van en `GitHubWritesFlowTest` con el mismo `FakeGh`.
 
 ### P3 · Una rama que está en dos pilas ✅ `0.3.0`
 
@@ -770,4 +803,5 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 | ✅ C9 | *Mark Ready*, *Convert to Draft*, *Labels…* y *Mark as Final Layer* no tenían icono `0.4.0` | `Actions` |
 | ✅ C10 | El clic derecho enseñaba el menú de la fila seleccionada, no el de la fila bajo el ratón; fuera de las filas, igual. Ahora selecciona esa fila, o quita la selección `0.4.0` | `StackPanel` |
 | ✅ C12 | Los tooltips medían lo que el comando más largo (casi 900 px con una URL de PR). Ahora, unos 520 px; cada comando en su bloque con fondo, como el código en Markdown, y las URLs en azul. Swing lee los `px` de CSS como puntos (×1,3): el ancho se escribe dividido `0.7.0` | `Help`, `TooltipStyle` |
+| 🟡 C13 | Los avisos de fin (y sus botones: *Push Stack*, *Abort Rebase*) salen antes de soltar la escritura: entre el aviso y el final de `syncIde`, pulsar uno da *Wait until … finishes*. Lo enseñaron los tests de P2; con la mano casi nunca se llega a tiempo. Avisar después de soltarla | `StackService.execute` |
 | ✅ C11 | Aun diciendo *Stack*, ver *Publish Stack as Drafts* en el menú de una capa sin PR confundía. El menú de una capa solo tiene lo suyo; lo de la pila sale al hacer clic fuera de las filas o sobre la base `0.6.0` | `plugin.xml`, `StackPanel` |

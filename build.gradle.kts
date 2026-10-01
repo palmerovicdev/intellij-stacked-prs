@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -35,8 +36,13 @@ val localIde: String? = providers.gradleProperty("localIdePath").orNull?.takeIf(
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // El framework de pruebas de la plataforma lo pide en tiempo de ejecucion.
+    testImplementation("org.opentest4j:opentest4j:1.3.0")
 
     intellijPlatform {
+        // Los tests de flujo (StackService con un `gh` falso) corren dentro de una aplicacion
+        // headless: son unas librerias, no otro IDE.
+        testFramework(TestFrameworkType.Platform)
         // Obligatorio: la pila vive en un repositorio Git y el plugin la lee con git4idea.
         bundledPlugin("Git4Idea")
         // GitRepository y GitRepositoryManager exponen tipos de dvcs (Repository.State,
