@@ -1,4 +1,4 @@
-# Stacklane
+# Upstack
 
 Plugin de IntelliJ IDEA para trabajar con **stacked pull requests de GitHub** desde el IDE.
 Es una interfaz visual sobre `gh stack` (extensión [github/gh-stack](https://github.com/github/gh-stack))
@@ -68,7 +68,7 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Cerrar una pila entera** (*Close Stack…*): deshacerla en GitHub, cerrar sus PRs
   abiertos con un comentario opcional y borrar sus ramas remotas y locales. El diálogo lista
   cada PR y rama que toca y los comandos en el orden en que se ejecutan.
-- **Comprobar el entorno** (*Settings | Version Control | Stacklane*, botón *Check*): qué
+- **Comprobar el entorno** (*Settings | Version Control | Upstack*, botón *Check*): qué
   `gh` hay y dónde, con qué cuenta en cada host, qué versión de gh-stack, los remotos del
   repositorio y si GitHub admite pilas en él. Lo que falta trae su arreglo al lado:
   *Install*, *Upgrade gh-stack* o *Log In…*.
@@ -120,7 +120,7 @@ uso de API interna, deprecada, experimental, *override-only* o *non-extendable*.
 contra la IDEA instalada, sin descargar nada:
 
 ```text
-Plugin com.stacklane:0.10.0 against IU-262.10315.125: Compatible
+Plugin com.upstack:0.10.0 against IU-262.10315.125: Compatible
 ```
 
 La integración con la ventana Pull Requests no compila contra el plugin GitHub: ninguna de
@@ -128,7 +128,7 @@ sus clases entra en el classpath. Se apoya en tres contratos de nombre, sin refe
 clases:
 
 1. Los ids de los grupos de menú (`Github.PullRequest.ToolWindow.List.Popup` y
-   `Github.PullRequest.Details.Popup`), en `stacklane-github.xml`.
+   `Github.PullRequest.Details.Popup`), en `upstack-github.xml`.
 2. El nombre de la `DataKey` de la URL del PR (`org.jetbrains.plugins.github.pullrequest.url`).
    Se crea una clave propia con ese nombre en vez de importar `GHPRActionKeys`, que es
    `@ApiStatus.Internal`. Comprobado en la 2026.2.2: `DataKey.create` con ese nombre
@@ -150,7 +150,7 @@ ni añadir botones a su cabecera. Por eso la vista principal es una ventana prop
 - La extensión `gh-stack` (`gh extension install github/gh-stack`), en su v0.1.1. Si falta,
   el plugin ofrece instalarla; si es otra versión, avisa.
 
-*Settings | Version Control | Stacklane | Check* dice cuál de las tres cosas falta.
+*Settings | Version Control | Upstack | Check* dice cuál de las tres cosas falta.
 - IntelliJ IDEA 2026.2 o posterior, con el plugin Git activo.
 
 ## Desarrollo
@@ -163,7 +163,7 @@ Todo corre contra la IDEA instalada en `/Applications/IntelliJ IDEA.app` (2026.2
 ./gradlew test                  # tests unitarios y de flujo (con un gh falso, sin red)
 ./gradlew verifyPlugin          # Plugin Verifier estricto contra la IDEA local
 ./gradlew runIde -PrunIdeProject=/ruta/a/un/repo   # IDE de prueba con ese proyecto
-./gradlew buildPlugin           # build/distributions/stacklane-<versión>.zip
+./gradlew buildPlugin           # build/distributions/upstack-<versión>.zip
 ```
 
 Para probarlo en el IDE de trabajo: *Settings → Plugins → ⚙ → Install Plugin from Disk…* y
@@ -306,7 +306,7 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.12.1**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.12.2**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
 
 Las capturas del Marketplace, el post de Reddit y cómo rehacerlos están en
 [docs/marketplace](docs/marketplace/README.md).

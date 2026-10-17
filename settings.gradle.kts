@@ -1,6 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 
-rootProject.name = "stacklane"
+rootProject.name = "upstack"
 
 // Mismas versiones que Tasklane: ya estan en la cache de Gradle, asi que el primer
 // build no descarga plugins nuevos.

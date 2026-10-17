@@ -1,6 +1,6 @@
 # Marketplace y Reddit
 
-Lo necesario para presentar Stacklane: diez diapositivas de 2400×1520 (el doble del mínimo de
+Lo necesario para presentar Upstack: diez diapositivas de 2400×1520 (el doble del mínimo de
 1200×760 del Marketplace, todas con la misma proporción) y el post de Reddit.
 
 | Diapositiva | Qué enseña |

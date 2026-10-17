@@ -3,6 +3,19 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.12.2 — Nuevo nombre: Upstack
+
+El nombre anterior ya lo usaba otro plugin del Marketplace. Sin cambios en lo que hace el
+plugin.
+
+- **Upstack** en todas partes: el nombre del plugin, su id (`com.upstack`), los paquetes, las
+  acciones (`Upstack.*`), la ventana y la página de ajustes (*Settings | Version Control |
+  Upstack*).
+- Los ajustes se guardan en `upstack.xml`: lo que se hubiera configurado con el nombre
+  anterior (la ruta de `gh`, la label final, qué hacer tras un commit) hay que volver a
+  ponerlo.
+- Las capturas del Marketplace y el post de Reddit, rehechos con el nombre nuevo.
+
 ## 0.12.1 — Lista para el Marketplace
 
 Sin cambios en lo que hace el plugin.
@@ -21,7 +34,7 @@ Salió del roadmap (P4). Si faltaba `gh`, la extensión o la sesión se veía un
 genérico, y la versión de gh-stack no se miraba aunque el plugin lee el JSON y los códigos
 de salida de la v0.1.1.
 
-- **Check** en *Settings | Version Control | Stacklane*: una línea por cosa comprobada, con
+- **Check** en *Settings | Version Control | Upstack*: una línea por cosa comprobada, con
   su icono. La versión de `gh` y su ruta (la escrita en el campo, sin tener que aplicarla),
   la cuenta de cada host (`gh auth status --json hosts`), la versión de gh-stack, los
   remotos del repositorio y si GitHub admite pilas en él (`gh api repos/…/stacks`: un 404 es
@@ -177,7 +190,7 @@ PR y no se usaba, y faltaba ver el diff de una capa sola, que es el sentido de a
 - Las capas sin PR ya no dicen dos veces que no están publicadas: queda la pastilla *No PR*.
 - La línea del grafo se ve en tema oscuro.
 - *Check Out Stack Locally*, desde Pull Requests, enseña `#13` en el progreso y no la URL.
-- Los ajustes pasan a *Settings → Version Control → Stacklane*, junto a Git y GitHub.
+- Los ajustes pasan a *Settings → Version Control → Upstack*, junto a Git y GitHub.
 
 ## 0.6.0 — Qué hace cada opción y qué es lo siguiente
 
@@ -211,7 +224,7 @@ capa se comía también los conflictos con lo nuevo de `main`, no solo los del a
   a las de encima, sin fetch y sin tocar el trunk. Solo salen los conflictos que causa ese
   cambio. Sin `--no-trunk`, desde la capa de abajo gh-stack rebasaría también sobre el trunk.
 - **Tras un commit del IDE** en una capa que no es la cima, un aviso ofrece el rebase
-  upstack o *Always After Commit*. En *Settings → Tools → Stacklane* se elige: preguntar,
+  upstack o *Always After Commit*. En *Settings → Tools → Upstack* se elige: preguntar,
   hacerlo sin preguntar (solo con el árbol limpio; si no, avisa) o nada.
 - **La banda *needs rebase*** separa los dos casos. Si hay capas que ya no parten de la de
   debajo, propone el upstack: desde la capa actual si está a su altura o por debajo; si no,

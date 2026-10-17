@@ -1,0 +1,909 @@
+package com.upstack.actions
+
+import com.intellij.CommonBundle
+import com.intellij.openapi.application.EDT
+import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.MessageDialogBuilder
+import com.intellij.openapi.ui.Messages
+import com.intellij.platform.ide.progress.withBackgroundProgress
+import com.upstack.Notifier
+import com.upstack.UpstackBundle.message
+import com.upstack.gh.GhCli
+import com.upstack.gh.GhCommands
+import com.upstack.gh.GhNotFoundException
+import com.upstack.gh.GhExit
+import com.upstack.settings.UpstackProjectSettings
+import com.upstack.stack.MergeOutcome
+import com.upstack.stack.MergePlans
+import com.upstack.stack.MergeTargets
+import com.upstack.stack.NumberCheck
+import com.upstack.ui.MergeStackDialog
+import com.upstack.ui.mergeBlockText
+import com.upstack.gh.GhResult
+import com.upstack.gh.GitCommands
+import com.upstack.gh.Tool
+import com.upstack.settings.UpstackSettings
+import com.upstack.stack.ClosePlans
+import com.upstack.stack.CloseTargets
+import com.upstack.stack.GhCall
+import com.upstack.stack.GitHubRepo
+import com.upstack.stack.LocalStack
+import com.upstack.stack.LayerPlans
+import com.upstack.stack.LocalStackEntry
+import com.upstack.stack.RemoteRename
+import com.upstack.stack.RenameBlock
+import com.upstack.stack.MissingBranch
+import com.upstack.stack.Operation
+import com.upstack.stack.Position
+import com.upstack.stack.PublishPlans
+import com.upstack.stack.StackJson
+import com.upstack.stack.StackLayer
+import com.upstack.stack.StackPlans
+import com.upstack.stack.StackService
+import com.upstack.stack.StackSnapshot
+import com.upstack.stack.StackState
+import com.upstack.stack.repo
+import com.upstack.ui.AddLayerDialog
+import com.upstack.ui.CloseStackDialog
+import com.upstack.ui.DeleteLayerDialog
+import com.upstack.ui.EditTitleDialog
+import com.upstack.ui.RenameBranchDialog
+import com.upstack.ui.Help
+import com.upstack.ui.Helps
+import com.upstack.ui.InitStackDialog
+import com.upstack.ui.LabelsDialog
+import com.upstack.ui.LoginDialog
+import com.upstack.ui.PublishDialog
+import com.upstack.ui.PublishLayerDialog
+import com.upstack.ui.StackToolWindow
+import git4idea.branch.GitBrancher
+import git4idea.repo.GitRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import java.awt.datatransfer.StringSelection
+import java.nio.file.Path
+
+/**
+ * Lo que hace cada accion, separado de las clases AnAction para poder lanzarlo tambien
+ * desde los enlaces de la ventana. Todo acaba en [StackService.execute].
+ */
+internal object StackFlows {
+
+    // Ramas que casi nunca se quieren adoptar como primera capa de una pila.
+    private val TRUNK_NAMES = setOf("main", "master", "develop", "development", "trunk")
+
+    // Lo que se ensena del ultimo commit comun en el titulo del diff de una capa.
+    private const val SHORT_HASH = 10
+
+    // ------------------------------------------------------------------ pila
+
+    /**
+     * Pila nueva. [prefill]: capas y base ya elegidas, al recrear una pila cuyas ramas se
+     * borraron. Si alguna capa esta registrada en una pila sin ramas, el plan la olvida antes.
+     */
+    fun initStack(project: Project, prefill: LocalStack? = null) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value
+        val repository = state.repo?.let(service::repositoryFor) ?: service.repository() ?: return
+        val current = repository.currentBranchName
+
+        // gh-stack no inicia una pila desde una capa de otra, aunque tambien sea la base de
+        // alguna: antes se vuelve a su trunk.
+        val leaveLayerFor = when (state) {
+            is StackState.Loaded -> state.snapshot.trunk.takeIf { current != null && current != it && state.snapshot.layers.any { l -> l.branch == current } }
+            is StackState.InSeveralStacks -> state.layerOf?.stack?.trunk?.takeIf { state.branch == current }
+            else -> null
+        }
+        // En una rama suelta con trabajo, lo normal es convertirla en la primera capa (base: la
+        // rama por defecto). En cualquier otro caso, la base propuesta es la rama actual.
+        val adopt = current?.takeIf { state is StackState.NotInStack && it !in TRUNK_NAMES }
+        val layers = prefill?.branches?.joinToString(" ") ?: adopt
+        val base = when {
+            prefill != null -> prefill.trunk
+            adopt != null -> null
+            else -> current
+        }
+        // Tras salir de la capa, HEAD esta en su trunk: desde ahi se olvida y se vuelve.
+        val from = if (leaveLayerFor != null) Position(leaveLayerFor, null) else Position(current, repository.currentRevision)
+
+        val dialog = InitStackDialog(project, repository, layers, base, leaveLayerFor, service.localStacks(repository), from)
+        if (!dialog.showAndGet()) return
+        val plan = dialog.plan() ?: return
+        val init = Operation(
+            title = message("op.init"),
+            calls = plan.calls,
+            repository = repository,
+            successMessage = message("op.init.done", dialog.branches.last(), dialog.base ?: message("init.base.default.short")),
+            cleanup = plan.cleanup,
+        )
+        if (leaveLayerFor == null) {
+            service.execute(init)
+        } else {
+            service.checkout(repository, leaveLayerFor) {
+                if (repository.currentBranchName == leaveLayerFor) service.execute(init)
+                else Notifier.warning(project, message("op.init"), message("init.leave.layer.failed", leaveLayerFor))
+            }
+        }
+    }
+
+    /**
+     * Una pila cuyas ramas ya no existen: gh-stack la sigue registrando, no se puede sacar y
+     * sus nombres no se pueden reutilizar. Se ofrece olvidarla o recrearla sobre otra base.
+     */
+    fun cleanUpStaleStack(project: Project, entry: LocalStackEntry) {
+        val choice = MessageDialogBuilder.yesNoCancel(
+            message("stale.title"),
+            message("stale.text", describe(entry)),
+        )
+            .yesText(message("stale.forget"))
+            .noText(message("stale.recreate"))
+            .cancelText(CommonBundle.getCancelButtonText())
+            .icon(Messages.getWarningIcon())
+            .show(project)
+        when (choice) {
+            Messages.YES -> forgetStack(project, entry)
+            Messages.NO -> initStack(project, prefill = entry.stack)
+        }
+    }
+
+    /** Deja de seguir en local una pila sin ramas. Ni GitHub ni el arbol de trabajo se tocan. */
+    fun forgetStack(project: Project, entry: LocalStackEntry) {
+        val service = StackService.getInstance(project)
+        val repository = service.repository() ?: return
+        val plan = StackPlans.forget(entry.stack, Position(repository.currentBranchName, repository.currentRevision))
+            ?: return Notifier.warning(project, message("op.forget"), message("init.detached"))
+        service.execute(
+            Operation(
+                title = message("op.forget"),
+                calls = plan.calls,
+                repository = repository,
+                successMessage = message("op.forget.done", describe(entry)),
+                cleanup = plan.cleanup,
+            )
+        )
+    }
+
+    private fun describe(entry: LocalStackEntry): String = (listOf(entry.stack.trunk) + entry.stack.branches).joinToString(" ← ")
+
+    private fun describe(snapshot: StackSnapshot): String = (listOf(snapshot.trunk) + snapshot.layers.map { it.branch }).joinToString(" ← ")
+
+    /**
+     * *Close Stack…*: deshacer la pila, cerrar sus PRs y borrar sus ramas, en el orden de
+     * [ClosePlans]. Antes del dialogo se pregunta al remoto que ramas tiene de verdad: lo que
+     * git sabe en local puede estar atrasado, y borrar una rama que ya no existe haria fallar
+     * el `git push --delete` entero.
+     *
+     * Primero `gh stack unstack`, solo. Si gh-stack sigue registrando la pila, GitHub se nego a
+     * deshacerla (PRs en cola o con auto-merge) y no se cierra ni se borra nada: si no, quedaria
+     * otra pila sin ramas.
+     */
+    fun closeStack(project: Project) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        val name = describe(snapshot)
+        service.launch {
+            val remoteHeads = withBackgroundProgress(project, message("close.reading")) { readRemoteHeads(service, repository, snapshot) }
+            val targets = closeTargets(service, repository, state, remoteHeads)
+            val choice = withContext(Dispatchers.EDT) {
+                val dialog = CloseStackDialog(project, name, targets)
+                // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+                dialog.show()
+                if (dialog.isOK) dialog.choice else null
+            } ?: return@launch
+
+            var unstacked = false
+            service.execute(
+                Operation(
+                    title = message("op.close"),
+                    calls = listOf(ClosePlans.unstack(choice, targets)),
+                    repository = repository,
+                    onSuccess = { unstacked = true },
+                )
+            ).join()
+            if (!unstacked) return@launch
+
+            val layers = snapshot.layers.mapTo(HashSet()) { it.branch }
+            if (service.localStacks(repository).any { entry -> entry.stack.branches.any(layers::contains) }) {
+                Notifier.warning(project, message("close.kept.title"), message("close.kept", name), showLog(project))
+                return@launch
+            }
+            val rest = ClosePlans.afterUnstack(choice, targets)
+            if (rest.isEmpty()) return@launch Notifier.info(project, message("op.close.done.unstacked", name))
+            service.execute(
+                Operation(
+                    title = message("op.close"),
+                    calls = rest,
+                    repository = repository,
+                    successMessage = message("op.close.done", name),
+                )
+            )
+        }
+    }
+
+    /**
+     * Lo que tocaria cerrar la pila de [state]. [remoteHeads]: las ramas del remoto, leidas con
+     * `git ls-remote`; sin ellas, lo que git sabe del remoto en local.
+     */
+    fun closeTargets(
+        service: StackService,
+        repository: GitRepository,
+        state: StackState.Loaded,
+        remoteHeads: Map<String, String>? = null,
+    ): CloseTargets {
+        val snapshot = state.snapshot
+        val names = stackBranches(snapshot)
+        val branches = repository.branches
+        val local = names.mapNotNull { name ->
+            branches.findLocalBranch(name)?.let(branches::getHash)?.let { name to it.asString() }
+        }.toMap()
+        val remote = service.stackRemote(repository, snapshot)
+        val heads = remoteHeads ?: branches.remoteBranches
+            .filter { it.remote.name == remote && it.nameForRemoteOperations in names }
+            .mapNotNull { branch -> branches.getHash(branch)?.let { branch.nameForRemoteOperations to it.asString() } }
+            .toMap()
+        val otherTrunks = service.localStacks(repository).mapTo(HashSet()) { it.stack.trunk }
+        return ClosePlans.targets(snapshot, state.details, remote, local, heads, otherTrunks)
+    }
+
+    private fun stackBranches(snapshot: StackSnapshot): Set<String> = snapshot.layers.mapTo(LinkedHashSet()) { it.branch } + snapshot.trunk
+
+    /** null si no se pudo preguntar (sin red, sin remoto): entonces vale lo que git sabe en local. */
+    private suspend fun readRemoteHeads(service: StackService, repository: GitRepository, snapshot: StackSnapshot): Map<String, String>? {
+        val remote = service.stackRemote(repository, snapshot) ?: return null
+        val result = try {
+            GhCli.run(repository.root.toNioPath(), GitCommands.lsRemoteHeads(remote, stackBranches(snapshot)), tool = Tool.GIT)
+        } catch (_: GhNotFoundException) {
+            return null
+        }
+        return if (result.ok) ClosePlans.parseLsRemote(result.stdout) else null
+    }
+
+    private fun showLog(project: Project) = Notifier.action(message("notification.show.log")) { StackToolWindow.showLog(project) }
+
+    /**
+     * *Merge Up to Here…* ([upTo]: esa capa) y *Merge Stack…* (null: la mas alta que se pueda).
+     * Antes del dialogo se lee como fusiona el repositorio; despues, antes de lanzar
+     * `gh stack merge N`, se comprueba que N no sea tambien el numero de otra pila: gh-stack lo
+     * probaria primero como pila y, con `--yes`, la fusionaria entera.
+     */
+    fun mergeStack(project: Project, upTo: String? = null) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val targets = MergePlans.targets(state.snapshot, state.details)
+        val initial = upTo?.let(targets::candidateOf) ?: targets.candidates.lastOrNull()
+            ?: return Notifier.info(project, message("merge.title"), nothingToMerge(targets))
+        val github = githubOf(state) ?: return Notifier.error(project, message("merge.title"), message("details.no.github"))
+        val root = repository.root.toNioPath()
+        val remembered = UpstackProjectSettings.getInstance(project)
+        service.launch {
+            val settings = try {
+                withBackgroundProgress(project, message("merge.reading")) {
+                    StackJson.parseMergeSettings(GhCli.run(root, GhCommands.mergeSettings(github, targets.trunk)).stdout)
+                }
+            } catch (_: GhNotFoundException) {
+                return@launch Notifier.error(project, message("merge.title"), message("state.gh.missing"))
+            }
+            val choice = withContext(Dispatchers.EDT) {
+                val dialog = MergeStackDialog(project, state, targets, settings, remembered.mergeMethod, initial)
+                dialog.show()
+                if (dialog.isOK) dialog.choice else null
+            } ?: return@launch
+            choice.method?.let { remembered.mergeMethod = it }
+
+            val number = choice.target.number
+            val check = try {
+                withBackgroundProgress(project, message("merge.checking", number)) { GhCli.run(root, GhCommands.remoteStack(github, number)) }
+            } catch (_: GhNotFoundException) {
+                return@launch Notifier.error(project, message("merge.title"), message("state.gh.missing"))
+            }
+            when (MergePlans.numberCheck(number, check)) {
+                null -> return@launch Notifier.error(
+                    project, message("merge.check.failed.title"), message("merge.check.failed", number) + "<br>" + Notifier.html(check.errorText),
+                )
+                NumberCheck.OTHER_STACK -> return@launch Notifier.warning(project, message("merge.number.taken.title"), message("merge.number.taken", number))
+                NumberCheck.PULL_REQUEST, NumberCheck.SAME_MERGE -> Unit
+            }
+
+            val prs = targets.upTo(choice.target).joinToString(", ") { "#${it.number}" }
+            service.execute(
+                Operation(
+                    title = message("op.merge", prs),
+                    calls = listOf(MergePlans.call(choice)),
+                    repository = repository,
+                    onOutput = { result ->
+                        val outcome = MergePlans.outcome(result) ?: if (settings?.usesMergeQueue == true) MergeOutcome.QUEUED else MergeOutcome.MERGED
+                        when (outcome) {
+                            MergeOutcome.MERGED -> Notifier.info(
+                                project, message("op.merge.done", prs, targets.trunk),
+                                Notifier.action(message("action.sync.prune")) { syncAndPrune(project) },
+                            )
+                            MergeOutcome.QUEUED -> Notifier.info(project, message("op.merge.queued", prs, targets.trunk))
+                            MergeOutcome.ALREADY_MERGED -> Notifier.info(project, message("op.merge.already", prs))
+                        }
+                    },
+                    onFailure = { result ->
+                        // gh-stack sale con 3 si GitHub encontro conflictos: no es un rebase local.
+                        val conflict = result.exitCode == GhExit.CONFLICT
+                        if (conflict) {
+                            Notifier.error(project, message("operation.failed", message("op.merge", prs)), message("merge.conflict", targets.trunk), showLog(project))
+                        }
+                        conflict
+                    },
+                )
+            )
+        }
+    }
+
+    /** Por que no hay nada que fusionar: una capa lo impide desde abajo, o ya esta todo fusionado. */
+    private fun nothingToMerge(targets: MergeTargets): String {
+        val blocker = targets.blocker ?: return message("merge.nothing.merged")
+        val layer = blocker.layer
+        return message("merge.nothing.blocked", layer.pr?.let { "#${it.number} ${layer.branch}" } ?: layer.branch, mergeBlockText(blocker.reason))
+    }
+
+    /** Donde estan los PRs de la pila. Un alias de ~/.ssh/config no es un host que gh entienda. */
+    fun githubOf(state: StackState.Loaded): GitHubRepo? =
+        state.snapshot.layers.firstNotNullOfOrNull { layer -> layer.pr?.url?.let(GitHubRepo::fromPullRequestUrl) }
+            ?: state.repo.github?.takeUnless { it.isSshAlias }
+
+    /**
+     * Tras fusionar capas en GitHub: `gh stack sync --prune` borra sus ramas locales, rebasa el
+     * resto de la pila sobre el trunk y la sube.
+     */
+    fun syncAndPrune(project: Project) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        service.execute(
+            Operation(
+                title = message("op.sync.prune"),
+                calls = listOf(GhCall(GhCommands.sync(prune = true), acceptsRemote = true)),
+                repository = service.repositoryFor(state.repo),
+                successMessage = message("op.sync.prune.done"),
+            )
+        )
+    }
+
+    /** Capas ya fusionadas cuya rama sigue en este repositorio: lo que borra [syncAndPrune]. */
+    fun mergedWithLocalBranch(repository: GitRepository, snapshot: StackSnapshot): List<String> =
+        snapshot.layers.filter { it.isMerged && repository.branches.findLocalBranch(it.branch) != null }.map { it.branch }
+
+    fun addLayer(project: Project) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        val top = snapshot.top ?: return Notifier.info(project, message("add.all.merged"))
+        val needsTop = snapshot.currentBranch != top.branch
+
+        // gh-stack no crea capa si la superior aun no tiene commits y se pide commitear: el
+        // commit cae en esa capa. El dialogo lo avisa.
+        val branches = repository.branches
+        val topHash = branches.findLocalBranch(top.branch)?.let(branches::getHash)
+        val parentHash = branches.findLocalBranch(snapshot.parentOf(top))?.let(branches::getHash)
+
+        val dialog = AddLayerDialog(project, state, top, needsTop, topIsEmpty = topHash != null && topHash == parentHash)
+        if (!dialog.showAndGet()) return
+        val calls = buildList {
+            if (needsTop) add(GhCall(GhCommands.top()))
+            add(GhCall(GhCommands.add(dialog.branch, dialog.commit)))
+        }
+        service.execute(Operation(message("op.add"), calls, repository, successMessage = message("op.add.done", dialog.branch)))
+    }
+
+    /**
+     * *Publish Stack…*: capa a capa, cual queda lista para review y con que titulo y
+     * descripcion salen las nuevas. Antes de abrir el dialogo se leen los commits de las capas
+     * nuevas para proponerlos. [focus]: la capa desde cuyo menu se abrio.
+     */
+    fun publishStack(project: Project, focus: String? = null) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        // Donde gh-stack crea los PRs.
+        val github = githubOf(state)
+        val fresh = snapshot.layers.filter { !it.isMerged && it.pr == null }
+        service.launch {
+            val proposals = try {
+                withBackgroundProgress(project, message("publish.reading")) {
+                    fresh.associate { layer ->
+                        val log = GitCommands.log(gitRef(repository, snapshot.parentOf(layer)), layer.branch)
+                        val result = GhCli.run(repository.root.toNioPath(), log, tool = Tool.GIT)
+                        // Sin commits legibles se propone el nombre de la rama: el dialogo deja cambiarlo.
+                        val commits = if (result.ok) PublishPlans.parseLog(result.stdout) else emptyList()
+                        layer.branch to PublishPlans.proposal(layer.branch, commits)
+                    }
+                }
+            } catch (_: GhNotFoundException) {
+                emptyMap()
+            }
+            val layers = withContext(Dispatchers.EDT) {
+                val dialog = PublishDialog(project, state, proposals, github, focus)
+                if (dialog.showAndGet()) dialog.layers() else null
+            } ?: return@launch
+            service.execute(
+                Operation(
+                    title = message("op.publish"),
+                    calls = PublishPlans.calls(layers, github),
+                    repository = repository,
+                    successMessage = message("op.publish.done"),
+                )
+            )
+        }
+    }
+
+    /**
+     * Publicar una capa sin PR desde su menu, como draft o lista para review (ver
+     * [PublishPlans.layerCalls]). `gh stack submit` publica todas las que no tienen PR: no se
+     * ofrece si hay alguna encima.
+     */
+    fun publishLayer(project: Project, layer: StackLayer, ready: Boolean) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        if (layer.pr != null || PublishPlans.unpublishedAbove(snapshot, layer).isNotEmpty()) return
+        val github = githubOf(state)
+        service.launch {
+            val proposal = try {
+                withBackgroundProgress(project, message("publish.reading")) {
+                    val log = GitCommands.log(gitRef(repository, snapshot.parentOf(layer)), layer.branch)
+                    val result = GhCli.run(repository.root.toNioPath(), log, tool = Tool.GIT)
+                    PublishPlans.proposal(layer.branch, if (result.ok) PublishPlans.parseLog(result.stdout) else emptyList())
+                }
+            } catch (_: GhNotFoundException) {
+                PublishPlans.proposal(layer.branch, emptyList())
+            }
+            val text = withContext(Dispatchers.EDT) {
+                val dialog = PublishLayerDialog(project, snapshot, layer, proposal, ready, github)
+                // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+                dialog.show()
+                if (dialog.isOK) dialog.text else null
+            } ?: return@launch
+            service.execute(
+                Operation(
+                    title = message("op.publish.layer", layer.branch),
+                    calls = PublishPlans.layerCalls(snapshot, layer, text, ready, github),
+                    repository = repository,
+                    successMessage = message(if (ready) "op.publish.layer.ready" else "op.publish.layer.draft", layer.branch),
+                )
+            )
+        }
+    }
+
+    /** Una rama como la entiende git: la local o, si solo esta en un remoto, `remoto/rama`. */
+    private fun gitRef(repository: GitRepository, branch: String): String {
+        val branches = repository.branches
+        if (branches.findLocalBranch(branch) != null) return branch
+        return branches.remoteBranches.firstOrNull { it.nameForRemoteOperations == branch }?.name ?: branch
+    }
+
+    fun publish(project: Project, ready: Boolean) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val asReady = if (ready) confirmReady(project, state) ?: return else false
+        service.execute(
+            Operation(
+                title = message(if (asReady) "op.publish.ready" else "op.publish.draft"),
+                calls = listOf(GhCall(GhCommands.submit(asReady), acceptsRemote = true)),
+                repository = repository,
+                successMessage = message(if (asReady) "op.publish.ready.done" else "op.publish.draft.done"),
+            )
+        )
+    }
+
+    /**
+     * `--open` marca listos TODOS los PRs de la pila, tambien los drafts que ya existian.
+     * Antes de hacerlo se ensena exactamente cuales cambian. true: listos; false: publicar
+     * como drafts; null: cancelado.
+     */
+    private fun confirmReady(project: Project, state: StackState.Loaded): Boolean? {
+        val active = state.snapshot.layers.filter { !it.isMerged }
+        val created = active.filter { it.pr == null }.map { it.branch }
+        val drafts = active.filter { state.detailsOf(it)?.isDraft == true }.map(::describe)
+        val unknown = active.filter { it.pr != null && state.detailsOf(it) == null }.map(::describe)
+        val text = buildString {
+            append(message("publish.ready.intro"))
+            if (created.isNotEmpty()) append("\n\n").append(message("publish.ready.new", created.joinToString(", ")))
+            if (drafts.isNotEmpty()) append("\n\n").append(message("publish.ready.drafts", drafts.joinToString(", ")))
+            if (unknown.isNotEmpty()) append("\n\n").append(message("publish.ready.unknown", unknown.joinToString(", ")))
+            if (created.isEmpty() && drafts.isEmpty() && unknown.isEmpty()) append("\n\n").append(message("publish.ready.nothing"))
+        }
+        val choice = MessageDialogBuilder.yesNoCancel(message("publish.ready.title"), text)
+            .yesText(message("publish.ready.yes"))
+            .noText(message("publish.ready.no"))
+            .cancelText(CommonBundle.getCancelButtonText())
+            .icon(Messages.getQuestionIcon())
+            .show(project)
+        return when (choice) {
+            Messages.YES -> true
+            Messages.NO -> false
+            else -> null
+        }
+    }
+
+    private fun describe(layer: StackLayer): String = "#${layer.pr?.number} ${layer.branch}"
+
+    fun sync(project: Project) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        service.execute(
+            Operation(
+                title = message("op.sync"),
+                calls = listOf(GhCall(GhCommands.sync(), acceptsRemote = true)),
+                repository = service.repositoryFor(state.repo),
+                successMessage = message("op.sync.done"),
+            )
+        )
+    }
+
+    /** Lleva a las capas de encima lo que cambio en [from] (`gh stack rebase --upstack --no-trunk`). */
+    fun rebaseUpstack(project: Project, from: String) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        service.rebaseUpstackFrom(repository, from)
+    }
+
+    /**
+     * `gh stack checkout`: si la pila solo existe en GitHub, gh-stack la trae y la registra.
+     * [label]: como se nombra en el progreso; un PR, por su numero y no por su URL.
+     */
+    fun checkoutStack(project: Project, target: String, repository: GitRepository? = null, label: String = target) {
+        StackService.getInstance(project).execute(
+            Operation(
+                title = message("op.checkout.stack", label),
+                calls = listOf(GhCall(GhCommands.checkout(target))),
+                repository = repository,
+                onSuccess = { withContext(Dispatchers.EDT) { StackToolWindow.show(project) } },
+            )
+        )
+    }
+
+    fun checkoutStackByInput(project: Project) {
+        val input = Messages.showInputDialog(project, message("checkout.prompt"), message("checkout.title"), null)
+            ?.trim().orEmpty()
+        if (input.isNotEmpty()) checkoutStack(project, input)
+    }
+
+    fun installExtension(project: Project): Job =
+        StackService.getInstance(project).execute(
+            Operation(
+                title = message("op.install"),
+                calls = listOf(GhCall(GhCommands.installExtension())),
+                workDir = Path.of(System.getProperty("user.home")),
+                successMessage = message("op.install.done"),
+            )
+        )
+
+    /** *Log In*: `gh auth login --web` en [host], con el codigo en un dialogo (ver [LoginDialog]). true si hay sesion. */
+    fun logIn(project: Project, host: String): Boolean = LoginDialog.logIn(project, host)
+
+    // ------------------------------------------------------------------ capas sin rama
+
+    /** Recrea las ramas de [missing], de la pila en pantalla (ver StackPlans.restoreLayers). */
+    fun restoreBranches(project: Project, missing: List<MissingBranch>) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        service.restoreBranches(missing, service.repositoryFor(state.repo))
+    }
+
+    /**
+     * Sacar de la pila una capa sin rama. gh-stack v0.1.1 solo saca capas con `gh stack modify`,
+     * que es una pantalla interactiva de la terminal y no abre la pila mientras a una capa le falte
+     * la rama (*failed to check linearity*) ni si alguna diverge de la de debajo. Se recupera la
+     * rama, se copia el comando y la banda de la ventana guia el resto hasta que la capa sale.
+     */
+    fun removeFromStack(project: Project, missing: MissingBranch) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        // La de arriba sin PR sale sin modify, y sin recuperar nada.
+        val layer = state.snapshot.layers.firstOrNull { it.branch == missing.branch }
+        if (layer != null && LayerPlans.dropBlock(state.snapshot, layer) == null) return deleteLayer(project, layer)
+        val above = state.snapshot.layers.dropWhile { it.branch != missing.branch }.drop(1).filter { !it.isMerged }
+        val confirmed = MessageDialogBuilder.okCancel(
+            message("remove.title", missing.branch),
+            message(
+                "remove.text", missing.branch, Helps.restoreSource(missing), missing.parent,
+                above.joinToString(", ") { it.branch }.ifEmpty { message("remove.none.above") },
+            ),
+        )
+            .yesText(message("remove.confirm"))
+            .noText(CommonBundle.getCancelButtonText())
+            .icon(Messages.getInformationIcon())
+            .ask(project)
+        if (!confirmed) return
+        copyModify()
+        service.restoreBranches(listOf(missing), repository, forRemoval = true)
+    }
+
+    /**
+     * Borrar la capa de arriba, sin PR (ver [LayerPlans.drop]). Que ramas hay en el remoto se mira
+     * con lo que git sabe en local: borrarla alli es lo ultimo, asi que si falla, la pila ya esta bien.
+     */
+    fun deleteLayer(project: Project, layer: StackLayer) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        if (LayerPlans.dropBlock(snapshot, layer) != null) return
+        val branches = repository.branches
+        val exists = branches.findLocalBranch(layer.branch) != null
+        val remote = service.stackRemote(repository, snapshot)?.takeIf { name ->
+            branches.remoteBranches.any { it.remote.name == name && it.nameForRemoteOperations == layer.branch }
+        }
+        val dialog = DeleteLayerDialog(project, snapshot, layer, repository.currentBranchName, exists, remote)
+        // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+        dialog.show()
+        if (!dialog.isOK) return
+        val plan = dialog.plan
+        service.execute(
+            Operation(
+                title = message("op.delete.layer", layer.branch),
+                calls = plan.calls,
+                repository = repository,
+                successMessage = message("op.delete.layer.done", layer.branch, snapshot.parentOf(layer)),
+                cleanup = plan.cleanup,
+            )
+        )
+    }
+
+    /**
+     * Donde esta la rama de [layer] fuera de aqui: en el remoto de la pila (segun lo que git sabe en
+     * local) y en que repositorio de GitHub. De eso depende si renombrarla toca GitHub.
+     */
+    class RenameTarget(val remoteName: String?, val onRemote: Boolean, val github: GitHubRepo?) {
+        val remote: RemoteRename? get() = if (onRemote && remoteName != null && github != null) RemoteRename(remoteName, github) else null
+    }
+
+    fun renameTarget(service: StackService, repository: GitRepository, snapshot: StackSnapshot, layer: StackLayer): RenameTarget {
+        val remoteName = service.stackRemote(repository, snapshot)
+        val onRemote = remoteName != null &&
+            repository.branches.remoteBranches.any { it.remote.name == remoteName && it.nameForRemoteOperations == layer.branch }
+        val github = repository.remotes.firstOrNull { it.name == remoteName }?.urls?.firstNotNullOfOrNull(GitHubRepo::fromRemoteUrl)
+        return RenameTarget(remoteName, onRemote, github)
+    }
+
+    fun renameBlock(service: StackService, state: StackState.Loaded, layer: StackLayer): RenameBlock? {
+        val repository = service.repositoryFor(state.repo) ?: return RenameBlock.NO_GITHUB
+        val target = renameTarget(service, repository, state.snapshot, layer)
+        return LayerPlans.renameBlock(state.snapshot, layer, target.onRemote, target.github)
+    }
+
+    /** Renombrar la rama de una capa sin PR (ver [LayerPlans.rename]). */
+    fun renameBranch(project: Project, layer: StackLayer) {
+        val service = StackService.getInstance(project)
+        val state = service.state.value as? StackState.Loaded ?: return
+        val repository = service.repositoryFor(state.repo) ?: return
+        val snapshot = state.snapshot
+        val target = renameTarget(service, repository, snapshot, layer)
+        if (LayerPlans.renameBlock(snapshot, layer, target.onRemote, target.github) != null) return
+        val branches = repository.branches
+        val taken = branches.localBranches.mapTo(HashSet()) { it.name } +
+            branches.remoteBranches.filter { it.remote.name == target.remoteName }.map { it.nameForRemoteOperations }
+        val dialog = RenameBranchDialog(project, snapshot, layer, repository.currentBranchName, target.remote, taken)
+        // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+        dialog.show()
+        if (!dialog.isOK) return
+        val plan = dialog.plan
+        service.execute(
+            Operation(
+                title = message("op.rename", layer.branch),
+                calls = plan.calls,
+                repository = repository,
+                successMessage = message("op.rename.done", layer.branch, dialog.newName),
+                cleanup = plan.cleanup,
+            )
+        )
+    }
+
+    /** `gh stack modify`, al portapapeles: solo se puede usar en la terminal. */
+    fun copyModify() = CopyPasteManager.getInstance().setContents(StringSelection(Help.gh(GhCommands.modify())))
+
+    // ------------------------------------------------------------------ un PR
+
+    fun setDraft(project: Project, target: PrTarget, draft: Boolean) {
+        val args = if (draft) GhCommands.markDraft(target.url) else GhCommands.markReady(target.url)
+        executeOnPr(
+            project, target,
+            title = message(if (draft) "op.draft" else "op.ready", target.number),
+            calls = listOf(GhCall(args)),
+            success = message(if (draft) "op.draft.done" else "op.ready.done", target.number),
+        )
+    }
+
+    /** El titulo del PR, con `gh pr edit --title`. Desde Pull Requests no se sabe el actual: el campo sale vacio. */
+    fun editTitle(project: Project, target: PrTarget) {
+        val dialog = EditTitleDialog(project, target.number, target.url, target.details?.title.orEmpty())
+        dialog.show()
+        if (!dialog.isOK) return
+        executeOnPr(
+            project, target,
+            title = message("op.title", target.number),
+            calls = listOf(GhCall(GhCommands.editTitle(target.url, dialog.newTitle))),
+            success = message("op.title.done", target.number, dialog.newTitle),
+        )
+    }
+
+    fun editLabels(project: Project, target: PrTarget) {
+        val service = StackService.getInstance(project)
+        val workDir = workDirFor(service, target)
+        service.launch {
+            val (all, applied) = try {
+                withBackgroundProgress(project, message("labels.loading", target.number)) {
+                    coroutineScope {
+                        val all = async { GhCli.run(workDir, GhCommands.repoLabels(target.github)) }
+                        val applied = async { GhCli.run(workDir, GhCommands.prLabels(target.url)) }
+                        all.await() to applied.await()
+                    }
+                }
+            } catch (_: GhNotFoundException) {
+                return@launch Notifier.error(project, message("labels.error"), message("state.gh.missing"))
+            }
+            listOf(all, applied).firstOrNull { !it.ok }?.let { failed ->
+                return@launch Notifier.error(project, message("labels.error"), Notifier.html(failed.errorText))
+            }
+            val current = StackJson.parsePrLabelNames(applied.stdout)
+            val selected = withContext(Dispatchers.EDT) {
+                val dialog = LabelsDialog(project, target.url, target.number, StackJson.parseRepoLabels(all.stdout), current)
+                if (dialog.showAndGet()) dialog.selectedLabels() else null
+            } ?: return@launch
+            val toAdd = selected - current
+            val toRemove = current - selected
+            if (toAdd.isEmpty() && toRemove.isEmpty()) return@launch
+            executeOnPr(
+                project, target,
+                title = message("op.labels", target.number),
+                calls = listOf(GhCall(GhCommands.editLabels(target.url, toAdd, toRemove))),
+                success = message("op.labels.done", target.number),
+            )
+        }
+    }
+
+    /**
+     * Pone o quita la label de capa final (por defecto `stack-final`). Al ponerla en una capa
+     * de la pila se quita de las demas capas que la tuvieran: una pila tiene un solo final.
+     */
+    fun toggleFinal(project: Project, target: PrTarget) {
+        val label = UpstackSettings.getInstance().finalLabel
+        val service = StackService.getInstance(project)
+        service.launch {
+            // Desde Stacks ya se sabe; desde Pull Requests hay que preguntarlo.
+            val hasLabel = target.details?.hasLabel(label) ?: run {
+                val result = try {
+                    withBackgroundProgress(project, message("labels.loading", target.number)) {
+                        GhCli.run(workDirFor(service, target), GhCommands.prLabels(target.url))
+                    }
+                } catch (_: GhNotFoundException) {
+                    return@launch Notifier.error(project, message("labels.error"), message("state.gh.missing"))
+                }
+                if (!result.ok) return@launch Notifier.error(project, message("labels.error"), Notifier.html(result.errorText))
+                StackJson.parsePrLabelNames(result.stdout).any { it.equals(label, ignoreCase = true) }
+            }
+
+            if (hasLabel) {
+                executeOnPr(
+                    project, target,
+                    title = message("op.final.remove", label, target.number),
+                    calls = listOf(GhCall(GhCommands.editLabels(target.url, emptyList(), listOf(label)))),
+                    success = message("op.final.removed", label, target.number),
+                )
+                return@launch
+            }
+
+            val others = otherFinalLayers(target, label)
+            val calls = listOf(GhCall(GhCommands.editLabels(target.url, listOf(label), emptyList()))) +
+                others.map { GhCall(GhCommands.editLabels(urlOf(it, target.github), emptyList(), listOf(label))) }
+            val success = if (others.isEmpty()) message("op.final.added", label, target.number)
+            else message("op.final.moved", label, target.number, others.joinToString(", ") { "#${it.pr?.number}" })
+            val title = message("op.final.add", label, target.number)
+
+            executeOnPr(project, target, title, calls, success, onFailure = { result ->
+                // La label no existe en el repositorio: se ofrece crearla y repetir.
+                if (!result.errorText.contains("not found", ignoreCase = true)) return@executeOnPr false
+                Notifier.warning(
+                    project, message("final.missing.title", label), message("final.missing", label, target.github.cliName),
+                    Notifier.action(message("final.create")) {
+                        executeOnPr(project, target, title, listOf(GhCall(GhCommands.createLabel(target.github, label))) + calls, success)
+                    },
+                )
+                true
+            })
+        }
+    }
+
+    /** Las otras capas de la pila con la label de capa final: al ponerla en [target], se les quita. */
+    fun otherFinalLayers(target: PrTarget, label: String): List<StackLayer> = target.selection?.state?.let { stack ->
+        stack.snapshot.layers.filter { layer ->
+            val pr = layer.pr
+            pr != null && pr.number != target.number && stack.detailsOf(layer)?.hasLabel(label) == true
+        }
+    }.orEmpty()
+
+    fun checkoutFromPullRequest(project: Project, target: PrTarget) {
+        val repository = StackService.getInstance(project).repositoryFor(target.github)
+        if (repository == null) {
+            Notifier.error(project, message("op.checkout.stack", "#${target.number}"), message("checkout.no.repository", target.github.cliName))
+            return
+        }
+        checkoutStack(project, target.url, repository, label = "#${target.number}")
+    }
+
+    /**
+     * El PR de la capa apunta a otra rama que la de debajo ([base]): se le pone esa. Solo
+     * cambia este PR; el aviso dice cual tenia, por si era la buena.
+     */
+    fun changeBase(project: Project, target: PrTarget, base: String) {
+        val previous = target.details?.baseRef.orEmpty()
+        executeOnPr(
+            project, target,
+            title = message("op.base", target.number, base),
+            calls = listOf(GhCall(GhCommands.editBase(target.url, base))),
+            success = message("op.base.done", target.number, base, previous),
+        )
+    }
+
+    /**
+     * Lo que anade la capa sobre la de debajo, como lo ensena su PR, en el diff del IDE. Si la
+     * de debajo avanzo despues (la capa necesita rebase), desde su ultimo commit comun: si no,
+     * lo nuevo de abajo saldria como si esta capa lo quitara.
+     */
+    fun showLayerChanges(project: Project, selection: LayerSelection) {
+        val service = StackService.getInstance(project)
+        val repository = service.repositoryFor(selection.state.repo) ?: return
+        val layer = selection.layer
+        val branch = gitRef(repository, layer.branch)
+        val parent = gitRef(repository, selection.state.snapshot.parentOf(layer))
+        service.launch {
+            val base = if (!layer.needsRebase) parent else try {
+                GhCli.run(repository.root.toNioPath(), GitCommands.mergeBase(parent, branch), tool = Tool.GIT)
+                    .takeIf { it.ok }?.stdout?.trim()?.takeIf { it.isNotEmpty() }?.take(SHORT_HASH)
+            } catch (_: GhNotFoundException) {
+                null
+            } ?: parent
+            withContext(Dispatchers.EDT) { GitBrancher.getInstance(project).showDiff(base, branch, listOf(repository)) }
+        }
+    }
+
+    private fun executeOnPr(
+        project: Project,
+        target: PrTarget,
+        title: String,
+        calls: List<GhCall>,
+        success: String,
+        onFailure: ((GhResult) -> Boolean)? = null,
+    ) {
+        val service = StackService.getInstance(project)
+        val component = target.pullRequestsComponent
+        service.execute(
+            Operation(
+                title = title,
+                calls = calls,
+                repository = target.selection?.state?.repo?.let(service::repositoryFor) ?: service.repositoryFor(target.github),
+                successMessage = success,
+                onSuccess = component?.let { { withContext(Dispatchers.EDT) { PullRequestsViews.reload(it) } } },
+                onFailure = onFailure,
+            )
+        )
+    }
+
+    // `gh pr` y `gh label` con URL o --repo funcionan desde cualquier sitio; se prefiere el
+    // repositorio del PR para que gh vea la misma configuracion que en la terminal.
+    private fun workDirFor(service: StackService, target: PrTarget): Path =
+        (target.selection?.state?.repo?.root ?: service.repositoryFor(target.github)?.root ?: service.repository()?.root)
+            ?.toNioPath() ?: Path.of(System.getProperty("user.home"))
+
+    fun urlOf(layer: StackLayer, github: GitHubRepo): String {
+        val pr = requireNotNull(layer.pr)
+        return pr.url.ifEmpty { "https://${github.host}/${github.owner}/${github.name}/pull/${pr.number}" }
+    }
+}

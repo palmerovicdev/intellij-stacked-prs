@@ -52,7 +52,7 @@ dependencies {
         bundledModule("intellij.platform.vcs.dvcs.impl")
 
         // El plugin GitHub NO se compila: solo se referencian sus grupos de acciones por
-        // id en stacklane-github.xml. Ni una clase suya en el classpath -> imposible usar
+        // id en upstack-github.xml. Ni una clase suya en el classpath -> imposible usar
         // por descuido su API interna.
 
         if (localIde != null) {
@@ -85,6 +85,11 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.12.2 &mdash; a new name: Upstack</h3>
+            <ul>
+              <li>The plugin is now <b>Upstack</b> (<code>com.upstack</code>): its tool window, actions and
+                settings page (Settings | Version Control | Upstack). Nothing changes in how it works.</li>
+            </ul>
             <h3>0.12.1 &mdash; ready for the Marketplace</h3>
             <ul>
               <li>A complete description and release notes for this page. Nothing changes in how the plugin
@@ -92,7 +97,7 @@ intellijPlatform {
             </ul>
             <h3>0.12.0 &mdash; check the environment and log in</h3>
             <ul>
-              <li><b>Check</b> in Settings | Version Control | Stacklane: which <code>gh</code> is used and
+              <li><b>Check</b> in Settings | Version Control | Upstack: which <code>gh</code> is used and
                 where, the account on each host, the <code>gh-stack</code> version, the repository's remotes and
                 whether GitHub supports stacked pull requests there. It only reads, and every command goes to
                 the Log.</li>
@@ -164,7 +169,7 @@ intellijPlatform {
                 <i>Behind</i> when GitHub cannot merge it as is.</li>
               <li>Narrower tooltips, with each command in its own code block and links in blue.</li>
               <li>Layers without a pull request say so once; the graph line is visible in dark themes;
-                settings moved to Settings | Version Control | Stacklane.</li>
+                settings moved to Settings | Version Control | Upstack.</li>
             </ul>
             <h3>0.6.0 &mdash; what each option does, and what comes next</h3>
             <ul>
@@ -181,7 +186,7 @@ intellijPlatform {
                 layer's commits to the layers above without fetching or rebasing onto the trunk, so the
                 only conflicts are the ones the change causes.</li>
               <li>After a commit in the IDE on a layer that is not the top, a notification offers it, or it
-                runs every time (Settings | Tools | Stacklane).</li>
+                runs every time (Settings | Tools | Upstack).</li>
               <li>The <i>needs rebase</i> banner tells an outdated layer (rebase upstack) from a bottom
                 layer behind the trunk (rebase the whole stack), and explains the difference once.</li>
               <li>Rebase in the toolbar is a menu: upstack, whole stack, downstack and layers only. Each

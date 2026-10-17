@@ -12,20 +12,20 @@ ROOT=$(cd "$TOOLS/../../.." && pwd)
 W=$ROOT/build/marketplace
 IDE="$HOME/Applications/IntelliJ IDEA.app"
 VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$IDE/Contents/Resources/product-info.json")
-SANDBOX=$ROOT/.intellijPlatform/sandbox/stacklane/IU-$VERSION
+SANDBOX=$ROOT/.intellijPlatform/sandbox/upstack/IU-$VERSION
 STARTUP=$SANDBOX/config/extensions/com.intellij/startup
 
-pkill -f "intellij-stacked-prs/.intellijPlatform/sandbox/stacklane" 2>/dev/null || true
-for _ in $(seq 1 40); do pgrep -f "intellij-stacked-prs/.intellijPlatform/sandbox/stacklane" >/dev/null || break; sleep 1; done
+pkill -f "intellij-stacked-prs/.intellijPlatform/sandbox/upstack" 2>/dev/null || true
+for _ in $(seq 1 40); do pgrep -f "intellij-stacked-prs/.intellijPlatform/sandbox/upstack" >/dev/null || break; sleep 1; done
 
 # The capture changes sandbox settings (gh path, editor, navigation bar, diff, trusted paths):
 # they are saved before the first round and put back by --clean.
 OPTIONS=$SANDBOX/config/options
 BACKUP=$W/options-backup
-TOUCHED="stacklane.xml editor.xml ui.lnf.xml diff.xml trusted-paths.xml"
+TOUCHED="upstack.xml editor.xml ui.lnf.xml diff.xml trusted-paths.xml"
 
 if [[ "${1:-}" == "--clean" ]]; then
-  rm -f "$STARTUP/stacklane-capture.groovy"
+  rm -f "$STARTUP/upstack-capture.groovy"
   rmdir "$STARTUP" 2>/dev/null || true
   if [[ -d "$BACKUP" ]]; then
     for f in $TOUCHED; do
@@ -39,12 +39,13 @@ fi
 
 "$TOOLS/demo-repo.sh" >/dev/null
 mkdir -p "$W/shots/raw" "$W/state"
-rm -f "$W/shots/raw/"*.png "$W/shots/capture.log" "$W/state/calls.log"
-if [[ -n "${1:-}" ]]; then echo "$1" > "$W/state/only"; else rm -f "$W/state/only"; fi
+# A round of only some steps keeps the other captures.
+if [[ -n "${1:-}" ]]; then echo "$1" > "$W/state/only"; else rm -f "$W/state/only" "$W/shots/raw/"*.png; fi
+rm -f "$W/shots/capture.log" "$W/state/calls.log"
 
 # A new sandbox starts from the previous one: theme, dismissed promotions and trusted paths.
 if [[ ! -d "$SANDBOX/config" ]]; then
-  previous=$(ls -d "$ROOT"/.intellijPlatform/sandbox/stacklane/IU-*/config 2>/dev/null | tail -1 || true)
+  previous=$(ls -d "$ROOT"/.intellijPlatform/sandbox/upstack/IU-*/config 2>/dev/null | tail -1 || true)
   mkdir -p "$SANDBOX"
   if [[ -n "$previous" ]]; then cp -R "$previous" "$SANDBOX/config"; fi
 fi
@@ -66,7 +67,7 @@ if project not in text:
                 f'      <map>\n{entry}      </map>\n    </option>\n  </component>\n</application>\n')
     open(path, "w").write(text)
 PY
-sed "s#@@ROOT@@#$ROOT#g" "$TOOLS/capture.groovy" > "$STARTUP/stacklane-capture.groovy"
+sed "s#@@ROOT@@#$ROOT#g" "$TOOLS/capture.groovy" > "$STARTUP/upstack-capture.groovy"
 
 cat <<EOF
 round ready. Run (in the background):

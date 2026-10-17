@@ -1,14 +1,14 @@
-**Title:** I built Stacklane, a JetBrains plugin for GitHub stacked pull requests: the whole stack in a tool window, and every button runs the `gh stack` command you'd type (free, no account)
+**Title:** I built Upstack, a JetBrains plugin for GitHub stacked pull requests: the whole stack in a tool window, and every button runs the `gh stack` command you'd type (free, no account)
 
 ---
 
 Hey r/Jetbrains 👋
 
-I've been building a plugin called **Stacklane**, and it's finally at a point where I'd love other people to try it and tell me what's wrong with it.
+I've been building a plugin called **Upstack**, and it's finally at a point where I'd love other people to try it and tell me what's wrong with it.
 
 It's for **stacked pull requests**: instead of one huge PR, you split the work into small layers, each one a branch with its own PR on top of the one below. GitHub now has this built in with the [`gh stack`](https://github.com/github/gh-stack) extension, but juggling five branches from the terminal gets old fast: which layer am I on, which ones need a rebase, which PR is approved, why did the rebase stop…
 
-So Stacklane is a tool window that shows the whole stack and lets you work on it from the IDE. It's a visual front end for `gh stack` and `gh pr`: **every button runs the same command you would type**, and the tooltip tells you which one. You can switch between the IDE and the terminal at any point. No account, no server, no tokens: it uses your own `gh` and its login.
+So Upstack is a tool window that shows the whole stack and lets you work on it from the IDE. It's a visual front end for `gh stack` and `gh pr`: **every button runs the same command you would type**, and the tooltip tells you which one. You can switch between the IDE and the terminal at any point. No account, no server, no tokens: it uses your own `gh` and its login.
 
 Here's everything it does. It's a long list, sorry 😅
 
@@ -76,7 +76,7 @@ This is the part I use the most.
 - **Merge Stack…** / **Merge Up to Here…** use GitHub's atomic stack merge (`gh stack merge`): the chosen PR and every one below it get merged together, **or none**.
 - The dialog shows which layers go in, with their review and CI, and only the merge methods your repo allows (it remembers the last one). With a **merge queue**, they join the queue.
 - It warns about what GitHub will check and `gh stack` doesn't look at: unapproved PRs, failing or running CI, conflicts. Drafts and layers without a PR can't be merged, and the dialog says why.
-- A safety check I'm quite happy with: `gh stack merge 12` first tries `12` as a *stack* number. Stacklane checks there's no stack with that number before running it, so you never merge the wrong thing.
+- A safety check I'm quite happy with: `gh stack merge 12` first tries `12` as a *stack* number. Upstack checks there's no stack with that number before running it, so you never merge the wrong thing.
 - Afterwards, **Sync and Prune** (`gh stack sync --prune`) deletes the merged branches and rebases the rest.
 - **Close Stack…**: unstack it, close its open PRs (with an optional comment) and delete its remote and local branches, each one a checkbox, in an order that never leaves a stack without branches. Local branches that differ from the remote are flagged and kept by default.
 
@@ -92,8 +92,8 @@ This is the part I use the most.
 
 ## Setup
 
-- **Check** (*Settings → Version Control → Stacklane*) tells you which `gh` it uses and where, your account on each host, the `gh-stack` version, the repo's remotes and whether GitHub supports stacked PRs there. Whatever's missing has its fix next to it: **Install**, **Upgrade gh-stack**, **Log In…**.
-- **Log In without a terminal**: it runs `gh auth login --web`, shows you the one-time code, copies it and opens GitHub. The token stays with `gh`; Stacklane never sees it.
+- **Check** (*Settings → Version Control → Upstack*) tells you which `gh` it uses and where, your account on each host, the `gh-stack` version, the repo's remotes and whether GitHub supports stacked PRs there. Whatever's missing has its fix next to it: **Install**, **Upgrade gh-stack**, **Log In…**.
+- **Log In without a terminal**: it runs `gh auth login --web`, shows you the one-time code, copies it and opens GitHub. The token stays with `gh`; Upstack never sees it.
 - If your `gh-stack` isn't the version the plugin was built against (v0.1.1), it tells you once. It doesn't block anything.
 
 [📷 10-set-up-in-a-minute.png]
@@ -121,7 +121,7 @@ If you use IntelliJ's own *Pull Requests* tool window, its list and details get 
 - Tested with ~200 unit and flow tests that run the real git against a fake `gh`.
 - **Free.**
 
-**Install:** *Settings → Plugins → Marketplace*, search for **Stacklane**
+**Install:** *Settings → Plugins → Marketplace*, search for **Upstack**
 **Source:** https://github.com/palmerovicdev/intellij-stacked-prs
 
 It's a solo project, so any feedback helps a lot: what's confusing, what's missing, what annoys you, or what breaks, especially if your stacking workflow is different from mine. I'll be around in the comments. Thanks for reading all the way down here 🙏

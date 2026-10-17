@@ -1,0 +1,102 @@
+package com.upstack.settings
+
+import com.intellij.openapi.components.BaseState
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.SimplePersistentStateComponent
+import com.intellij.openapi.components.State
+import com.intellij.openapi.components.Storage
+import com.intellij.openapi.components.StoragePathMacros
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.upstack.gh.MergeMethod
+
+/** Que hacer cuando un commit del IDE deja atras las capas de encima. */
+enum class RestackMode { ASK, ALWAYS, NEVER }
+
+/**
+ * Preferencias globales: donde esta `gh`, como se llama la label de la capa final, que hacer
+ * tras un commit en una capa que no es la cima y de que version de gh-stack ya se aviso.
+ */
+@Service(Service.Level.APP)
+@State(name = "Upstack", storages = [Storage("upstack.xml")])
+class UpstackSettings : SimplePersistentStateComponent<UpstackSettings.Options>(Options()) {
+
+    class Options : BaseState() {
+        var ghPath by string("")
+        var finalLabel by string(DEFAULT_FINAL_LABEL)
+        // Por nombre: `enum()` de BaseState es inline y viene compilado para JVM 25, y el plugin sale en 21.
+        var restackAfterCommit by string(RestackMode.ASK.name)
+        var warnedStackVersion by string()
+    }
+
+    var restackAfterCommit: RestackMode
+        get() = RestackMode.entries.firstOrNull { it.name == state.restackAfterCommit } ?: RestackMode.ASK
+        set(value) {
+            state.restackAfterCommit = value.name
+        }
+
+    /** La version de gh-stack de la que ya se aviso que no es la de referencia: una vez por version. */
+    var warnedStackVersion: String?
+        get() = state.warnedStackVersion
+        set(value) {
+            state.warnedStackVersion = value
+        }
+
+    /** Ruta explicita a `gh`. Vacia: se busca en el PATH del shell. */
+    var ghPath: String
+        get() = state.ghPath.orEmpty().trim()
+        set(value) {
+            state.ghPath = value.trim()
+        }
+
+    var finalLabel: String
+        get() = state.finalLabel?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_FINAL_LABEL
+        set(value) {
+            state.finalLabel = value.trim().ifEmpty { DEFAULT_FINAL_LABEL }
+        }
+
+    companion object {
+        const val DEFAULT_FINAL_LABEL = "stack-final"
+
+        fun getInstance(): UpstackSettings = service()
+    }
+}
+
+/**
+ * Preferencias de este proyecto, en el workspace (no se versionan): el repositorio elegido
+ * cuando hay varios, el remoto al que publicar cuando gh-stack no sabe elegir y el ultimo
+ * metodo de merge, que depende de lo que admita el repositorio.
+ */
+@Service(Service.Level.PROJECT)
+@State(name = "UpstackProject", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
+class UpstackProjectSettings : SimplePersistentStateComponent<UpstackProjectSettings.Options>(Options()) {
+
+    class Options : BaseState() {
+        var repositoryRoot by string()
+        var remote by string()
+        var mergeMethod by string()
+    }
+
+    var repositoryRoot: String?
+        get() = state.repositoryRoot
+        set(value) {
+            state.repositoryRoot = value
+        }
+
+    var remote: String?
+        get() = state.remote
+        set(value) {
+            state.remote = value
+        }
+
+    /** El ultimo con el que se fusiono desde el plugin. */
+    var mergeMethod: MergeMethod?
+        get() = MergeMethod.parse(state.mergeMethod)
+        set(value) {
+            state.mergeMethod = value?.name
+        }
+
+    companion object {
+        fun getInstance(project: Project): UpstackProjectSettings = project.service()
+    }
+}

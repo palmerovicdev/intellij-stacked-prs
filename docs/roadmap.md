@@ -1,6 +1,6 @@
 # Roadmap — próximas adiciones
 
-Lo que se propone añadir a Stacklane después de la `0.1.0`, con su estado. No es un
+Lo que se propone añadir a Upstack después de la `0.1.0`, con su estado. No es un
 compromiso: es la lista de la que se elige cada iteración, y el registro de lo que ya se
 ofreció para no volver a ofrecerlo como si fuera nuevo.
 
@@ -763,7 +763,7 @@ cuando hay ramas fusionadas o cerradas que borrar. Queda solo la casilla de
 ### P37 · El remoto, visible y editable 🟡
 
 Cuando gh-stack no sabe a qué remoto publicar, se pregunta y se guarda en el workspace
-(`StacklaneProjectSettings.remote`), pero no hay dónde verlo ni cambiarlo: si se elige
+(`UpstackProjectSettings.remote`), pero no hay dónde verlo ni cambiarlo: si se elige
 mal, la única salida es borrar `.idea/workspace.xml`.
 
 Primera entrega: una página de proyecto en Settings con el remoto (o *Ask*) y el
@@ -781,7 +781,7 @@ Los ajustes de hoy son del IDE, y los de P34–P36 serían del workspace. Un equ
 compartir la plantilla de ramas (P20), las labels de publicación y el nombre de la label
 final.
 
-Primera entrega: `.idea/stacklane.xml` versionable con esas convenciones. Tiene
+Primera entrega: `.idea/upstack.xml` versionable con esas convenciones. Tiene
 prioridad sobre los ajustes globales, y la página de Settings indica de dónde sale cada
 valor.
 
@@ -791,18 +791,18 @@ valor.
 
 ### P40 · CI, firma y Marketplace 🟡
 
-Tasklane tiene `build.yml`, `nightly.yml` y `release.yml`. Stacklane no tiene ninguno.
+Tasklane tiene `build.yml`, `nightly.yml` y `release.yml`. Upstack no tiene ninguno.
 
 Primera entrega: `build.yml` con tests y `verifyPlugin` estricto contra la 2026.2 y
 `recommended()` (en CI sí se descargan IDEs), y `release.yml` con firma y publicación como
 en Tasklane. Ficha del Marketplace con capturas en `docs/screenshots/`, revisión del
-nombre (disponibilidad de «Stacklane» y que no use marcas de GitHub) y del icono. Con P1
+nombre (disponibilidad de «Upstack» y que no use marcas de GitHub) y del icono. Con P1
 hecha, esto es la `1.0.0`.
 
 ### P41 · Traducción al español 🟡
 
-Todos los textos pasan por `StacklaneBundle`, así que basta con
-`StacklaneBundle_es.properties`. Hay que revisar los que llevan `{0,choice,…}`.
+Todos los textos pasan por `UpstackBundle`, así que basta con
+`UpstackBundle_es.properties`. Hay que revisar los que llevan `{0,choice,…}`.
 
 ### P42 · Windows y Linux 🟡
 
@@ -935,7 +935,7 @@ Encontrados al probar y al releer el código. Cada uno cabe en una corrección.
 | ✅ C5  | `repo!!` en el aviso de *needs rebase*; no puede fallar hoy, pero sobra: quitado al rehacer la banda `0.5.0`                                                                                                                                                                          | `StackPanel.renderBanners`           |
 | ✅ C6  | La página de ajustes estaba en *Tools*; pasa a *Version Control*. En ese grupo solo hay páginas de proyecto, así que es `projectConfigurable`; los ajustes siguen siendo globales `0.7.0`                                                                                             | `plugin.xml`                         |
 | ✅ C7  | La caché de build de Gradle devolvía clases de test compiladas contra firmas viejas (fallos falsos, incluso tras `clean`): desactivada `0.2.0`                                                                                                                                        | `gradle.properties`                  |
-| ✅ C8  | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0`. Superada por C11                                                                                                             | `StacklaneBundle`                    |
+| ✅ C8  | En el menú de una capa, *Add Layer on Top…* y los dos *Publish* parecían actuar sobre esa capa y actúan sobre toda la pila: ahora dicen *Stack* `0.4.0`. Superada por C11                                                                                                             | `UpstackBundle`                    |
 | ✅ C9  | *Mark Ready*, *Convert to Draft*, *Labels…* y *Mark as Final Layer* no tenían icono `0.4.0`                                                                                                                                                                                           | `Actions`                            |
 | ✅ C10 | El clic derecho enseñaba el menú de la fila seleccionada, no el de la fila bajo el ratón; fuera de las filas, igual. Ahora selecciona esa fila, o quita la selección `0.4.0`                                                                                                          | `StackPanel`                         |
 | ✅ C12 | Los tooltips medían lo que el comando más largo (casi 900 px con una URL de PR). Ahora, unos 520 px; cada comando en su bloque con fondo, como el código en Markdown, y las URLs en azul. Swing lee los `px` de CSS como puntos (×1,3): el ancho se escribe dividido `0.7.0`          | `Help`, `TooltipStyle`               |

@@ -1,4 +1,4 @@
-// Fixed screenshot scenario for the Stacklane Marketplace images. capture.sh copies it to the
+// Fixed screenshot scenario for the Upstack Marketplace images. capture.sh copies it to the
 // sandbox IDE's startup scripts, which run it once when the demo project opens. It paints IDE
 // windows to PNG under build/marketplace/shots/raw and reads nothing from outside.
 import com.intellij.ide.plugins.PluginManagerCore
@@ -39,7 +39,7 @@ final String ONLY = new File("$W/state/only").exists() ? new File("$W/state/only
 
 def project = IDE.project
 def app = ApplicationManager.application
-def CL = PluginManagerCore.plugins.find { it.name == "Stacklane" }.pluginClassLoader
+def CL = PluginManagerCore.plugins.find { it.name == "Upstack" }.pluginClassLoader
 
 def say = { String m -> LOG << "${java.time.LocalTime.now()} $m\n" }
 def edt = { Closure c -> def r = null; app.invokeAndWait({ r = c() } as Runnable, ModalityState.any()); r }
@@ -144,7 +144,7 @@ def step = { String name, Closure body ->
 
 // ------------------------------------------------------------------ scenario
 
-Thread.start("stacklane-shots") {
+Thread.start("upstack-shots") {
     try {
         say("waiting for smart mode")
         DumbService.getInstance(project).waitForSmartMode()
@@ -152,11 +152,11 @@ Thread.start("stacklane-shots") {
 
         def frame = edt { WindowManager.getInstance().getFrame(project) }
         def twm = ToolWindowManager.getInstance(project)
-        def tw = edt { twm.getToolWindow("Stacklane") }
+        def tw = edt { twm.getToolWindow("Upstack") }
         def fem = FileEditorManager.getInstance(project)
-        def service = project.getService(cls("com.stacklane.stack.StackService"))
-        def settings = app.getService(cls("com.stacklane.settings.StacklaneSettings"))
-        def flows = cls("com.stacklane.actions.StackFlows").getField("INSTANCE").get(null)
+        def service = project.getService(cls("com.upstack.stack.StackService"))
+        def settings = app.getService(cls("com.upstack.settings.UpstackSettings"))
+        def flows = cls("com.upstack.actions.StackFlows").getField("INSTANCE").get(null)
 
         def stateName = { edt { service.state.value.getClass().simpleName } }
         def loaded = { ->
@@ -190,7 +190,7 @@ Thread.start("stacklane-shots") {
             proc.waitFor()
             say("git ${args.join(' ')} -> ${proc.exitValue()} ${out.trim().take(200)}")
         }
-        def panel = { edt { all(tw.component).find { it.getClass().name == "com.stacklane.ui.StackPanel" } } }
+        def panel = { edt { all(tw.component).find { it.getClass().name == "com.upstack.ui.StackPanel" } } }
         def list = { edt { field(panel(), "list") } }
         def rowIndex = { String branch ->
             edt {
@@ -307,7 +307,7 @@ Thread.start("stacklane-shots") {
 
         def mainLayout = {
             edt {
-                twm.toolWindowIds.each { id -> if (id != "Stacklane") twm.getToolWindow(id)?.hide() }
+                twm.toolWindowIds.each { id -> if (id != "Upstack") twm.getToolWindow(id)?.hide() }
                 frame.setSize(1280, 700)
                 def screen = frame.graphicsConfiguration.bounds
                 frame.setLocation((int) (screen.x + screen.width - 1280), (int) screen.y + 60)
@@ -330,7 +330,7 @@ Thread.start("stacklane-shots") {
                 def screen = frame.graphicsConfiguration.bounds
                 frame.setLocation((int) (screen.x + screen.width - 1280), (int) screen.y + 60)
                 say("screen $screen, frame ${frame.bounds}")
-                twm.toolWindowIds.each { id -> if (id != "Stacklane") twm.getToolWindow(id)?.hide() }
+                twm.toolWindowIds.each { id -> if (id != "Upstack") twm.getToolWindow(id)?.hide() }
                 fem.openFiles.each { fem.closeFile(it) }
                 try { com.intellij.codeInsight.codeVision.settings.CodeVisionSettings.getInstance().codeVisionEnabled = false } catch (Throwable t) { say("codevision: $t") }
                 try { com.intellij.codeInsight.hints.InlayHintsSettings.instance().setEnabledGlobally(false) } catch (Throwable t) { say("inlay: $t") }
@@ -400,7 +400,7 @@ Thread.start("stacklane-shots") {
         }
 
         step("toolbar tooltip") {
-            def button = toolbarButton("Stacklane.PublishDraft")
+            def button = toolbarButton("Upstack.PublishDraft")
             say("publish draft button: $button")
             if (button != null) {
                 edt { hover(button, 12, 12) }
@@ -586,7 +586,7 @@ Thread.start("stacklane-shots") {
             }
             pause(1000)
             shot("12-needs-rebase", frame)
-            def button = toolbarButton("Stacklane.RebaseMenu")
+            def button = toolbarButton("Upstack.RebaseMenu")
             say("rebase menu button: $button")
             if (button != null) {
                 edt { press(button, 12, 12, MouseEvent.BUTTON1, false) }
@@ -627,9 +627,9 @@ Thread.start("stacklane-shots") {
         }
 
         step("settings") {
-            def conf = cls("com.stacklane.settings.StacklaneConfigurable").getConstructor(com.intellij.openapi.project.Project).newInstance(project)
+            def conf = cls("com.upstack.settings.UpstackConfigurable").getConstructor(com.intellij.openapi.project.Project).newInstance(project)
             later { ShowSettingsUtil.instance.editConfigurable(project, conf) }
-            def d = dialogTitled("Stacklane")
+            def d = dialogTitled("Upstack")
             if (d != null) {
                 edt { d.setSize(860, 520); d.validate() }
                 pause(1500)

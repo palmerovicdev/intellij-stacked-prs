@@ -1,5 +1,5 @@
 #!/opt/homebrew/bin/python3 -I
-"""A `gh` for the Marketplace screenshots, set as Stacklane's gh path in the sandbox IDE.
+"""A `gh` for the Marketplace screenshots, set as Upstack's gh path in the sandbox IDE.
 
 Local gh-stack commands (view, rebase, init, add, unstack...) go to the real gh: the stack, the
 layers that need a rebase and a stopped rebase are real. What would need GitHub is answered here

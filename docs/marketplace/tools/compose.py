@@ -112,7 +112,7 @@ def dialog(name, title, s, left, top, w=None, h=None):
 
 
 def island(top_to=None, pad=3):
-    """The Stacklane tool window island: the decorator is [pad] px larger on every side. [top_to]:
+    """The Upstack tool window island: the decorator is [pad] px larger on every side. [top_to]:
     where the island's content ends, for a crop through its empty lower part."""
     x, y, w, h = GEOM["toolwindow"]
     x, y, w, h = x + pad, y + pad, w - 2 * pad, h - 2 * pad
@@ -152,7 +152,7 @@ code,.key{{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:.
 .bullets b{{color:{PURPLE};font-weight:700}}
 .bullets code{{font-size:.8em}}
 </style></head><body>
-<div class="brand">{icon}<span>Stacklane</span></div>
+<div class="brand">{icon}<span>Upstack</span></div>
 {body}
 </body></html>"""
 
@@ -375,7 +375,7 @@ def _():
     return header_center("Set up in a minute",
                          "<b>Check</b> shows your gh, account, gh-stack version and whether the repository supports "
                          "stacks, with the fix next to what is missing. Log in without a terminal.") + \
-        dialog("15-settings", "Stacklane", s, left, top) + \
+        dialog("15-settings", "Upstack", s, left, top) + \
         dialog("16-login", "Log In to github.com", s, left + sw * s + gap, top + 90)
 
 

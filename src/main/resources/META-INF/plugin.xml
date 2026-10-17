@@ -4,7 +4,7 @@
 
     <description><![CDATA[
         <p>
-            <b>Stacklane</b> puts GitHub stacked pull requests inside the IDE. It is a visual
+            <b>Upstack</b> puts GitHub stacked pull requests inside the IDE. It is a visual
             front end for <a href="https://github.com/github/gh-stack">gh stack</a> and
             <code>gh pr</code>: every button runs the same command you would type in the
             terminal, so you can switch between the IDE and the terminal at any point.
@@ -50,7 +50,7 @@
                 <b>deleted</b> (the top one) or <b>renamed</b>, here and on GitHub.</li>
             <li>Every button, menu item and dialog option explains on hover what it does and the
                 exact command it runs.</li>
-            <li><b>Check</b> in Settings | Version Control | Stacklane: which <code>gh</code> is used,
+            <li><b>Check</b> in Settings | Version Control | Upstack: which <code>gh</code> is used,
                 the account on each host, the version of <code>gh-stack</code> and whether the
                 repository supports stacked pull requests, with the fix next to whatever is
                 missing. <b>Log In</b> signs in without a terminal
@@ -69,110 +69,110 @@
     <depends>Git4Idea</depends>
     <!-- Solo para los menus de la ventana Pull Requests. Sin el plugin GitHub, todo lo demas
          funciona igual. -->
-    <depends optional="true" config-file="stacklane-github.xml">org.jetbrains.plugins.github</depends>
+    <depends optional="true" config-file="upstack-github.xml">org.jetbrains.plugins.github</depends>
 
-    <resource-bundle>messages.StacklaneBundle</resource-bundle>
+    <resource-bundle>messages.UpstackBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow id="Stacklane"
+        <toolWindow id="Upstack"
                     anchor="right"
-                    icon="/icons/stacklane.svg"
-                    factoryClass="com.stacklane.ui.StackToolWindowFactory"/>
-        <notificationGroup id="Stacklane" displayType="BALLOON" key="notification.group"/>
+                    icon="/icons/upstack.svg"
+                    factoryClass="com.upstack.ui.StackToolWindowFactory"/>
+        <notificationGroup id="Upstack" displayType="BALLOON" key="notification.group"/>
         <!-- Tras un commit en una capa intermedia, ofrecer el rebase upstack. -->
-        <checkinHandlerFactory implementation="com.stacklane.stack.RestackCheckinHandlerFactory"/>
+        <checkinHandlerFactory implementation="com.upstack.stack.RestackCheckinHandlerFactory"/>
         <!-- Junto a Git y GitHub, en Version Control. Solo hay paginas de proyecto en ese grupo;
-             los ajustes siguen siendo globales (StacklaneSettings). -->
+             los ajustes siguen siendo globales (UpstackSettings). -->
         <projectConfigurable parentId="project.propVCSSupport.Mappings"
-                             id="com.stacklane.settings"
-                             instance="com.stacklane.settings.StacklaneConfigurable"
+                             id="com.upstack.settings"
+                             instance="com.upstack.settings.UpstackConfigurable"
                              key="settings.title"/>
     </extensions>
 
     <projectListeners>
-        <listener class="com.stacklane.stack.GitEvents" topic="git4idea.repo.GitRepositoryChangeListener"/>
-        <listener class="com.stacklane.stack.GitEvents" topic="com.intellij.dvcs.repo.VcsRepositoryMappingListener"/>
-        <listener class="com.stacklane.stack.GitEvents" topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
+        <listener class="com.upstack.stack.GitEvents" topic="git4idea.repo.GitRepositoryChangeListener"/>
+        <listener class="com.upstack.stack.GitEvents" topic="com.intellij.dvcs.repo.VcsRepositoryMappingListener"/>
+        <listener class="com.upstack.stack.GitEvents" topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
     </projectListeners>
 
-    <actions resource-bundle="messages.StacklaneBundle">
-        <group id="Stacklane.Toolbar">
-            <action id="Stacklane.Refresh" class="com.stacklane.actions.RefreshAction"/>
+    <actions resource-bundle="messages.UpstackBundle">
+        <group id="Upstack.Toolbar">
+            <action id="Upstack.Refresh" class="com.upstack.actions.RefreshAction"/>
             <separator/>
-            <action id="Stacklane.InitStack" class="com.stacklane.actions.InitStackAction"/>
-            <action id="Stacklane.AddLayer" class="com.stacklane.actions.AddLayerAction"/>
+            <action id="Upstack.InitStack" class="com.upstack.actions.InitStackAction"/>
+            <action id="Upstack.AddLayer" class="com.upstack.actions.AddLayerAction"/>
             <separator/>
-            <action id="Stacklane.Publish" class="com.stacklane.actions.PublishStackAction"/>
-            <action id="Stacklane.PublishDraft" class="com.stacklane.actions.PublishDraftAction"/>
-            <action id="Stacklane.PublishReady" class="com.stacklane.actions.PublishReadyAction"/>
+            <action id="Upstack.Publish" class="com.upstack.actions.PublishStackAction"/>
+            <action id="Upstack.PublishDraft" class="com.upstack.actions.PublishDraftAction"/>
+            <action id="Upstack.PublishReady" class="com.upstack.actions.PublishReadyAction"/>
             <separator/>
-            <action id="Stacklane.Sync" class="com.stacklane.actions.SyncAction"/>
+            <action id="Upstack.Sync" class="com.upstack.actions.SyncAction"/>
             <!-- Upstack primero: es lo que se quiere tras tocar una capa intermedia. -->
-            <group id="Stacklane.RebaseMenu" class="com.stacklane.actions.RebaseGroup" popup="true" icon="AllIcons.Vcs.Merge">
-                <action id="Stacklane.RebaseUpstack" class="com.stacklane.actions.RebaseUpstackAction"/>
-                <action id="Stacklane.Rebase" class="com.stacklane.actions.RebaseAction"/>
-                <action id="Stacklane.RebaseDownstack" class="com.stacklane.actions.RebaseDownstackAction"/>
-                <action id="Stacklane.RebaseLayers" class="com.stacklane.actions.RebaseLayersAction"/>
+            <group id="Upstack.RebaseMenu" class="com.upstack.actions.RebaseGroup" popup="true" icon="AllIcons.Vcs.Merge">
+                <action id="Upstack.RebaseUpstack" class="com.upstack.actions.RebaseUpstackAction"/>
+                <action id="Upstack.Rebase" class="com.upstack.actions.RebaseAction"/>
+                <action id="Upstack.RebaseDownstack" class="com.upstack.actions.RebaseDownstackAction"/>
+                <action id="Upstack.RebaseLayers" class="com.upstack.actions.RebaseLayersAction"/>
             </group>
             <separator/>
-            <action id="Stacklane.MergeStack" class="com.stacklane.actions.MergeStackAction"/>
-            <action id="Stacklane.CloseStack" class="com.stacklane.actions.CloseStackAction"/>
+            <action id="Upstack.MergeStack" class="com.upstack.actions.MergeStackAction"/>
+            <action id="Upstack.CloseStack" class="com.upstack.actions.CloseStackAction"/>
             <separator/>
-            <action id="Stacklane.OpenSettings" class="com.stacklane.actions.OpenSettingsAction"/>
+            <action id="Upstack.OpenSettings" class="com.upstack.actions.OpenSettingsAction"/>
         </group>
 
         <!-- Las acciones de PR sirven en los dos sitios: aqui y en los menus de Pull Requests
-             (stacklane-github.xml). Cada una resuelve su PR segun donde se abra el menu. -->
-        <action id="Stacklane.MarkReady" class="com.stacklane.actions.MarkReadyAction"/>
-        <action id="Stacklane.MarkDraft" class="com.stacklane.actions.MarkDraftAction"/>
-        <action id="Stacklane.EditTitle" class="com.stacklane.actions.EditTitleAction"/>
-        <action id="Stacklane.EditLabels" class="com.stacklane.actions.EditLabelsAction"/>
-        <action id="Stacklane.ToggleFinal" class="com.stacklane.actions.ToggleFinalAction"/>
+             (upstack-github.xml). Cada una resuelve su PR segun donde se abra el menu. -->
+        <action id="Upstack.MarkReady" class="com.upstack.actions.MarkReadyAction"/>
+        <action id="Upstack.MarkDraft" class="com.upstack.actions.MarkDraftAction"/>
+        <action id="Upstack.EditTitle" class="com.upstack.actions.EditTitleAction"/>
+        <action id="Upstack.EditLabels" class="com.upstack.actions.EditLabelsAction"/>
+        <action id="Upstack.ToggleFinal" class="com.upstack.actions.ToggleFinalAction"/>
 
         <!-- Clic derecho sobre una fila: solo lo de esa capa (o esa pila local), nada con «Stack».
-             Lo de la pila entera esta en Stacklane.Stack.Popup, fuera de las filas. -->
-        <group id="Stacklane.Layer.Popup">
+             Lo de la pila entera esta en Upstack.Stack.Popup, fuera de las filas. -->
+        <group id="Upstack.Layer.Popup">
             <!-- Solo sobre una pila local cuyas ramas ya no existen. -->
-            <action id="Stacklane.RecreateStack" class="com.stacklane.actions.RecreateStackAction"/>
-            <action id="Stacklane.ForgetStack" class="com.stacklane.actions.ForgetStackAction"/>
+            <action id="Upstack.RecreateStack" class="com.upstack.actions.RecreateStackAction"/>
+            <action id="Upstack.ForgetStack" class="com.upstack.actions.ForgetStackAction"/>
             <!-- Solo sobre una capa cuya rama ya no existe en local. -->
-            <action id="Stacklane.RestoreBranch" class="com.stacklane.actions.RestoreBranchAction"/>
-            <action id="Stacklane.RemoveFromStack" class="com.stacklane.actions.RemoveFromStackAction"/>
-            <action id="Stacklane.CheckoutLayer" class="com.stacklane.actions.CheckoutLayerAction"/>
-            <action id="Stacklane.ShowLayerChanges" class="com.stacklane.actions.ShowLayerChangesAction"/>
-            <action id="Stacklane.OpenPr" class="com.stacklane.actions.OpenPrAction"/>
+            <action id="Upstack.RestoreBranch" class="com.upstack.actions.RestoreBranchAction"/>
+            <action id="Upstack.RemoveFromStack" class="com.upstack.actions.RemoveFromStackAction"/>
+            <action id="Upstack.CheckoutLayer" class="com.upstack.actions.CheckoutLayerAction"/>
+            <action id="Upstack.ShowLayerChanges" class="com.upstack.actions.ShowLayerChangesAction"/>
+            <action id="Upstack.OpenPr" class="com.upstack.actions.OpenPrAction"/>
             <!-- Solo en una capa sin PR: publicarla a ella, no la pila (eso es Publish Stack…, fuera de las filas). -->
-            <action id="Stacklane.PublishLayerDraft" class="com.stacklane.actions.PublishLayerDraftAction"/>
-            <action id="Stacklane.PublishLayerReady" class="com.stacklane.actions.PublishLayerReadyAction"/>
-            <action id="Stacklane.CopyPrLink" class="com.stacklane.actions.CopyPrLinkAction"/>
+            <action id="Upstack.PublishLayerDraft" class="com.upstack.actions.PublishLayerDraftAction"/>
+            <action id="Upstack.PublishLayerReady" class="com.upstack.actions.PublishLayerReadyAction"/>
+            <action id="Upstack.CopyPrLink" class="com.upstack.actions.CopyPrLinkAction"/>
             <separator/>
-            <action id="Stacklane.RebaseUpstackFromLayer" class="com.stacklane.actions.RebaseUpstackFromLayerAction"/>
+            <action id="Upstack.RebaseUpstackFromLayer" class="com.upstack.actions.RebaseUpstackFromLayerAction"/>
             <!-- Solo en una capa sin PR; con PR, desactivada y diciendo por que. -->
-            <action id="Stacklane.RenameBranch" class="com.stacklane.actions.RenameBranchAction"/>
+            <action id="Upstack.RenameBranch" class="com.upstack.actions.RenameBranchAction"/>
             <!-- Solo en la capa de arriba sin PR. -->
-            <action id="Stacklane.DeleteLayer" class="com.stacklane.actions.DeleteLayerAction"/>
+            <action id="Upstack.DeleteLayer" class="com.upstack.actions.DeleteLayerAction"/>
             <!-- Solo si el PR apunta en GitHub a otra rama que la capa de debajo. -->
-            <action id="Stacklane.ChangePrBase" class="com.stacklane.actions.ChangePrBaseAction"/>
+            <action id="Upstack.ChangePrBase" class="com.upstack.actions.ChangePrBaseAction"/>
             <separator/>
-            <action id="Stacklane.MergeUpToLayer" class="com.stacklane.actions.MergeUpToLayerAction"/>
+            <action id="Upstack.MergeUpToLayer" class="com.upstack.actions.MergeUpToLayerAction"/>
             <separator/>
-            <reference ref="Stacklane.MarkReady"/>
-            <reference ref="Stacklane.MarkDraft"/>
+            <reference ref="Upstack.MarkReady"/>
+            <reference ref="Upstack.MarkDraft"/>
             <separator/>
-            <reference ref="Stacklane.EditTitle"/>
-            <reference ref="Stacklane.EditLabels"/>
-            <reference ref="Stacklane.ToggleFinal"/>
+            <reference ref="Upstack.EditTitle"/>
+            <reference ref="Upstack.EditLabels"/>
+            <reference ref="Upstack.ToggleFinal"/>
         </group>
 
         <!-- Clic derecho fuera de las filas o sobre la base: la pila entera, por eso dicen «Stack». -->
-        <group id="Stacklane.Stack.Popup">
-            <reference ref="Stacklane.AddLayer"/>
-            <reference ref="Stacklane.Publish"/>
-            <reference ref="Stacklane.PublishDraft"/>
-            <reference ref="Stacklane.PublishReady"/>
+        <group id="Upstack.Stack.Popup">
+            <reference ref="Upstack.AddLayer"/>
+            <reference ref="Upstack.Publish"/>
+            <reference ref="Upstack.PublishDraft"/>
+            <reference ref="Upstack.PublishReady"/>
             <separator/>
-            <reference ref="Stacklane.MergeStack"/>
-            <reference ref="Stacklane.CloseStack"/>
+            <reference ref="Upstack.MergeStack"/>
+            <reference ref="Upstack.CloseStack"/>
         </group>
     </actions>
 </idea-plugin>
