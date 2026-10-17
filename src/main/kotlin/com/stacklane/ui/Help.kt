@@ -161,6 +161,23 @@ internal object Helps {
 
     fun installExtension() = Help(message("help.install.extension"), listOf(Help.gh(GhCommands.installExtension())))
 
+    fun upgradeExtension() = Help(message("help.upgrade.extension"), listOf(Help.gh(GhCommands.upgradeExtension())))
+
+    /** No ejecuta nada: abre la pagina. */
+    fun installGh() = Help(message("help.install.gh", GH_INSTALL_URL))
+
+    fun logIn(host: String) = Help(message("help.log.in", host), listOf(Help.gh(GhCommands.login(host))))
+
+    fun checkEnvironment() = Help(
+        message("help.check.environment"),
+        listOf(
+            Help.gh(GhCommands.version()),
+            Help.gh(GhCommands.authStatus()),
+            Help.gh(GhCommands.stackVersion()),
+            "gh api repos/OWNER/REPO/stacks",
+        ),
+    )
+
     fun rebase(scope: RebaseScope, text: @Nls String) = Help(text, listOf(Help.gh(GhCommands.rebase(scope))))
 
     fun rebaseStack() = rebase(RebaseScope.STACK, message("action.Stacklane.Rebase.description"))
@@ -225,6 +242,8 @@ internal object Helps {
     }
 
     fun copyModify(branch: String) = Help(message("help.copy.modify", branch), listOf(Help.gh(GhCommands.modify())))
+
+    const val GH_INSTALL_URL = "https://cli.github.com"
 
     private const val INIT = "gh stack init --base BASE BRANCH…"
     private const val SHORT_HASH = 7

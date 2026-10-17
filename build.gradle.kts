@@ -85,6 +85,73 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.12.1 &mdash; ready for the Marketplace</h3>
+            <ul>
+              <li>A complete description and release notes for this page. Nothing changes in how the plugin
+                works.</li>
+            </ul>
+            <h3>0.12.0 &mdash; check the environment and log in</h3>
+            <ul>
+              <li><b>Check</b> in Settings | Version Control | Stacklane: which <code>gh</code> is used and
+                where, the account on each host, the <code>gh-stack</code> version, the repository's remotes and
+                whether GitHub supports stacked pull requests there. It only reads, and every command goes to
+                the Log.</li>
+              <li>Whatever is missing has its fix next to it: <i>Install GitHub CLI</i>, <i>Install
+                gh-stack</i>, <i>Upgrade gh-stack</i> and <i>Log In&hellip;</i>.</li>
+              <li><b>Log In without a terminal</b>: <code>gh auth login --web</code> asks GitHub for a
+                one-time code, and a dialog shows it, copies it and opens the page where it goes. The token
+                stays with gh.</li>
+              <li>Without a session, the Stacks window says so and offers to log in, instead of showing gh's
+                error as is.</li>
+              <li>A warning, once per version, if <code>gh-stack</code> is not v0.1.1, the version whose JSON
+                and exit codes the plugin reads. It blocks nothing.</li>
+            </ul>
+            <h3>0.11.1 &mdash; the title of a new pull request</h3>
+            <ul>
+              <li>The proposed title of a new pull request is its branch name, in <i>Publish Stack&hellip;</i>
+                and in a layer's <i>Publish</i>. The description still comes from its commits.</li>
+            </ul>
+            <h3>0.11.0 &mdash; layers without a branch, delete, rename and publish a layer</h3>
+            <ul>
+              <li>A layer whose branch is gone is marked <i>Branch deleted</i> (or <i>Only on origin</i>), and
+                a banner explains that gh stack cannot rebase, sync or push without it.</li>
+              <li><b>Restore Branch</b> recreates it from the remote or at its last known commit;
+                <b>Remove From Stack&hellip;</b> takes it out of the stack.</li>
+              <li><b>Delete Layer&hellip;</b> for the top layer without a pull request, with its local and,
+                optionally, remote branch.</li>
+              <li><b>Rename Branch&hellip;</b> for a layer without a pull request, here and on GitHub, and
+                <b>Edit Title&hellip;</b> for a pull request.</li>
+              <li><b>Publish as Draft&hellip;</b> and <b>Publish Ready for Review&hellip;</b> from a layer's
+                menu, with an editable title and description.</li>
+            </ul>
+            <h3>0.10.0 &mdash; guided conflicts</h3>
+            <ul>
+              <li>When <code>gh stack rebase</code> stops, the IDE's conflicts dialog opens on its own.</li>
+              <li>The banner says which layer stopped, its position in the stack and the commit git could not
+                apply, and counts the files still in conflict.</li>
+              <li>When none is left, the banner turns blue and offers <b>Continue</b>
+                (<code>gh stack rebase --continue</code>). <i>Abort</i> asks first.</li>
+              <li>The stack stays on screen during the rebase.</li>
+            </ul>
+            <h3>0.9.0 &mdash; merge the stack</h3>
+            <ul>
+              <li><b>Merge Stack&hellip;</b> and, from a layer, <b>Merge Up to Here&hellip;</b>: GitHub merges
+                that pull request and every one below it at once, or none (<code>gh stack merge</code>).</li>
+              <li>The dialog shows which layers go in, their review and CI, and only the merge methods the
+                repository allows, remembering the last one. With a merge queue, they join the queue.</li>
+              <li>It checks first that the number is not also a stack number, so no other stack is merged by
+                mistake.</li>
+              <li>Afterwards, <b>Sync and Prune</b> (<code>gh stack sync --prune</code>) deletes the merged
+                branches.</li>
+            </ul>
+            <h3>0.8.0 &mdash; close a whole stack</h3>
+            <ul>
+              <li><b>Close Stack&hellip;</b>: unstack it, close its open pull requests with an optional
+                comment, and delete its remote and local branches, one checkbox per step.</li>
+              <li>In a safe order: unstack first, while the branches still exist. Local branches that differ
+                from the remote are flagged and kept by default, and a branch that is the base of another stack
+                is never deleted.</li>
+            </ul>
             <h3>0.7.0 &mdash; each layer at a glance</h3>
             <ul>
               <li><b>Show Layer Changes</b> in a layer's menu: the IDE diff with what the layer adds on top

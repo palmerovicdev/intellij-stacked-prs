@@ -26,6 +26,12 @@
                 branches in one click from the banner that stays until they are pushed
                 (<code>gh stack push</code>). The first rebase asks whether to
                 turn on <code>git rerere</code>, as gh stack does in the terminal.</li>
+            <li><b>Guided conflicts</b>: when a rebase stops, the IDE's conflicts dialog opens on its
+                own, and the stack says which layer and which commit stopped and how many files are
+                still in conflict. When none is left, <b>Continue</b> is one click.</li>
+            <li><b>Show Layer Changes</b>: the IDE diff with what a layer adds on top of the one
+                below, the same changes its pull request shows. A pull request whose base on GitHub is
+                not the layer below is marked <i>Wrong base</i>, and one click points it back.</li>
             <li><b>Merge a stack</b>, whole or up to a layer, with GitHub's atomic stack merge
                 (<code>gh stack merge</code>): the dialog shows which pull requests go in, their
                 review and CI, and the merge method the repository allows (the last one used is
@@ -35,16 +41,27 @@
             <li><b>Close a whole stack</b>: unstack it, close its open pull requests (with an
                 optional comment) and delete its remote and local branches, in an order that
                 never leaves a stack without branches behind.</li>
-            <li><b>Labels</b>, <b>ready / draft</b> and a <b>final-layer label</b>
+            <li><b>Labels</b>, <b>ready / draft</b>, the <b>title</b> and a <b>final-layer label</b>
                 (<code>stack-final</code> by default) from the stack and from the
                 <i>Pull Requests</i> tool window menus.</li>
+            <li><b>When a branch goes missing</b>: a layer whose branch was deleted is marked, and
+                <b>Restore Branch</b> brings it back from the remote or its last known commit, or
+                <b>Remove From Stack</b> takes it out. Layers without a pull request can be
+                <b>deleted</b> (the top one) or <b>renamed</b>, here and on GitHub.</li>
             <li>Every button, menu item and dialog option explains on hover what it does and the
                 exact command it runs.</li>
+            <li><b>Check</b> in Settings | Version Control | Stacklane: which <code>gh</code> is used,
+                the account on each host, the version of <code>gh-stack</code> and whether the
+                repository supports stacked pull requests, with the fix next to whatever is
+                missing. <b>Log In</b> signs in without a terminal
+                (<code>gh auth login --web</code>): a dialog shows the one-time code and opens
+                GitHub.</li>
             <li>A <b>Log</b> tab with every command and its output.</li>
         </ul>
-        <p>Requires the <a href="https://cli.github.com">GitHub CLI</a>, signed in with
-            <code>gh auth login</code>, and the <code>gh-stack</code> extension (the plugin
-            offers to install it).</p>
+        <p>Requires the <a href="https://cli.github.com">GitHub CLI</a>, signed in
+            (<code>gh auth login</code>, or <i>Log In</i> from the plugin), and the
+            <code>gh-stack</code> extension, v0.1.1 (the plugin offers to install it, and warns
+            about any other version).</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

@@ -53,12 +53,14 @@ import com.stacklane.ui.Help
 import com.stacklane.ui.Helps
 import com.stacklane.ui.InitStackDialog
 import com.stacklane.ui.LabelsDialog
+import com.stacklane.ui.LoginDialog
 import com.stacklane.ui.PublishDialog
 import com.stacklane.ui.PublishLayerDialog
 import com.stacklane.ui.StackToolWindow
 import git4idea.branch.GitBrancher
 import git4idea.repo.GitRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
@@ -572,7 +574,7 @@ internal object StackFlows {
         if (input.isNotEmpty()) checkoutStack(project, input)
     }
 
-    fun installExtension(project: Project) {
+    fun installExtension(project: Project): Job =
         StackService.getInstance(project).execute(
             Operation(
                 title = message("op.install"),
@@ -581,7 +583,9 @@ internal object StackFlows {
                 successMessage = message("op.install.done"),
             )
         )
-    }
+
+    /** *Log In*: `gh auth login --web` en [host], con el codigo en un dialogo (ver [LoginDialog]). true si hay sesion. */
+    fun logIn(project: Project, host: String): Boolean = LoginDialog.logIn(project, host)
 
     // ------------------------------------------------------------------ capas sin rama
 

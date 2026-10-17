@@ -41,6 +41,11 @@ class FakeGh(private val dir: Path) {
             dir.resolve("hold").deleteIfExists()
         }
 
+        /** Deja terminar a la llamada que ya imprimio su salida y sigue viva ([respond] con `linger`). */
+        fun finish() {
+            dir.resolve("linger").deleteIfExists()
+        }
+
         /** Deja de contestar: la siguiente regla que encaje toma su lugar. */
         @OptIn(ExperimentalPathApi::class)
         fun remove() {
@@ -51,6 +56,8 @@ class FakeGh(private val dir: Path) {
     /**
      * Contesta a `gh args`. [prefix]: tambien a llamadas con mas argumentos detras. [times]: solo
      * las primeras veces; despues sigue buscando. [hold]: la llamada no termina hasta [Rule.release].
+     * [linger]: imprime su salida y no termina hasta [Rule.finish], como `gh auth login --web`
+     * mientras espera a que se autorice en el navegador.
      */
     fun respond(
         args: List<String>,
@@ -60,11 +67,12 @@ class FakeGh(private val dir: Path) {
         prefix: Boolean = false,
         times: Int? = null,
         hold: Boolean = false,
-    ): Rule = add("r%04d".format(next++), args, exit, stdout, stderr, prefix, times, hold)
+        linger: Boolean = false,
+    ): Rule = add("r%04d".format(next++), args, exit, stdout, stderr, prefix, times, hold, linger)
 
     /** Como [respond], pero detras de todas las demas: lo que contesta si nadie mas lo hace. */
     fun fallback(args: List<String>, exit: Int = 0, stdout: String = "", stderr: String = "", prefix: Boolean = false): Rule =
-        add("z%04d".format(nextFallback++), args, exit, stdout, stderr, prefix, null, false)
+        add("z%04d".format(nextFallback++), args, exit, stdout, stderr, prefix, null, false, false)
 
     private fun add(
         name: String,
@@ -75,6 +83,7 @@ class FakeGh(private val dir: Path) {
         prefix: Boolean,
         times: Int?,
         hold: Boolean,
+        linger: Boolean,
     ): Rule {
         val rule = rules.resolve(name).createDirectories()
         rule.resolve("args").writeText(key(args))
@@ -84,6 +93,7 @@ class FakeGh(private val dir: Path) {
         if (prefix) rule.resolve("prefix").writeText("")
         if (times != null) rule.resolve("times").writeText(times.toString())
         if (hold) rule.resolve("hold").writeText("")
+        if (linger) rule.resolve("linger").writeText("")
         return Rule(rule)
     }
 
@@ -92,10 +102,11 @@ class FakeGh(private val dir: Path) {
         if (!calls.exists()) emptyList()
         else calls.readText().split(RECORD).filter { it.isNotEmpty() }.map { it.split(UNIT).dropLast(1) }
 
-    /** Las llamadas que no son lecturas: ni `stack view` ni `gh api` (GraphQL o un GET). */
+    /** Las llamadas que no son lecturas: ni `stack view`, ni `stack --version`, ni `gh api` (GraphQL o un GET). */
     fun writes(): List<List<String>> = calls().filter { !isRead(it) }
 
-    private fun isRead(args: List<String>) = args == listOf("stack", "view", "--json") || args.firstOrNull() == "api"
+    private fun isRead(args: List<String>) =
+        args == listOf("stack", "view", "--json") || args == listOf("stack", "--version") || args.firstOrNull() == "api"
 
     private fun key(args: List<String>) = args.joinToString("") { it + UNIT }
 
@@ -123,6 +134,8 @@ class FakeGh(private val dir: Path) {
         |  while [[ -f "${'$'}rule/hold" && ${'$'}waited -lt 600 ]]; do sleep 0.05; waited=${'$'}((waited + 1)); done
         |  cat "${'$'}rule/stdout"
         |  cat "${'$'}rule/stderr" >&2
+        |  waited=0
+        |  while [[ -f "${'$'}rule/linger" && ${'$'}waited -lt 600 ]]; do sleep 0.05; waited=${'$'}((waited + 1)); done
         |  exit ${'$'}(<"${'$'}rule/exit")
         |done
         |echo "fake gh: no response for: ${'$'}*" >&2

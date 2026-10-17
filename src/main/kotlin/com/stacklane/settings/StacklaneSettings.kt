@@ -14,8 +14,8 @@ import com.stacklane.gh.MergeMethod
 enum class RestackMode { ASK, ALWAYS, NEVER }
 
 /**
- * Preferencias globales: donde esta `gh`, como se llama la label de la capa final y que hacer
- * tras un commit en una capa que no es la cima.
+ * Preferencias globales: donde esta `gh`, como se llama la label de la capa final, que hacer
+ * tras un commit en una capa que no es la cima y de que version de gh-stack ya se aviso.
  */
 @Service(Service.Level.APP)
 @State(name = "Stacklane", storages = [Storage("stacklane.xml")])
@@ -26,12 +26,20 @@ class StacklaneSettings : SimplePersistentStateComponent<StacklaneSettings.Optio
         var finalLabel by string(DEFAULT_FINAL_LABEL)
         // Por nombre: `enum()` de BaseState es inline y viene compilado para JVM 25, y el plugin sale en 21.
         var restackAfterCommit by string(RestackMode.ASK.name)
+        var warnedStackVersion by string()
     }
 
     var restackAfterCommit: RestackMode
         get() = RestackMode.entries.firstOrNull { it.name == state.restackAfterCommit } ?: RestackMode.ASK
         set(value) {
             state.restackAfterCommit = value.name
+        }
+
+    /** La version de gh-stack de la que ya se aviso que no es la de referencia: una vez por version. */
+    var warnedStackVersion: String?
+        get() = state.warnedStackVersion
+        set(value) {
+            state.warnedStackVersion = value
         }
 
     /** Ruta explicita a `gh`. Vacia: se busca en el PATH del shell. */

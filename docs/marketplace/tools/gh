@@ -1,0 +1,184 @@
+#!/opt/homebrew/bin/python3 -I
+"""A `gh` for the Marketplace screenshots, set as Stacklane's gh path in the sandbox IDE.
+
+Local gh-stack commands (view, rebase, init, add, unstack...) go to the real gh: the stack, the
+layers that need a rebase and a stopped rebase are real. What would need GitHub is answered here
+from demo-github.json: the pull requests with their review, CI and labels, the merge settings,
+the signed-in account and the one-time code of `gh auth login --web`. Nothing reaches GitHub.
+
+build/marketplace/state/scenario picks the pull requests of a scene (see demo-github.json).
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+REAL = "/opt/homebrew/bin/gh"
+TOOLS = os.path.dirname(os.path.abspath(__file__))
+STATE = os.path.join(os.path.dirname(os.path.dirname(TOOLS)), "..", "build", "marketplace", "state")
+STATE = os.path.normpath(STATE)
+DATA = json.load(open(os.path.join(TOOLS, "demo-github.json")))
+REPO = DATA["repository"]
+
+args = sys.argv[1:]
+os.makedirs(STATE, exist_ok=True)
+with open(os.path.join(STATE, "calls.log"), "a") as log:
+    log.write(" ".join(args)[:300] + "\n")
+
+
+def scenario():
+    try:
+        name = open(os.path.join(STATE, "scenario")).read().strip()
+    except OSError:
+        name = "default"
+    return name if name in DATA["scenarios"] else "default"
+
+
+def prs():
+    """{branch: pull request} for the current scene."""
+    out = {}
+    scene = DATA["scenarios"][scenario()]
+    for branch, pr in DATA["pulls"].items():
+        if branch in scene.get("without", []):
+            continue
+        pr = dict(pr, **scene.get("override", {}).get(branch, {}))
+        out[branch] = pr
+    return out
+
+
+def real(extra_env=None, capture=False):
+    env = dict(os.environ, **(extra_env or {}))
+    if capture:
+        r = subprocess.run([REAL] + args, capture_output=True, text=True, env=env, timeout=60)
+        return r.returncode, r.stdout, r.stderr
+    os.execve(REAL, [REAL] + args, env)
+
+
+def done(stdout="", code=0, stderr=""):
+    sys.stdout.write(stdout)
+    sys.stderr.write(stderr)
+    sys.exit(code)
+
+
+def git(*a):
+    return subprocess.run(["git"] + list(a), capture_output=True, text=True).stdout.strip()
+
+
+def size(branch, base):
+    """+additions -deletions and files of the layer, from git: the same numbers its diff shows."""
+    stat = git("diff", "--shortstat", f"{base}...{branch}")
+    nums = {k: 0 for k in ("files", "insertions", "deletions")}
+    for n, word in re.findall(r"(\d+) (file|insertion|deletion)", stat):
+        nums[{"file": "files", "insertion": "insertions", "deletion": "deletions"}[word]] = int(n)
+    return nums["insertions"], nums["deletions"], nums["files"]
+
+
+def node(branch, pr, base):
+    additions, deletions, files = size(branch, base) if git("rev-parse", "--verify", "-q", branch) else (0, 0, 0)
+    return {
+        "number": pr["number"],
+        "title": pr["title"],
+        "url": f"https://github.com/{REPO}/pull/{pr['number']}",
+        "state": pr.get("state", "OPEN"),
+        "isDraft": pr.get("draft", False),
+        "reviewDecision": pr.get("review"),
+        "baseRefName": pr.get("baseRefName", base),
+        "additions": pr.get("additions", additions),
+        "deletions": pr.get("deletions", deletions),
+        "changedFiles": files,
+        "mergeable": pr.get("mergeable", "MERGEABLE"),
+        "mergeStateStatus": pr.get("mergeStateStatus", "CLEAN"),
+        "labels": {"nodes": [{"name": n, "color": DATA["labels"][n]["color"]} for n in pr.get("labels", [])]},
+        "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": pr["checks"]} if pr.get("checks") else None}}]},
+    }
+
+
+def stack_order():
+    """Layer -> the branch below it, from gh-stack's own file."""
+    below = {}
+    try:
+        data = json.load(open(os.path.join(git("rev-parse", "--git-dir"), "gh-stack")))
+    except (OSError, ValueError):
+        return below
+    for stack in data.get("stacks", []):
+        prev = stack["trunk"]["branch"]
+        for b in stack["branches"]:
+            below[b["branch"]] = prev
+            prev = b["branch"]
+    return below
+
+
+# ---------------------------------------------------------------- gh stack
+if args[:3] == ["stack", "view", "--json"]:
+    code, out, err = real(capture=True)
+    if code != 0:
+        done(out, code, err)
+    view = json.loads(out)
+    pulls = prs()
+    scene = DATA["scenarios"][scenario()]
+    for layer in view.get("branches", []):
+        pr = pulls.get(layer["name"])
+        if pr:
+            layer["pr"] = {"number": pr["number"], "url": f"https://github.com/{REPO}/pull/{pr['number']}",
+                           "state": pr.get("state", "OPEN")}
+            if pr.get("state") == "MERGED":
+                layer["isMerged"] = True
+            if pr.get("queued"):
+                layer["isQueued"] = True
+    done(json.dumps(view, indent=2) + "\n", 0, err)
+
+if args[:1] == ["stack"] and len(args) > 1 and args[1] in ("submit", "sync", "push", "merge", "checkout"):
+    done("", 1, "demo: gh stack %s needs GitHub, and this is a demo repository\n" % args[1])
+
+if args[:1] == ["stack"]:
+    real()
+
+# ---------------------------------------------------------------- gh api
+if args[:2] == ["api", "graphql"]:
+    query = next((a[6:] for a in args if a.startswith("query=")), "")
+    if "pullRequest(number" in query:
+        wanted = [int(n) for n in re.findall(r"pullRequest\(number: (\d+)\)", query)]
+        below = stack_order()
+        repo = {}
+        for branch, pr in prs().items():
+            if pr["number"] in wanted:
+                repo[f"pr{pr['number']}"] = node(branch, pr, below.get(branch, "main"))
+        done(json.dumps({"data": {"repository": repo}}) + "\n")
+    if "mergeCommitAllowed" in query:
+        done(json.dumps({"data": {"repository": DATA["mergeSettings"]}}) + "\n")
+    done("", 1, "demo: unknown GraphQL query\n")
+
+if args[:1] == ["api"] and len(args) > 1:
+    path = args[1]
+    if re.match(r"repos/[^/]+/[^/]+/stacks\?per_page=1$", path):
+        done("[]\n")
+    if re.match(r"repos/[^/]+/[^/]+/stacks/\d+$", path):
+        done('{"message":"Not Found","status":"404"}\n', 1, "gh: Not Found (HTTP 404)\n")
+    done("", 1, "demo: gh api %s needs GitHub\n" % path)
+
+# ---------------------------------------------------------------- the rest
+if args == ["--version"]:
+    real()
+
+if args[:2] == ["auth", "status"]:
+    done(json.dumps({"hosts": {"github.com": [DATA["account"]]}}) + "\n")
+
+if args[:3] == ["auth", "login", "--web"]:
+    sys.stderr.write("! First copy your one-time code: %s\n" % DATA["deviceCode"])
+    sys.stderr.write("Open this URL to continue in your web browser: https://github.com/login/device\n")
+    sys.stderr.flush()
+    time.sleep(3600)
+    sys.exit(1)
+
+if args[:2] == ["label", "list"]:
+    done(json.dumps([{"name": n, "color": l["color"], "description": l["description"]}
+                     for n, l in DATA["labels"].items()]) + "\n")
+
+if args[:2] == ["pr", "view"] and "labels" in args:
+    number = int(re.search(r"(\d+)$", args[2]).group(1)) if len(args) > 2 and re.search(r"(\d+)$", args[2]) else 0
+    pr = next((p for p in prs().values() if p["number"] == number), {})
+    done(json.dumps({"labels": [{"name": n} for n in pr.get("labels", [])]}) + "\n")
+
+done("", 1, "demo: gh %s needs GitHub, and this is a demo repository\n" % " ".join(args[:2]))

@@ -117,6 +117,22 @@ class GhCommandsTest {
     }
 
     @Test
+    fun `the environment check and what fixes it`() {
+        assertEquals("gh --version", GhCommands.display(GhCommands.version()))
+        assertEquals("gh auth status --json hosts", GhCommands.display(GhCommands.authStatus()))
+        assertEquals("gh stack --version", GhCommands.display(GhCommands.stackVersion()))
+        assertEquals("gh extension upgrade gh-stack", GhCommands.display(GhCommands.upgradeExtension()))
+        // Sin --git-protocol: iniciar sesion no cambia el protocolo de git del host.
+        assertEquals("gh auth login --web --hostname github.com", GhCommands.display(GhCommands.login("github.com")))
+        assertEquals(
+            "gh api 'repos/acme/shop/stacks?per_page=1'",
+            GhCommands.display(GhCommands.stacksAvailable(GitHubRepo("github.com", "acme", "shop"))),
+        )
+        assertEquals(listOf("--hostname", "ghe.acme.io"), GhCommands.stacksAvailable(GitHubRepo("ghe.acme.io", "acme", "shop")).takeLast(2))
+        assertFalse("--hostname" in GhCommands.stacksAvailable(GitHubRepo("github-personal", "acme", "shop")))
+    }
+
+    @Test
     fun `branch names`() {
         listOf("feat/payment-api", "fix-1", "user/feat.x").forEach { assertNull(it, GhCommands.branchNameProblem(it)) }
         assertEquals(BranchNameProblem.EMPTY, GhCommands.branchNameProblem(" "))

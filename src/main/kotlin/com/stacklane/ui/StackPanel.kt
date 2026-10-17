@@ -280,8 +280,12 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         repo?.rebase?.let(::renderRebaseStop)
         if (current is StackState.Loaded) {
             current.detailsError?.let { error ->
+                val host = current.loginHost
                 banners.add(
-                    banner(message("banner.details.error", error), EditorNotificationPanel.Status.Warning)
+                    // Sin sesion, reintentar no arregla nada: lo que toca es entrar.
+                    if (host != null) banner(message("banner.signed.out", host), EditorNotificationPanel.Status.Warning)
+                        .withAction(message("action.log.in"), Helps.logIn(host)) { StackFlows.logIn(project, host) }
+                    else banner(message("banner.details.error", error), EditorNotificationPanel.Status.Warning)
                         .withAction(message("action.retry"), Helps.refresh()) { service.requestRefresh() }
                 )
             }
@@ -447,7 +451,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             StackState.GhMissing -> {
                 text.appendLine(message("state.gh.missing"))
                 text.appendLine(message("link.install.gh"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
-                    BrowserUtil.browse(GH_INSTALL_URL)
+                    BrowserUtil.browse(Helps.GH_INSTALL_URL)
                 }
                 text.appendLine(message("link.configure.gh"), SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES) {
                     ShowSettingsUtil.getInstance().showSettingsDialog(project, StacklaneConfigurable::class.java)
@@ -545,7 +549,6 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         const val LAYER_POPUP_GROUP = "Stacklane.Layer.Popup"
         const val STACK_POPUP_GROUP = "Stacklane.Stack.Popup"
         const val POPUP_PLACE = "StacklaneLayerPopup"
-        const val GH_INSTALL_URL = "https://cli.github.com"
         const val UPSTACK_TIP_ID = "stacklane.rebase.upstack"
     }
 }

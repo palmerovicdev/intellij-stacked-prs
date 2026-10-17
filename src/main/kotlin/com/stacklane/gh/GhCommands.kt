@@ -128,6 +128,36 @@ object GhCommands {
 
     fun installExtension(): List<String> = listOf("extension", "install", "github/gh-stack")
 
+    fun upgradeExtension(): List<String> = listOf("extension", "upgrade", "gh-stack")
+
+    // ---- el entorno (ver EnvironmentCheck): todo lecturas, salvo [login].
+
+    fun version(): List<String> = listOf("--version")
+
+    fun stackVersion(): List<String> = listOf("stack", "--version")
+
+    /** Las cuentas de cada host, sin el token. Sin sesion sale bien, con `hosts` vacio. */
+    fun authStatus(): List<String> = listOf("auth", "status", "--json", "hosts")
+
+    /** Para un gh anterior a `--json`: sale con 1 si no hay sesion. */
+    fun authStatusText(): List<String> = listOf("auth", "status")
+
+    /**
+     * Lo mismo que pregunta gh-stack antes de escribir: si la API de pilas responde 404, las pilas
+     * no estan activadas en el repositorio y `gh stack` sale con 9. Con un alias de
+     * `~/.ssh/config` no se sabe el host: va sin `--hostname`, como [renameRemoteBranch].
+     */
+    fun stacksAvailable(repo: GitHubRepo): List<String> =
+        listOf("api", "repos/${repo.owner}/${repo.name}/stacks?per_page=1") +
+            if (repo.isSshAlias || repo.host == "github.com") emptyList() else listOf("--hostname", repo.host)
+
+    /**
+     * Inicia sesion por el navegador. Sin terminal gh no pregunta nada: imprime un codigo de un
+     * solo uso y la pagina donde escribirlo, y espera a que se autorice. Sin `--git-protocol`:
+     * no toca el protocolo de git que ya tenga configurado el host.
+     */
+    fun login(host: String): List<String> = listOf("auth", "login", "--web", "--hostname", host)
+
     /** [pr]: numero, URL o rama, como lo acepta `gh pr`. Ver [prSelector]. */
     fun markReady(pr: String, repo: GitHubRepo? = null): List<String> = listOf("pr", "ready") + prSelector(pr, repo)
 

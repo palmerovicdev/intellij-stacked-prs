@@ -3,6 +3,46 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.12.1 — Lista para el Marketplace
+
+Sin cambios en lo que hace el plugin.
+
+- **La ficha del Marketplace, al día.** Las notas de versión se habían quedado en la `0.7.0`:
+  ahora llegan hasta esta. La descripción añade los conflictos guiados, *Show Layer Changes*
+  y *Wrong base*, el título de un PR y las capas sin rama, borrar y renombrar.
+- **Diez capturas** en `docs/marketplace/`, una por funcionalidad, para la galería del
+  Marketplace, y **el post para Reddit**. Salen de un repositorio de demo con una pila real de
+  gh-stack y un `gh` falso para lo que sería de GitHub; las herramientas para rehacerlas están
+  en `docs/marketplace/tools/`.
+
+## 0.12.0 — Comprobar el entorno e iniciar sesión
+
+Salió del roadmap (P4). Si faltaba `gh`, la extensión o la sesión se veía un error
+genérico, y la versión de gh-stack no se miraba aunque el plugin lee el JSON y los códigos
+de salida de la v0.1.1.
+
+- **Check** en *Settings | Version Control | Stacklane*: una línea por cosa comprobada, con
+  su icono. La versión de `gh` y su ruta (la escrita en el campo, sin tener que aplicarla),
+  la cuenta de cada host (`gh auth status --json hosts`), la versión de gh-stack, los
+  remotos del repositorio y si GitHub admite pilas en él (`gh api repos/…/stacks`: un 404 es
+  lo que hace salir a `gh stack` con 9). Solo lee, y cada comando queda en el Log.
+- Lo que falta trae su arreglo al lado: **Install GitHub CLI**, **Install gh-stack**,
+  **Upgrade gh-stack** (`gh extension upgrade gh-stack`) y **Log In…**. Al terminar se
+  comprueba otra vez.
+- **Log In…** inicia sesión sin terminal: `gh auth login --web --hostname <host>` pide a
+  GitHub un código de un solo uso, y un diálogo lo enseña, lo copia y abre la página donde
+  se escribe. Se cierra solo cuando gh tiene la sesión; cancelarlo mata a gh y no cambia
+  nada. El host es el del repositorio, o github.com con un alias de `~/.ssh/config`. El
+  token lo guarda gh, como siempre.
+- **Sin sesión, la ventana lo dice y ofrece entrar.** Antes salía el error de `gh` tal cual
+  en la banda *Pull request details unavailable*; ahora la banda dice que falta la sesión,
+  con *Log In…*. Una escritura que falla por lo mismo avisa igual.
+- **Aviso si gh-stack no es la v0.1.1**, una vez por versión: anterior, con *Upgrade
+  gh-stack*; posterior, solo el aviso. No bloquea nada.
+- El plan era abrir `gh auth login` en una pestaña de la terminal del IDE. Su API es
+  experimental en la 2026.2 (y la anterior, deprecada), y no pasa el Plugin Verifier; sin
+  terminal `gh auth login --web` hace lo mismo.
+
 ## 0.11.1 — El título de un PR nuevo, de su rama
 
 - **El título propuesto de un PR nuevo es el nombre de su rama**, tal cual, en *Publish

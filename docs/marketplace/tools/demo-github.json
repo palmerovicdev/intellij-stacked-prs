@@ -1,0 +1,72 @@
+{
+  "repository": "acme/storefront",
+  "account": {
+    "state": "success",
+    "active": true,
+    "host": "github.com",
+    "login": "sam-rivera",
+    "tokenSource": "keyring",
+    "scopes": "gist, read:org, repo",
+    "gitProtocol": "ssh"
+  },
+  "deviceCode": "7D4E-91AC",
+  "labels": {
+    "payments": {"color": "1d76db", "description": "Checkout, charges and refunds"},
+    "bug": {"color": "d73a4a", "description": "Something isn't working"},
+    "api": {"color": "0e8a16", "description": "Public HTTP API"},
+    "ux": {"color": "a371f7", "description": "What customers see"},
+    "needs-qa": {"color": "fbca04", "description": "Try it on staging before merging"},
+    "stack-final": {"color": "8250DF", "description": "Top layer of a stack of pull requests"}
+  },
+  "pulls": {
+    "refunds/money-type": {
+      "number": 481,
+      "title": "Add a Money type that counts in minor units",
+      "review": "APPROVED",
+      "checks": "SUCCESS",
+      "labels": ["payments"]
+    },
+    "refunds/currency-conversion": {
+      "number": 482,
+      "title": "Convert refunds to the currency of the order",
+      "review": "APPROVED",
+      "checks": "SUCCESS",
+      "labels": ["payments", "bug"]
+    },
+    "refunds/partial-refunds-api": {
+      "number": 483,
+      "title": "Add POST /orders/:id/refunds for partial refunds",
+      "review": "CHANGES_REQUESTED",
+      "checks": "FAILURE",
+      "labels": ["api"]
+    },
+    "refunds/refund-dialog": {
+      "number": 484,
+      "title": "Refund dialog on the orders page",
+      "draft": true,
+      "review": "REVIEW_REQUIRED",
+      "checks": "PENDING",
+      "labels": ["ux", "stack-final"]
+    }
+  },
+  "scenarios": {
+    "default": {},
+    "publish": {
+      "without": ["refunds/refund-dialog"]
+    },
+    "glance": {
+      "override": {
+        "refunds/partial-refunds-api": {"mergeStateStatus": "BEHIND"},
+        "refunds/refund-dialog": {"baseRefName": "main"}
+      }
+    }
+  },
+  "mergeSettings": {
+    "mergeCommitAllowed": true,
+    "squashMergeAllowed": true,
+    "rebaseMergeAllowed": true,
+    "viewerDefaultMergeMethod": "SQUASH",
+    "mergeQueue": null,
+    "ref": {"rules": {"nodes": []}}
+  }
+}

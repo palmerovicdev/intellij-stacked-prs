@@ -74,6 +74,8 @@ sealed interface StackState {
         val detailsError: String?,
         /** Las capas activas sin rama local. Ver [StackSnapshot.missingBranches]. */
         val missing: List<MissingBranch> = emptyList(),
+        /** [detailsError] es que falta la sesion de gh en este host: se arregla con *Log In*. */
+        val loginHost: String? = null,
     ) : StackState {
         fun detailsOf(layer: StackLayer): PrDetails? = layer.pr?.let { details[it.number] }
 

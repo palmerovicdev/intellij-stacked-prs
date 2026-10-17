@@ -65,6 +65,7 @@ hecha y el plugin salga al Marketplace (P40).
 | Capa sin rama: *Branch deleted*, *Restore Branch* y *Remove From Stack…*; *Delete Layer…* en la de arriba sin PR (P44)                                 | `0.11.0`                |
 | *Rename Branch…* (capas sin PR), *Edit Title…* y *Publish as Draft / Ready…* desde el menú de una capa (P16, en parte)                                 | `0.11.0`                |
 | El título propuesto de un PR nuevo es el nombre de su rama                                                                                             | `0.11.1`                |
+| *Check* del entorno en los ajustes, *Log In…* sin terminal, *Upgrade gh-stack* y aviso si gh-stack no es la v0.1.1 (P4)                                | `0.12.0`                |
 
 ---
 
@@ -86,7 +87,10 @@ cuesta poco y lo que hace falta antes de escribir en GitHub cosas que no se desh
 7. ~~**P16, renombrar** — cambiar el nombre de una rama y el título de su PR~~ — hecha en la
    `0.11.0`, por separado y solo ramas sin PR (ver P16).
 
-Fuera del orden, pero no descartadas: **P10 + P29** (el doble clic ya cubre lo básico), **P4, P40, P41 y P42** (van con
+8. ~~**P4** — comprobar el entorno e iniciar sesión~~ — hecha en la `0.12.0` (elegida el
+   2026-10-01), con el inicio de sesión sin terminal (ver P4).
+
+Fuera del orden, pero no descartadas: **P10 + P29** (el doble clic ya cubre lo básico), **P40, P41 y P42** (van con
 la `1.0.0` y el Marketplace) y **P1**, que sigue siendo
 condición para la `1.0.0` (ver P1).
 
@@ -195,7 +199,7 @@ Hecha en la `0.3.0` (estado `InSeveralStacks`). Lo que salió al probarlo con gh
 - *New Stack* desde la rama compartida hace checkout de la base de su pila: `init` desde
   una capa sale con 5 aunque la capa también sea base de otra.
 
-### P4 · Comprobar el entorno e iniciar sesión 🟡
+### P4 · Comprobar el entorno e iniciar sesión ✅ `0.12.0`
 
 Si falta `gh`, la extensión o la sesión, hoy se ve un error genérico: el de `gh auth` sale
 tal cual en el aviso de *details unavailable*. La versión de gh-stack tampoco se mira, y
@@ -207,6 +211,39 @@ y los remotos. Si la versión de gh-stack no es conocida, un aviso, no un bloque
 `gh extension upgrade gh-stack`. Para iniciar sesión, *Log In* abre una
 pestaña de la terminal del IDE con `gh auth login` (dependencia opcional del plugin
 Terminal, como en Tasklane) y refresca al cerrarla.
+
+Hecha en la `0.12.0` (`EnvironmentCheck`, `EnvironmentPanel`, `LoginDialog`,
+`StackService.checkEnvironment` y `logIn`):
+
+- **Sin terminal.** En la 2026.2.2 la API de pestañas de la terminal
+  (`TerminalToolWindowTabsManager`, `TerminalView`, `TerminalSendTextBuilder`) es
+  `@ApiStatus.Experimental`, y la anterior (`TerminalToolWindowManager`) está deprecada:
+  con cualquiera de las dos falla `verifyPlugin`. Tasklane la usa porque su verificador no
+  falla con lo experimental; aquí sí. No hizo falta: sin TTY, `gh auth login --web` no
+  pregunta nada, imprime el código de un solo uso (y, según la versión, la página) por
+  stderr y espera a que se autorice. *Log In…* lo ejecuta, enseña el código en un diálogo,
+  lo copia y abre `https://<host>/login/device`; se cierra cuando gh termina bien, y
+  cancelar mata a gh. Comprobado con gh 2.102.0 y una configuración aparte
+  (`GH_CONFIG_DIR`), cortando antes de autorizar.
+- Va sin `--git-protocol`: así gh no toca el protocolo de git del host ni ofrece subir una
+  clave SSH. El host es el del repositorio; con un alias de `~/.ssh/config`, github.com.
+- *Check* comprueba la ruta escrita en el campo, sin aplicarla. Los enlaces que ejecutan
+  `gh` (*Install gh-stack*, *Upgrade*, *Log In…*) sí la aplican antes, y solo esa.
+- `gh auth status --json hosts` sale bien sin sesión, con `hosts` vacío. Un gh anterior a
+  `--json` falla con *unknown flag*: entonces se usa `gh auth status` a secas, que solo
+  dice si hay sesión (sale con 1 si no la hay).
+- Si el repositorio admite pilas se pregunta como lo hace gh-stack (`ListStacks`):
+  `gh api repos/OWNER/REPO/stacks?per_page=1`, y un 404 es el código 9. Sin sesión no se
+  pregunta: `gh api` sale con 4 en cualquier repositorio.
+- Sin sesión `gh` siempre nombra `gh auth login`, salga con 4 (sin token) o con 1 (401):
+  es lo que se busca (`GhResult.needsLogin`) para cambiar la banda *details unavailable* y
+  el aviso de una escritura fallida por *Log In…*.
+- La versión se mira además sola, una vez por sesión, tras la primera lectura de la pila: si
+  no es la v0.1.1 sale un aviso, uno por versión (`warnedStackVersion`). Anterior, con
+  *Upgrade gh-stack*; posterior, sin él, que actualizando no se arregla.
+
+Queda fuera: avisar de un `gh` demasiado antiguo (no hay una versión mínima comprobada) y
+probarlo contra GitHub Enterprise.
 
 ### P5 · Refrescar menos y mejor 🟡
 
@@ -475,7 +512,10 @@ cerrar el PR, recrear la pila en GitHub y publicar otro: queda aquí, junto a re
 insertar y plegar.
 
 Primera entrega: *Restructure in Terminal…* abre `gh stack modify` en una pestaña de la
-terminal del IDE (la dependencia de P4) y refresca al cerrarse. Hacerlo desde la propia
+terminal del IDE y refresca al cerrarse. **Bloqueada por la regla de API** (2026-10-01): al
+hacer P4 se vio que la API de pestañas de la terminal es experimental en la 2026.2 y la
+anterior está deprecada, así que P4 salió sin ella y esta dependencia no existe. Mientras
+tanto queda lo de la `0.11.0`: copiar `gh stack modify` y guiar con una banda. Hacerlo desde la propia
 ventana espera a P6.
 
 ### P17 · Cambiar la base de una pila que ya existe 🟡

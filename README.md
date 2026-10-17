@@ -68,6 +68,16 @@ puede alternar entre IDE y terminal en cualquier momento.
 - **Cerrar una pila entera** (*Close Stack…*): deshacerla en GitHub, cerrar sus PRs
   abiertos con un comentario opcional y borrar sus ramas remotas y locales. El diálogo lista
   cada PR y rama que toca y los comandos en el orden en que se ejecutan.
+- **Comprobar el entorno** (*Settings | Version Control | Stacklane*, botón *Check*): qué
+  `gh` hay y dónde, con qué cuenta en cada host, qué versión de gh-stack, los remotos del
+  repositorio y si GitHub admite pilas en él. Lo que falta trae su arreglo al lado:
+  *Install*, *Upgrade gh-stack* o *Log In…*.
+- **Iniciar sesión sin terminal** (*Log In…*): `gh auth login --web` pide un código de un
+  solo uso, y un diálogo lo enseña, lo copia y abre la página de GitHub donde se escribe.
+  Se ofrece también en la ventana, en una banda, cuando los datos de los PRs fallan por
+  falta de sesión, y en el aviso de una escritura que falla por lo mismo.
+- **Aviso si gh-stack no es la v0.1.1**, una vez por versión: el plugin lee su JSON y sus
+  códigos de salida de esa versión. No bloquea nada.
 - Pestaña **Log** con cada comando ejecutado y su salida.
 
 **Menú “Stack” en la ventana Pull Requests** de IntelliJ (lista y detalle): listo / draft,
@@ -97,6 +107,9 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Título de un PR | `gh pr edit <url> --title …` |
 | Publicar una capa | `gh stack submit --auto`, `gh pr edit <rama> --title … --body …` y, si es lista, `gh pr ready <rama>` |
 | Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
+| Comprobar el entorno | `gh --version`, `gh auth status --json hosts`, `gh stack --version` y `gh api repos/OWNER/REPO/stacks?per_page=1` (solo leen) |
+| Iniciar sesión | `gh auth login --web --hostname <host>` |
+| Actualizar gh-stack | `gh extension upgrade gh-stack` |
 
 Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
 
@@ -132,9 +145,12 @@ ni añadir botones a su cabecera. Por eso la vista principal es una ventana prop
 
 ## Requisitos para usarlo
 
-- [GitHub CLI](https://cli.github.com) con sesión iniciada (`gh auth login`).
-- La extensión `gh-stack` (`gh extension install github/gh-stack`). Si falta, el plugin
-  ofrece instalarla.
+- [GitHub CLI](https://cli.github.com) con sesión iniciada (`gh auth login`, o *Log In…*
+  desde el plugin).
+- La extensión `gh-stack` (`gh extension install github/gh-stack`), en su v0.1.1. Si falta,
+  el plugin ofrece instalarla; si es otra versión, avisa.
+
+*Settings | Version Control | Stacklane | Check* dice cuál de las tres cosas falta.
 - IntelliJ IDEA 2026.2 o posterior, con el plugin Git activo.
 
 ## Desarrollo
@@ -156,11 +172,11 @@ elegir el zip.
 ## Código
 
 ```text
-gh/        GhCli (ejecuta gh sin TTY y lo cancela con la corrutina), GhCommands (cada comando)
+gh/        GhCli (ejecuta gh sin TTY y lo cancela con la corrutina), GhCommands (cada comando), Environment (qué gh, sesión y gh-stack hay)
 stack/     modelo, parser JSON, StackService (estado + operaciones), log, rerere, handler de commit
 ui/        ventana, lista con el grafo, diálogos
 actions/   acciones (barra, menú de capa, menú de Pull Requests), PrTarget, StackFlows
-settings/  ruta de gh, nombre de la label final, qué hacer tras un commit; remoto y último método de merge por proyecto
+settings/  ruta de gh, nombre de la label final, qué hacer tras un commit y la comprobación del entorno; remoto y último método de merge por proyecto
 ```
 
 Los tests de `src/test/.../flow` corren dentro de un IDE headless con el framework de pruebas de
@@ -178,7 +194,7 @@ del VFS y de Git4Idea al terminar.
 
 **Verificado**
 
-- Compila, 172 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
+- Compila, 196 tests en verde y Plugin Verifier estricto limpio contra IU-262.10315.125.
 - `StackService` y los flujos que escriben en GitHub, con un `gh` falso: los estados de la
   ventana, el reintento con `--remote` tras *multiple remotes*, los avisos por código de
   salida (3 con y sin rebase parado, 8, 9, 10), el corte de una secuencia y su limpieza, una
@@ -200,12 +216,23 @@ del VFS y de Git4Idea al terminar.
   capa de arriba con `unstack --local` + `init`, también con gh-stack real. En el IDE, solo con
   tests de flujo: la pastilla, las bandas y el diálogo aún no se han visto pintados.
 - La salida JSON y los códigos de salida corresponden al código de gh-stack v0.1.1.
+- El entorno (P4), con gh 2.102.0 real: lo que imprimen `gh --version`, `gh stack --version`
+  y `gh auth status --json hosts` con y sin sesión, el 404 de la API de pilas y la salida 4
+  de `gh api` sin sesión. `gh auth login --web` sin terminal imprime el código y espera (se
+  probó con una configuración de gh aparte y se cortó antes de autorizar). En el IDE, con
+  tests de flujo: el resumen de los ajustes y el diálogo de *Log In* (el código, el cierre
+  al terminar gh, el error y la cancelación).
 - Pilas con base `develop` y con base en una capa de otra pila, creadas con gh-stack real.
 - Una rama en dos pilas, con gh-stack real: `view --json` sale con 6 en la capa que es base
   de otra y en un `main` con dos pilas encima, y con 0 en las demás capas de cada una.
   `init` desde esa capa sale con 5.
 
 **Pendiente de probar**
+
+- La `0.12.0` con un `gh` de verdad: un inicio de sesión completo, autorizando en el
+  navegador, y *Log In* en GitHub Enterprise. El resumen de *Check* y el diálogo de *Log In*
+  ya se vieron pintados en el IDE de prueba, con el `gh` falso de las capturas del
+  Marketplace.
 
 - Con PRs reales: los menús de Pull Requests (necesitan una cuenta GitHub en el IDE),
   submit, sync y rebase contra GitHub, y el refresco nativo tras escribir.
@@ -238,6 +265,14 @@ del VFS y de Git4Idea al terminar.
 - **Menús de lista, no `JPopupMenu`**, para que cada opción enseñe su tooltip. El menú
   *Stack* de Pull Requests es del plugin GitHub: ahí la explicación y el comando solo salen
   en la barra de estado.
+- **Iniciar sesión sin terminal.** La API de pestañas de la terminal del IDE es experimental
+  en la 2026.2 y la anterior está deprecada: ninguna pasa el Plugin Verifier. No hace falta:
+  sin terminal, `gh auth login --web` no pregunta nada, imprime el código de un solo uso y
+  espera. Va sin `--git-protocol`, para no cambiar el protocolo de git del host. El token lo
+  guarda gh; el plugin solo ve el código, que también queda en el Log.
+- **La versión de gh-stack se avisa, no se exige.** Una vez por sesión se mira
+  `gh stack --version`; si no es la v0.1.1, sale un aviso (uno por versión) con *Upgrade* si
+  es anterior. Con una posterior todo sigue igual: el JSON se lee de forma tolerante.
 - **Varios remotos**: si gh-stack no sabe cuál usar, se pregunta una vez y se recuerda por
   proyecto.
 - **La base de una pila nueva es libre.** Se propone la rama actual (como
@@ -271,7 +306,10 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.11.1**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **0.12.1**. Qué trae cada una: [CHANGELOG.md](CHANGELOG.md).
+
+Las capturas del Marketplace, el post de Reddit y cómo rehacerlos están en
+[docs/marketplace](docs/marketplace/README.md).
 
 ## Roadmap
 

@@ -45,7 +45,7 @@ class RenameBranchFlowTest : FlowTestCase() {
     }
 
     /** Las escrituras, con las de `gh api`, que [FakeGh.writes] cuenta como lecturas. */
-    private fun writes() = gh.calls().filter { it != VIEW && it.take(2) != listOf("api", "graphql") }
+    private fun writes() = gh.calls().filter { it != VIEW && it != STACK_VERSION && it.take(2) != listOf("api", "graphql") }
 
     private fun branches() = git("branch", "--format=%(refname:short)").lines().filter { it.isNotBlank() }
 

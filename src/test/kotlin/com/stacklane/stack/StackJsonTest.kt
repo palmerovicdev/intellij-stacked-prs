@@ -1,5 +1,6 @@
 package com.stacklane.stack
 
+import com.stacklane.gh.GhAccount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -139,6 +140,34 @@ class StackJsonTest {
 
         val applied = StackJson.parsePrLabelNames("""{"labels":[{"id":"LA_1","name":"bug","description":"","color":"d73a4a"}]}""")
         assertEquals(setOf("bug"), applied)
+    }
+
+    @Test
+    fun `accounts of gh auth status, by host`() {
+        // Salida real de `gh auth status --json hosts` (gh 2.102.0), con otra cuenta y otro host.
+        val hosts = """
+            {"hosts":{"github.com":[
+              {"state":"success","active":true,"host":"github.com","login":"octo","tokenSource":"keyring","scopes":"gist, read:org, repo","gitProtocol":"ssh"},
+              {"state":"success","active":false,"host":"github.com","login":"work","tokenSource":"keyring"}],
+             "ghe.acme.io":[
+              {"state":"error","active":true,"host":"ghe.acme.io","login":"octo","tokenSource":"GH_ENTERPRISE_TOKEN","error":"HTTP 401: Bad credentials"}]}}
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                GhAccount("github.com", "octo", active = true, valid = true, source = "keyring"),
+                GhAccount("github.com", "work", active = false, valid = true, source = "keyring"),
+                GhAccount("ghe.acme.io", "octo", active = true, valid = false, source = "GH_ENTERPRISE_TOKEN", error = "HTTP 401: Bad credentials"),
+            ),
+            StackJson.parseAuthHosts(hosts),
+        )
+        // Sin sesion gh lo dice antes del JSON, y sale bien.
+        assertEquals(
+            emptyList<GhAccount>(),
+            StackJson.parseAuthHosts("You are not logged into any GitHub hosts. To log in, run: gh auth login\n{\"hosts\":{}}\n"),
+        )
+        // Un gh anterior a `--json`.
+        assertNull(StackJson.parseAuthHosts("unknown flag: --json"))
+        assertNull(StackJson.parseAuthHosts("{\"other\":1}"))
     }
 
     @Test

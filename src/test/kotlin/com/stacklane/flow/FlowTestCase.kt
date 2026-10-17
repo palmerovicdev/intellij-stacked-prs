@@ -14,6 +14,7 @@ import com.intellij.testFramework.HeavyPlatformTestCase
 import com.intellij.testFramework.LoggedErrorProcessor
 import com.intellij.ui.UiInterceptors
 import com.stacklane.StacklaneBundle.message
+import com.stacklane.gh.StackExtension
 import com.stacklane.settings.StacklaneProjectSettings
 import com.stacklane.settings.StacklaneSettings
 import com.stacklane.stack.StackService
@@ -45,6 +46,13 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
     protected val notifications = CopyOnWriteArrayList<Notification>()
 
     private var previousGhPath = ""
+    private var previousWarnedVersion: String? = null
+
+    /** Lo que contesta `gh stack --version`: la de referencia, para que nadie avise de la version. */
+    protected open fun stackVersion(): String = StackExtension.REFERENCE
+
+    /** Con los ajustes ya en su sitio y antes de que [StackService] lea la pila por primera vez. */
+    protected open fun beforeFirstRefresh() {}
 
     override fun runInDispatchThread(): Boolean = false
 
@@ -56,10 +64,14 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         gh = FakeGh(createTempDirectoryWithSuffix("gh"))
         // Sin pila hasta que el test diga otra cosa: el primer refresco no debe fallar.
         gh.fallback(VIEW, exit = 2, stderr = "current branch is not part of a stack")
+        gh.fallback(STACK_VERSION, stdout = "gh stack version ${stackVersion()}\n")
 
         val settings = StacklaneSettings.getInstance()
         previousGhPath = settings.ghPath
+        previousWarnedVersion = settings.warnedStackVersion
         settings.ghPath = gh.executable.toString()
+        settings.warnedStackVersion = null
+        beforeFirstRefresh()
 
         project.messageBus.connect(testRootDisposable).subscribe(
             Notifications.TOPIC,
@@ -92,6 +104,7 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
             TestDialogManager.setTestDialog(TestDialog.DEFAULT)
             UiInterceptors.clear()
             StacklaneSettings.getInstance().ghPath = previousGhPath
+            StacklaneSettings.getInstance().warnedStackVersion = previousWarnedVersion
         } catch (e: Throwable) {
             addSuppressedException(e)
         } finally {
@@ -254,6 +267,7 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
 
     companion object {
         val VIEW = listOf("stack", "view", "--json")
+        val STACK_VERSION = listOf("stack", "--version")
         const val TIMEOUT_MS = 20_000L
         private const val POLL_MS = 20L
 

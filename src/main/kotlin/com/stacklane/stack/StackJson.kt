@@ -1,5 +1,6 @@
 package com.stacklane.stack
 
+import com.stacklane.gh.GhAccount
 import com.stacklane.gh.MergeMethod
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -128,6 +129,27 @@ object StackJson {
         val root = parse(text) as? JsonObject ?: return null
         val prs = root["pull_requests"] as? JsonArray ?: return null
         return prs.mapNotNull { (it as? JsonObject)?.int("number") }
+    }
+
+    /**
+     * `gh auth status --json hosts`: las cuentas de cada host, la activa primero como las da gh.
+     * null si no es ese JSON (un gh anterior a `--json`); vacio si no hay sesion.
+     */
+    fun parseAuthHosts(text: String): List<GhAccount>? {
+        val hosts = (parse(text) as? JsonObject)?.obj("hosts") ?: return null
+        return hosts.entries.flatMap { (host, accounts) ->
+            (accounts as? JsonArray).orEmpty().mapNotNull { element ->
+                val account = element as? JsonObject ?: return@mapNotNull null
+                GhAccount(
+                    host = host,
+                    login = account.string("login").orEmpty(),
+                    active = account.bool("active"),
+                    valid = account.string("state") == "success",
+                    source = account.string("tokenSource").orEmpty(),
+                    error = account.string("error")?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
     }
 
     /**

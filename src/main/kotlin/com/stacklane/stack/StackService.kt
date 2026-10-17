@@ -6,6 +6,7 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
@@ -20,17 +21,28 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.stacklane.Notifier
 import com.stacklane.StacklaneBundle.message
+import com.stacklane.gh.Environment
+import com.stacklane.gh.EnvironmentCheck
+import com.stacklane.gh.EnvironmentReport
 import com.stacklane.gh.GhCli
 import com.stacklane.gh.GhCommands
 import com.stacklane.gh.GhExit
 import com.stacklane.gh.GhNotFoundException
+import com.stacklane.gh.GhOutputSink
 import com.stacklane.gh.GhResult
 import com.stacklane.gh.GitCommands
+import com.stacklane.gh.LoginPrompt
 import com.stacklane.gh.RebaseScope
+import com.stacklane.gh.RemoteInfo
+import com.stacklane.gh.RepositoryEnvironment
+import com.stacklane.gh.StackExtension
 import com.stacklane.gh.Tool
+import com.stacklane.gh.VersionStatus
 import com.stacklane.settings.RestackMode
+import com.stacklane.settings.StacklaneConfigurable
 import com.stacklane.settings.StacklaneProjectSettings
 import com.stacklane.settings.StacklaneSettings
+import com.stacklane.ui.LoginDialog
 import com.stacklane.ui.RemoteChooser
 import com.stacklane.ui.StackToolWindow
 import git4idea.branch.GitBrancher
@@ -55,6 +67,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.Nls
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -137,6 +150,8 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
 
     @Volatile
     private var lastFingerprint: String? = null
+
+    private val stackVersionChecked = AtomicBoolean()
 
     init {
         cs.launch {
@@ -228,6 +243,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         val ref = repoRef(repository)
         try {
             val result = GhCli.run(ref.root.toNioPath(), GhCommands.view())
+            if (!result.isMissingExtension) checkStackVersionOnce(ref.root.toNioPath())
             val branch = repository.currentBranchName
             val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
             when {
@@ -275,16 +291,17 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         val details = StackJson.parsePrDetails(result.stdout)
         val error = if (details.isEmpty()) result.errorText.lineSequence().firstOrNull { it.isNotBlank() }
             ?: message("details.failed") else null
-        finishDetails(snapshot, details, error)
+        finishDetails(snapshot, details, error, if (error != null && result.needsLogin) Environment.loginHost(github) else null)
     }
 
-    private fun finishDetails(snapshot: StackSnapshot, details: Map<Int, PrDetails>, error: String?) {
+    private fun finishDetails(snapshot: StackSnapshot, details: Map<Int, PrDetails>, error: String?, loginHost: String? = null) {
         _state.update { current ->
             if (current is StackState.Loaded && current.snapshot == snapshot) {
                 current.copy(
                     details = details.ifEmpty { current.details },
                     detailsLoading = false,
                     detailsError = error,
+                    loginHost = loginHost,
                 )
             } else {
                 current
@@ -510,6 +527,14 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
                 Notifier.error(project, operation.title, message("error.unavailable"), showLog)
             result.exitCode == GhExit.MODIFY_RECOVERY ->
                 Notifier.error(project, operation.title, message("error.modify"), showLog)
+            // Sin sesion, lo que arregla el fallo es entrar, no leer el error de gh.
+            result.needsLogin -> Environment.loginHost(repository?.let(::githubOf)).let { host ->
+                Notifier.error(
+                    project, message("operation.failed", operation.title), message("error.signed.out", host),
+                    Notifier.action(message("action.log.in")) { LoginDialog.logIn(project, host) },
+                    showLog,
+                )
+            }
             // gh-stack no salta una capa sin rama: falla al buscarla, con un error de git que no lo dice.
             missing.isNotEmpty() ->
                 Notifier.error(
@@ -532,6 +557,102 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         // git las nombra entre comillas, sueltas o como `refs/heads/rama`.
         val words = result.errorText.split(ERROR_SEPARATORS).flatMapTo(HashSet()) { listOf(it, it.removePrefix(HEADS)) }
         return state.missing.filter { it.branch in words }
+    }
+
+    // ---------------------------------------------------------------- entorno
+
+    /**
+     * Que `gh` hay, con que sesion, que gh-stack y si el repositorio que se muestra admite pilas
+     * (ver [EnvironmentCheck]). [ghPath]: la ruta escrita en los ajustes, aplicada o no. Solo
+     * lee, y deja cada comando en el Log.
+     */
+    suspend fun checkEnvironment(ghPath: String = StacklaneSettings.getInstance().ghPath): EnvironmentReport {
+        val repository = repository()
+        val remotes = repository?.let { repo ->
+            RepositoryEnvironment(
+                name = repo.root.name,
+                remotes = repo.remotes.sortedBy { it.name }.map { remote ->
+                    RemoteInfo(remote.name, remote.firstUrl.orEmpty(), remote.urls.firstNotNullOfOrNull(GitHubRepo::fromRemoteUrl))
+                },
+                github = githubOf(repo),
+            )
+        }
+        return EnvironmentCheck.run(ghPath, repository?.root?.toNioPath() ?: HOME, remotes, log)
+    }
+
+    /**
+     * `gh auth login --web` en [host], sin terminal: gh imprime el codigo de un solo uso y espera
+     * a que se autorice en el navegador. [onPrompt] lo recibe en cuanto sale, desde el hilo que
+     * lee el proceso. Cancelar la corrutina lo mata y no cambia la sesion.
+     *
+     * @throws GhNotFoundException si no hay `gh`.
+     */
+    suspend fun logIn(host: String, onPrompt: (LoginPrompt) -> Unit): GhResult {
+        val printed = StringBuffer()
+        var shown: LoginPrompt? = null
+        val sink = object : GhOutputSink {
+            override fun started(workDir: Path, command: String) = log.started(workDir, command)
+
+            override fun output(text: String) {
+                log.output(text)
+                val prompt = Environment.parseLoginPrompt(printed.append(text).toString(), host)
+                if (prompt != null && prompt != shown) {
+                    shown = prompt
+                    onPrompt(prompt)
+                }
+            }
+
+            override fun finished(exitCode: Int) = log.finished(exitCode)
+        }
+        return GhCli.run(HOME, GhCommands.login(host), sink)
+    }
+
+    fun upgradeExtension(): Job = execute(
+        Operation(
+            title = message("op.upgrade"),
+            calls = listOf(GhCall(GhCommands.upgradeExtension())),
+            workDir = HOME,
+            // `[stack]: upgraded from v0.1.0 to v0.1.1`, o que ya estaba al dia: lo dice gh.
+            onOutput = { result -> Notifier.info(project, message("op.upgrade.done"), Notifier.html(result.stdout + result.stderr)) },
+        )
+    )
+
+    /**
+     * Una vez por sesion: si gh-stack no es la version de la que se leyeron el JSON y los codigos
+     * de salida, se avisa, una vez por version, en vez de fallar mas tarde sin explicacion. Es
+     * un aviso y no un bloqueo: todo sigue funcionando igual.
+     */
+    private fun checkStackVersionOnce(workDir: Path) {
+        if (!stackVersionChecked.compareAndSet(false, true)) return
+        cs.launch {
+            val result = try {
+                GhCli.run(workDir, GhCommands.stackVersion())
+            } catch (_: GhNotFoundException) {
+                return@launch
+            }
+            if (!result.ok) return@launch
+            val extension = StackExtension(true, Environment.parseStackVersion(result.stdout))
+            val status = extension.status
+            val version = extension.version ?: UNREADABLE_VERSION
+            val settings = StacklaneSettings.getInstance()
+            if (status == VersionStatus.KNOWN || settings.warnedStackVersion == version) return@launch
+            settings.warnedStackVersion = version
+            val text = when (status) {
+                VersionStatus.OLDER -> message("version.older", version, StackExtension.REFERENCE)
+                VersionStatus.NEWER -> message("version.newer", version, StackExtension.REFERENCE)
+                else -> message("version.unreadable", StackExtension.REFERENCE)
+            }
+            val openSettings = Notifier.action(message("action.open.settings")) {
+                ShowSettingsUtil.getInstance().showSettingsDialog(project, StacklaneConfigurable::class.java)
+            }
+            // Una mas nueva no se arregla actualizando.
+            if (status == VersionStatus.NEWER) Notifier.warning(project, message("version.title"), text, openSettings)
+            else Notifier.warning(
+                project, message("version.title"), text,
+                Notifier.action(message("action.upgrade.extension")) { upgradeExtension() },
+                openSettings,
+            )
+        }
     }
 
     // ---------------------------------------------------------------- capas sin rama
@@ -811,6 +932,10 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         private val REBASE_DIRS = listOf("rebase-merge", "rebase-apply")
         private const val HEADS = "refs/heads/"
         private const val UNIT_SEPARATOR = '\u001F'
+        private const val UNREADABLE_VERSION = "?"
+
+        /** Donde corre lo que no es de ningun repositorio: instalar la extension, iniciar sesion. */
+        private val HOME: Path get() = Path.of(System.getProperty("user.home"))
         private val ERROR_SEPARATORS = Regex("""[\s'"`:]+""")
 
         fun getInstance(project: Project): StackService = project.service()
