@@ -22,6 +22,8 @@ Lo necesario para presentar Upstack: diez diapositivas de 2400×1520 (el doble d
 
 - **Marketplace → Media**: subir las diez en orden; la primera es la que sale en los
   resultados de búsqueda. Van aparte de la `<description>` de `plugin.xml`, que no las enlaza.
+- **README**: las diez ilustran la portada del proyecto ([README](../../README.md)), que las
+  enlaza por su nombre. Si se renombra o se añade una, hay que cambiarla también allí.
 - **Reddit**: un post de imágenes en el orden del fichero, o un post de texto con las imágenes
   insertadas donde marca cada `[📷 …]`. El enlace de instalación solo funciona cuando el plugin
   ya está aprobado en el Marketplace.

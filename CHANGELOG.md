@@ -299,7 +299,7 @@ reutilizar sus nombres en una pila nueva (`already exists in a stack`).
   marcan *Branches deleted*; si solo están en el remoto, *Only on remote*, y se traen con
   `gh stack checkout`. Si queda alguna en local, se usa el checkout del IDE.
 - **Forget Stack** deja de seguir en local una pila sin ramas. GitHub y el árbol de trabajo
-  no se tocan (ver *Decisiones* en el README).
+  no se tocan (ver *Decisiones* en [docs/manual.md](docs/manual.md#decisiones)).
 - **Recreate on Another Base…** la olvida y abre *New Stack* con las mismas capas: se elige
   la base y se recuperan las ramas en su último commit conocido.
 - *New Stack*:

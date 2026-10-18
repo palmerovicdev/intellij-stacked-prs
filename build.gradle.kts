@@ -244,6 +244,24 @@ intellijPlatform {
         }
     }
 
+    // Solo los usa release.yml, y solo si estan los secretos del repositorio (ver
+    // docs/development.md, «Publicar»). CERTIFICATE_CHAIN, PRIVATE_KEY y PRIVATE_KEY_PASSWORD
+    // los da el generador de JetBrains; PUBLISH_TOKEN sale del perfil del Marketplace.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+        // Una version con sufijo (0.13.0-beta.1) sale al canal con ese nombre en vez de al
+        // estable, que es como el Marketplace distingue las preliminares.
+        channels = providers.gradleProperty("pluginVersion").map { version ->
+            listOf(version.substringAfter('-', "").substringBefore('.').ifEmpty { "default" })
+        }
+    }
+
     // verifyPlugin corre contra la IDEA instalada: no descarga IDEs. Y es la garantia de
     // «nada de API interna»: el build FALLA si aparece un uso interno, deprecado,
     // experimental o de API que no se puede extender/sobrescribir.

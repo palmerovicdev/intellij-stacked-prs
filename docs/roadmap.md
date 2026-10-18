@@ -112,7 +112,8 @@ el código y con `DataKey.create`), y el refresco nativo depende de ejecutar
 Primera entrega: un repositorio de prueba en GitHub y una lista de comprobación escrita
 en `docs/` (crear pila, dos capas, publicar como drafts, listo por PR, labels,
 `stack-final`, sync tras un merge, rebase con conflicto, menú en lista y en detalle,
-refresco de la lista). El resultado de cada paso se copia al README. Lo que falle entra
+refresco de la lista). El resultado de cada paso se copia a `docs/development.md`
+(*Estado*). Lo que falle entra
 como `C` o como `P`.
 
 Primer contacto real (2026-09-30, repositorio `staffMobileApp`): la ventana, el Log y la
@@ -122,7 +123,7 @@ cuya rama se borró falló. De ahí salió la `0.2.0`.
 Desde entonces, la `0.4.0`, la `0.5.0` y la `0.6.0` salieron de usar el plugin con PRs
 reales, así que parte de la lista ya se ha visto funcionar. Sale del orden sugerido, pero
 la `1.0.0` sigue esperando a la lista escrita: lo que falta está en *Pendiente de probar*
-del README.
+de `docs/development.md`.
 
 ### P2 · Tests de flujo con un `gh` falso ✅ sin versión
 
@@ -791,7 +792,14 @@ valor.
 
 ### P40 · CI, firma y Marketplace 🟡
 
-Tasklane tiene `build.yml`, `nightly.yml` y `release.yml`. Upstack no tiene ninguno.
+Tasklane tiene `build.yml`, `nightly.yml` y `release.yml`. Upstack no tenía ninguno.
+
+En parte (2026-10-18, sin versión): `build.yml` (tests en Linux y macOS, build y
+`verifyPlugin` estricto contra la IU 2026.2.2), `release.yml` y `release-on-label.yml` como
+en Tasklane, y la firma y la publicación en `build.gradle.kts`, que solo actúan con los
+secretos del repositorio. Se explica en `docs/development.md`, «Publicar». Las capturas ya
+están en `docs/marketplace/` y el nombre se revisó en la `0.12.2`. Falta: los secretos,
+`recommended()` en el Plugin Verifier y la primera subida al Marketplace, que es a mano.
 
 Primera entrega: `build.yml` con tests y `verifyPlugin` estricto contra la 2026.2 y
 `recommended()` (en CI sí se descargan IDEs), y `release.yml` con firma y publicación como
@@ -827,7 +835,7 @@ la lista enseña lo mismo que `gh stack` en ese worktree. Compartir pilas entre 
 está pedido en gh-stack ([#459](https://github.com/github/gh-stack/issues/459), ver P6).
 
 Queda una entrega pequeña: comprobar init, add y submit desde un worktree y explicarlo en
-el README.
+el manual (`docs/manual.md`).
 
 ### P44 · Una capa cuya rama desaparece dentro de una pila activa ✅ `0.11.0`
 

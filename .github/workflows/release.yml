@@ -1,0 +1,116 @@
+name: Release
+
+# Se dispara con una etiqueta `vX.Y.Z`, no con cada push a main: publicar es un acto
+# deliberado. La etiqueta la empuja a mano quien publica, o la pone release-on-label.yml
+# al mergear un PR con el label `release`; ese la lanza por `workflow_dispatch` sobre la
+# etiqueta, porque una etiqueta empujada con GITHUB_TOKEN no dispara workflows.
+# `workflow_dispatch` deja tambien repetirlo a mano si el Marketplace rechaza el zip por
+# algo que no sea el codigo.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Verify, sign & publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Sin los secretos no se firma ni se sube al Marketplace, pero la release de GitHub
+    # sale igual, con el zip sin firmar: es el que se sube a mano en la web del Marketplace.
+    env:
+      CAN_SIGN: ${{ secrets.CERTIFICATE_CHAIN != '' && secrets.PRIVATE_KEY != '' }}
+      CAN_PUBLISH: ${{ secrets.PUBLISH_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 25 porque es el toolchain (jvmToolchain(25)); ver build.yml.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # La etiqueta y pluginVersion tienen que decir lo mismo. Sin esta comprobacion
+      # se publica en el Marketplace una version que no coincide con lo etiquetado en
+      # el repositorio, y eso no hay forma de arreglarlo luego.
+      - name: Tag must match pluginVersion
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          declared=$(grep '^pluginVersion' gradle.properties | cut -d= -f2 | tr -d ' ')
+          test "$tag" = "$declared" || {
+            echo "::error::la etiqueta v$tag no coincide con pluginVersion=$declared"
+            exit 1
+          }
+
+      # -PlocalIdePath= vacio -> ignora cualquier IDE local y descarga platformVersion.
+      - name: Verify project configuration
+        run: ./gradlew verifyPluginProjectConfiguration -PlocalIdePath=
+
+      - name: Test
+        run: ./gradlew test -PlocalIdePath=
+
+      - name: Verify plugin
+        run: ./gradlew verifyPlugin -PlocalIdePath=
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin -PlocalIdePath=
+
+      - name: Sign plugin
+        if: env.CAN_SIGN == 'true'
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: ./gradlew signPlugin -PlocalIdePath=
+
+      # El texto de la release es la seccion `## X.Y.Z — titulo` del CHANGELOG, sin su
+      # cabecera, y el zip, el firmado si lo hay.
+      - name: Release notes and zip
+        id: release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v head="## $version" '
+            index($0, head) == 1 && (length($0) == length(head) || substr($0, length(head) + 1, 1) == " ") { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > build/release-notes.md
+          grep -q '[^[:space:]]' build/release-notes.md || {
+            echo "::error::CHANGELOG.md no tiene la seccion $version"
+            exit 1
+          }
+          zip=$(ls build/distributions/*-signed.zip 2>/dev/null | head -n 1)
+          zip="${zip:-build/distributions/upstack-$version.zip}"
+          test -f "$zip"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+
+      # El mismo zip que va al Marketplace, colgado de la release: es lo que permite
+      # instalar «desde disco» una version concreta sin esperar al indexado. Va antes de
+      # publicar para que un rechazo del Marketplace no deje la etiqueta sin release.
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: Upstack ${{ steps.release.outputs.version }}
+          body_path: build/release-notes.md
+          files: ${{ steps.release.outputs.zip }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+      - name: Publish to JetBrains Marketplace
+        if: env.CAN_SIGN == 'true' && env.CAN_PUBLISH == 'true'
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+        run: ./gradlew publishPlugin -PlocalIdePath=
+
+      - name: Marketplace skipped
+        if: env.CAN_SIGN != 'true' || env.CAN_PUBLISH != 'true'
+        run: echo "::notice::Sin los secretos de firma o PUBLISH_TOKEN no se sube al Marketplace; el zip de la release se sube a mano."

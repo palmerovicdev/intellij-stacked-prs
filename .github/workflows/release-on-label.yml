@@ -1,0 +1,73 @@
+name: Release on label
+
+# Un PR hacia main con el label `release` publica, al mergearse, la version de su
+# pluginVersion: crea la etiqueta vX.Y.Z sobre el commit del merge y lanza release.yml
+# sobre ella. Ponerle el label a un PR ya mergeado tambien vale; a uno abierto no le hace
+# nada hasta que se mergea. Ver docs/development.md, «Publicar».
+on:
+  pull_request:
+    types: [closed, labeled]
+    branches: [main]
+
+concurrency:
+  group: release-on-label
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag & dispatch the release
+    # `closed` con el label ya puesto, o `labeled` con `release` despues de mergear. Otro
+    # label sobre un PR ya publicado no vuelve a publicar.
+    if: >-
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'release') &&
+      (github.event.action == 'closed' || github.event.label.name == 'release')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # empujar la etiqueta
+      actions: write        # lanzar release.yml
+      pull-requests: write  # comentar en el PR
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      # Una version ya etiquetada no se vuelve a publicar: el Marketplace no admite subir
+      # dos veces el mismo numero, y la etiqueta no se mueve. Las secciones del CHANGELOG
+      # son `## X.Y.Z — titulo` (o `## X.Y.Z` sin titulo).
+      - name: Version must be new and in the CHANGELOG
+        id: version
+        run: |
+          version=$(grep '^pluginVersion' gradle.properties | cut -d= -f2 | tr -d ' ')
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::error::$tag ya existe: sube pluginVersion en el PR antes de ponerle el label release"
+            exit 1
+          fi
+          awk -v head="## $version" '
+            index($0, head) == 1 && (length($0) == length(head) || substr($0, length(head) + 1, 1) == " ") { found = 1 }
+            END { exit !found }
+          ' CHANGELOG.md || {
+            echo "::error::CHANGELOG.md no tiene la seccion $version"
+            exit 1
+          }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Tag the merge commit
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git tag "$TAG" "$SHA"
+          git push origin "refs/tags/$TAG"
+
+      - name: Dispatch release.yml on the tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          RUNS: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml
+        run: |
+          gh workflow run release.yml --ref "$TAG"
+          gh pr comment "$PR" --body "Etiquetado \`$TAG\` sobre $SHA. La release sale de [release.yml]($RUNS)."

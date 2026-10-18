@@ -1,0 +1,70 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Los tests unitarios y los de flujo. Windows no: FakeGh es un script de bash (ver P42 en
+  # docs/roadmap.md).
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 25 porque es el toolchain (jvmToolchain(25)). Sin IDEA instalada, la ruta de
+      # org.gradle.java.installations.paths no existe y Gradle usa el JDK sobre el que corre.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # -PlocalIdePath= vacio -> ignora el IDE local y descarga platformVersion.
+      - name: Test
+        run: ./gradlew test -PlocalIdePath=
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.os }}
+          path: build/reports/tests/test
+
+  build:
+    name: Build & verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # -PlocalIdePath= vacio -> descarga platformVersion, la misma version que la IDEA
+      # instalada en local, e indexa las opciones de Settings (buildSearchableOptions).
+      - name: Verify project configuration
+        run: ./gradlew verifyPluginProjectConfiguration -PlocalIdePath=
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin -PlocalIdePath=
+
+      # El Plugin Verifier estricto: falla con cualquier uso de API interna, deprecada o
+      # experimental (ver pluginVerification en build.gradle.kts).
+      - name: Verify plugin
+        run: ./gradlew verifyPlugin -PlocalIdePath=
