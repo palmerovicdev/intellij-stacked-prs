@@ -1,7 +1,3 @@
-**Title:** I built Upstack, a JetBrains plugin for GitHub stacked pull requests: the whole stack in a tool window, and every button runs the `gh stack` command you'd type (free, no account)
-
----
-
 Hey r/Jetbrains 👋
 
 I've been building a plugin called **Upstack**, and it's finally at a point where I'd love other people to try it and tell me what's wrong with it.
@@ -121,7 +117,7 @@ If you use IntelliJ's own *Pull Requests* tool window, its list and details get 
 - Tested with ~200 unit and flow tests that run the real git against a fake `gh`.
 - **Free.**
 
-**Install:** *Settings → Plugins → Marketplace*, search for **Upstack**
+**Install:** *Settings → Plugins → Marketplace*, search for Upstack
 **Source:** https://github.com/palmerovicdev/intellij-stacked-prs
 
 It's a solo project, so any feedback helps a lot: what's confusing, what's missing, what annoys you, or what breaks, especially if your stacking workflow is different from mine. I'll be around in the comments. Thanks for reading all the way down here 🙏

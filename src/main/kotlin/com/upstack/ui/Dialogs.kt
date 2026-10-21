@@ -1,6 +1,7 @@
 package com.upstack.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
@@ -8,7 +9,9 @@ import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.ui.ComboboxSpeedSearch
 import com.intellij.ui.DocumentAdapter
+import com.intellij.ui.EditorTextField
 import com.intellij.ui.GroupedComboBoxRenderer
+import com.intellij.ui.TextFieldWithAutoCompletion
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBRadioButton
@@ -154,6 +157,12 @@ internal fun branchProblemText(problem: BranchNameProblem, name: String): String
 internal fun JTextComponent.onChange(block: () -> Unit) {
     document.addDocumentListener(object : DocumentAdapter() {
         override fun textChanged(e: DocumentEvent) = block()
+    })
+}
+
+internal fun EditorTextField.onChange(block: () -> Unit) {
+    addDocumentListener(object : DocumentListener {
+        override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) = block()
     })
 }
 
@@ -391,6 +400,10 @@ private class StackPreview : JPanel(VerticalLayout(0)) {
 /**
  * `gh stack add rama`, con el commit opcional de `-A`/`-u`/`-m`. Si no se esta en la capa
  * superior, antes `gh stack top`: gh-stack solo anade encima de la pila.
+ *
+ * El nombre se autocompleta con [existing], las ramas locales que gh-stack puede adoptar
+ * (ver [com.upstack.stack.LayerPlans.addCandidates]): las adopta tal cual, sin rebase sobre
+ * la de arriba.
  */
 internal class AddLayerDialog(
     project: Project,
@@ -398,9 +411,11 @@ internal class AddLayerDialog(
     private val top: StackLayer,
     private val needsTop: Boolean,
     private val topIsEmpty: Boolean,
+    private val existing: List<String>,
 ) : DialogWrapper(project) {
 
-    private val branchField = JBTextField(prefixOf(top.branch), 32)
+    private val branchField = TextFieldWithAutoCompletion.create(project, existing, AllIcons.Vcs.Branch, false, prefixOf(top.branch))
+    private val adoptNote = JBLabel("", AllIcons.General.Information, JBLabel.LEFT)
     private val commitBox = JBCheckBox(message("add.commit"))
     private val messageField = JBTextField(32)
     private val stagingAll = JBRadioButton(message("add.staging.all"), true)
@@ -424,7 +439,8 @@ internal class AddLayerDialog(
     init {
         title = message("add.title")
         setOKButtonText(message("add.ok"))
-        branchField.caretPosition = branchField.text.length
+        // El editor del campo se crea al mostrarse: es entonces cuando el cursor va tras el prefijo.
+        branchField.addSettingsProvider { it.caretModel.moveToOffset(it.document.textLength) }
         branchField.onChange(::update)
         messageField.onChange(::update)
         commitBox.addActionListener { update() }
@@ -450,6 +466,7 @@ internal class AddLayerDialog(
         row(message("add.branch")) {
             cell(branchField).align(AlignX.FILL)
         }
+        row { cell(adoptNote) }
         row { cell(commitBox) }
         indent {
             row(message("add.message")) { cell(messageField).align(AlignX.FILL) }
@@ -481,11 +498,16 @@ internal class AddLayerDialog(
         val committing = commitBox.isSelected
         listOf(messageField, stagingAll, stagingTracked, stagingStaged).forEach { it.isEnabled = committing }
         emptyWarning.isVisible = committing && topIsEmpty
+        adoptNote.isVisible = branch in existing
+        adoptNote.text = message("add.adopt", branch, top.branch)
         val commands = buildList {
             if (needsTop) add(GhCommands.top())
             add(GhCommands.add(branch.ifEmpty { "…" }, commit?.let { if (it.message.isEmpty()) it.copy(message = "…") else it }))
         }
         preview.show(commands)
+        // Un aviso que aparece no cabe en el alto de antes: el dialogo crece, nunca encoge.
+        val window = window ?: return
+        if (window.isVisible && window.preferredSize.let { it.height > window.height || it.width > window.width }) pack()
     }
 
     private companion object {

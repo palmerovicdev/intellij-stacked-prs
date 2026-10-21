@@ -125,6 +125,13 @@ class LayerPlansTest {
     }
 
     @Test
+    fun `a new layer can adopt any local branch that no stack holds, the trunk of another stack included`() {
+        val local = listOf("main", "feat/a", "feat/b", "feat/c", "spike", "fix/x", "release", "fix/y")
+        val other = LocalStack("release", listOf("fix/x"))
+        assertEquals(listOf("fix/y", "release", "spike"), LayerPlans.addCandidates(local, stack, listOf(other)))
+    }
+
+    @Test
     fun `a top layer without its branch is only taken out`() {
         val plan = LayerPlans.drop(stack, stack.layers[2], "feat/b", deleteLocal = true, deleteOn = null, layerExists = false)
         assertEquals(listOf("gh stack unstack --local", "gh stack init --base main feat/a feat/b"), lines(plan.calls))

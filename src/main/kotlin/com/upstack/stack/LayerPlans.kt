@@ -154,6 +154,21 @@ object LayerPlans {
         }
     }
 
+    /**
+     * Las ramas de [local] que `gh stack add` acepta como capa nueva: las adopta tal cual estan.
+     * Fuera el trunk y las capas de [snapshot], y las de cualquier otra pila de [tracked]: con
+     * ellas gh-stack falla con «already exists in the stack». El trunk de otra pila si vale.
+     * Solo locales: con una que solo esta en el remoto, `add` crea otra rama desde la de arriba.
+     */
+    fun addCandidates(local: Collection<String>, snapshot: StackSnapshot, tracked: List<LocalStack>): List<String> {
+        val taken = buildSet {
+            add(snapshot.trunk)
+            snapshot.layers.mapTo(this) { it.branch }
+            tracked.flatMapTo(this) { it.branches }
+        }
+        return local.filterNot(taken::contains).sorted()
+    }
+
     /** `init` termina en la ultima de [branches]: volver a [branch] si es otra. */
     private fun backTo(branch: String?, branches: List<String>): List<GhCall> =
         if (branch == null || branch == branches.lastOrNull()) emptyList() else listOf(git(GitCommands.switch(branch)))

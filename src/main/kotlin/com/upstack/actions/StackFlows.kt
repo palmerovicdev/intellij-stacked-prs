@@ -388,7 +388,9 @@ internal object StackFlows {
         val topHash = branches.findLocalBranch(top.branch)?.let(branches::getHash)
         val parentHash = branches.findLocalBranch(snapshot.parentOf(top))?.let(branches::getHash)
 
-        val dialog = AddLayerDialog(project, state, top, needsTop, topIsEmpty = topHash != null && topHash == parentHash)
+        val existing = LayerPlans.addCandidates(branches.localBranches.map { it.name }, snapshot, service.localStacks(repository).map { it.stack })
+
+        val dialog = AddLayerDialog(project, state, top, needsTop, topIsEmpty = topHash != null && topHash == parentHash, existing)
         if (!dialog.showAndGet()) return
         val calls = buildList {
             if (needsTop) add(GhCall(GhCommands.top()))
