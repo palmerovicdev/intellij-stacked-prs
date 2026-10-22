@@ -67,6 +67,9 @@ hecha y el plugin salga al Marketplace (P40).
 | El título propuesto de un PR nuevo es el nombre de su rama                                                                                             | `0.11.1`                |
 | *Check* del entorno en los ajustes, *Log In…* sin terminal, *Upgrade gh-stack* y aviso si gh-stack no es la v0.1.1 (P4)                                | `0.12.0`                |
 | *Add Layer…* autocompleta el nombre con las ramas locales que gh-stack puede adoptar                                                                   | `0.12.3`                |
+| *Back to Stacks*: de las capas a la lista de pilas sin cambiar de rama; en el trunk, la lista de entrada                                               | `0.13.0`                |
+| *Publish as Draft / Ready…* en cualquier capa sin PR, aunque haya capas sin PR encima                                                                  | `0.14.0`                |
+| *Add Layer…* sugiere todas las ramas, locales y remotas, sin pedirlas; una solo remota se sigue en local antes de adoptarla                            | `0.14.0`                |
 
 ---
 
@@ -686,6 +689,10 @@ locales. Quien lleva dos o tres pilas a la vez no las ve juntas.
 Primera entrega: un selector de pila en la cabecera (como el de repositorio) con todas
 las pilas locales. Elegir una no hace checkout: solo cambia lo que se ve, con sus
 acciones activas donde tenga sentido. Depende de P7 y, con P13, suma las remotas.
+
+Desde la `0.13.0`, *Back to Stacks* trae la lista de pilas también desde dentro de una, y en
+el trunk es lo de entrada. Ver otra pila que no sea la de la rama actual sigue pidiendo
+checkout.
 
 ### P29 · Widget en la barra de estado 🟡
 

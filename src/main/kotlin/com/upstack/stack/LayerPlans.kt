@@ -2,6 +2,7 @@ package com.upstack.stack
 
 import com.upstack.gh.GhCommands
 import com.upstack.gh.GitCommands
+import com.upstack.gh.LayerCommit
 import com.upstack.gh.Tool
 
 /** Por que una capa no se puede borrar sin `gh stack modify`. Ver [LayerPlans.dropBlock]. */
@@ -29,6 +30,30 @@ enum class RenameBlock {
 
     /** La rama esta en el remoto, pero no se sabe en que repositorio de GitHub renombrarla. */
     NO_GITHUB,
+}
+
+/** Que pasa con una rama del proyecto si se elige en *Add Layer…*. Ver [LayerPlans.addSuggestions]. */
+enum class AddBranchKind {
+    /** Local y fuera de toda pila: `gh stack add` la adopta tal cual. */
+    LOCAL,
+
+    /** Solo en un remoto: antes se crea la local que la sigue, y `add` la adopta (ver [LayerPlans.add]). */
+    REMOTE,
+
+    /** Capa o trunk de esta pila: ya esta. */
+    THIS_STACK,
+
+    /** Capa de otra pila que gh-stack sigue: `add` falla con «already exists in the stack». */
+    OTHER_STACK,
+}
+
+/** Una rama que sugiere *Add Layer…*. [remote]: donde esta, solo en [AddBranchKind.REMOTE]. */
+data class AddBranch(val name: String, val kind: AddBranchKind, val remote: String? = null) {
+    /** `gh stack add` la acepta. */
+    val usable: Boolean get() = kind == AddBranchKind.LOCAL || kind == AddBranchKind.REMOTE
+
+    /** `origin/feat/a`, la rama remota que seguira la local nueva. */
+    val remoteBranch: String? get() = remote?.let { "$it/$name" }
 }
 
 /** La rama de la capa esta en [remote], que es [github]: tambien se renombra alli. */
@@ -155,18 +180,85 @@ object LayerPlans {
     }
 
     /**
-     * Las ramas de [local] que `gh stack add` acepta como capa nueva: las adopta tal cual estan.
-     * Fuera el trunk y las capas de [snapshot], y las de cualquier otra pila de [tracked]: con
-     * ellas gh-stack falla con «already exists in the stack». El trunk de otra pila si vale.
-     * Solo locales: con una que solo esta en el remoto, `add` crea otra rama desde la de arriba.
+     * [calls] con gh-stack siguiendo en local la pila solo hasta [layer], y despues entera otra vez:
+     * asi `submit`, que publica todas las capas sin PR que sigue, deja fuera las de encima. La pila
+     * parcial y la entera adoptan las ramas y sus PRs, y `submit` adopta la pila de GitHub. Con
+     * capas fusionadas o en cola no vale (como [DropBlock.MERGED_LAYERS]).
+     *
+     * `init` deja HEAD en la ultima capa que adopta: [calls] corren en [layer], y al final se
+     * vuelve a [current].
+     *
+     * Si se corta a medias, la pila se vuelve a crear entera y HEAD vuelve a [current].
      */
-    fun addCandidates(local: Collection<String>, snapshot: StackSnapshot, tracked: List<LocalStack>): List<String> {
-        val taken = buildSet {
+    fun upTo(snapshot: StackSnapshot, layer: StackLayer, current: String?, calls: List<GhCall>): Plan {
+        val branches = snapshot.layers.map { it.branch }
+        val partial = branches.take(branches.indexOf(layer.branch) + 1)
+        val all = buildList {
+            add(GhCall(GhCommands.unstackLocal()))
+            add(GhCall(GhCommands.init(partial, snapshot.trunk)))
+            addAll(calls)
+            add(GhCall(GhCommands.unstackLocal()))
+            add(GhCall(GhCommands.init(branches, snapshot.trunk)))
+            addAll(backTo(current, branches))
+        }
+        // Cuantas llamadas tienen que haber terminado para que cada `init` este hecho.
+        val partialInitialized = 2
+        val initialized = calls.size + 4
+        return Plan(all) { completed ->
+            // Antes del primer `unstack` no cambio nada; tras el ultimo `init`, la pila ya esta bien.
+            if (completed == 0 || completed >= initialized) return@Plan emptyList()
+            buildList {
+                // La pila parcial sigue en local: antes de volver a crearla entera, se deja de seguir.
+                if (completed in partialInitialized until initialized - 1) add(GhCall(GhCommands.unstackLocal()))
+                add(GhCall(GhCommands.init(branches, snapshot.trunk)))
+                addAll(backTo(current, branches))
+            }
+        }
+    }
+
+    /**
+     * Las ramas del proyecto que sugiere *Add Layer…*, locales y remotas, cada una con lo que pasa
+     * si se elige (ver [AddBranchKind]): primero las que `gh stack add` acepta, despues las que no,
+     * y por nombre. [remote]: por nombre, el remoto que la tiene; una que tambien esta en local
+     * cuenta como local. El trunk de otra pila si vale: gh-stack solo mira sus capas.
+     */
+    fun addSuggestions(local: Collection<String>, remote: Map<String, String>, snapshot: StackSnapshot, tracked: List<LocalStack>): List<AddBranch> {
+        val ours = buildSet {
             add(snapshot.trunk)
             snapshot.layers.mapTo(this) { it.branch }
-            tracked.flatMapTo(this) { it.branches }
         }
-        return local.filterNot(taken::contains).sorted()
+        val others = tracked.flatMapTo(HashSet()) { it.branches }
+        fun kind(name: String, isLocal: Boolean) = when (name) {
+            in ours -> AddBranchKind.THIS_STACK
+            in others -> AddBranchKind.OTHER_STACK
+            else -> if (isLocal) AddBranchKind.LOCAL else AddBranchKind.REMOTE
+        }
+        val locals = local.toSet()
+        val all = locals.map { AddBranch(it, kind(it, isLocal = true)) } +
+            remote.filterKeys { it !in locals }.map { (name, where) ->
+                val kind = kind(name, isLocal = false)
+                AddBranch(name, kind, where.takeIf { kind == AddBranchKind.REMOTE })
+            }
+        return all.sortedWith(compareBy({ !it.usable }, { it.name }))
+    }
+
+    /**
+     * `gh stack add` de [branch] encima de la pila, con `gh stack top` antes si [needsTop]. Si solo
+     * esta en un remoto ([remoteBranch], `origin/rama`), antes se crea la local que la sigue, y
+     * gh-stack la adopta tal cual: sin ella, `add` crearia otra rama con ese nombre desde la capa de
+     * arriba, y el siguiente push pisaria la del remoto.
+     *
+     * Si se corta despues de crear esa rama local y antes de que `add` termine, se borra.
+     */
+    fun add(branch: String, commit: LayerCommit?, needsTop: Boolean, remoteBranch: String?): Plan {
+        val calls = buildList {
+            if (remoteBranch != null) add(git(GitCommands.branchTracking(branch, remoteBranch)))
+            if (needsTop) add(GhCall(GhCommands.top()))
+            add(GhCall(GhCommands.add(branch, commit)))
+        }
+        return Plan(calls) { completed ->
+            if (remoteBranch != null && completed in 1 until calls.size) listOf(git(GitCommands.deleteBranch(branch))) else emptyList()
+        }
     }
 
     /** `init` termina en la ultima de [branches]: volver a [branch] si es otra. */

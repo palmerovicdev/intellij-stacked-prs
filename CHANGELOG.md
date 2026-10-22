@@ -3,6 +3,41 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.14.0 — Publicar cualquier capa
+
+- **Publicar cualquier capa sin PR desde su menú**, no solo la de arriba: *Publish as Draft…*
+  y *Publish Ready for Review…* ya no salen desactivadas si hay capas sin PR encima. Como
+  `gh stack submit` publica todas, la pila se sigue en local solo hasta esa capa durante el
+  `submit` y después otra vez entera; las de encima se quedan sin PR. Si se corta a medias, la
+  pila se vuelve a crear como estaba. Con capas fusionadas o en cola sigue sin poderse.
+- **Add Layer sugiere todas las ramas del proyecto**, locales y remotas, y sin pedirlas: al
+  abrirse el diálogo y al escribir, aunque el IDE tenga desactivado *Show suggestions as you
+  type*. Cada una dice a la derecha qué es (*local*, el remoto, *in this stack*, *in another
+  stack*); las que `gh stack add` no acepta salen al final y en gris, y el diálogo dice por qué.
+  Siguen siendo sugerencias: vale cualquier otro nombre.
+- **Se buscan por palabras, como en el popup de ramas del IDE**: `feat/pay` encuentra
+  `feat/business-configuration-pay-runs`, y `pay`, cualquier rama con esa palabra. `/`, `.` y
+  `-` siguen filtrando: antes `/` cerraba la lista y `.` insertaba la rama elegida.
+- **Una rama que solo está en el remoto se adopta**: antes de `gh stack add` se crea la local
+  que la sigue (`git branch --track`). Hasta ahora, escribir ese nombre creaba otra rama desde
+  la capa de arriba, y el siguiente push habría pisado la del remoto. Si `add` falla, esa rama
+  local se borra.
+
+## 0.13.0 — Volver a la lista de pilas
+
+- **Back to Stacks**, la flecha al principio de la barra de la ventana: de las capas de una
+  pila a la lista de pilas locales, sin cambiar de rama. Vale también con una sola pila.
+- **En el trunk ya no se entra solo en su pila.** Si de `main` sale una única pila (por
+  ejemplo, tras cerrar las demás), `gh stack view` la abría y la ventana enseñaba sus capas;
+  ahora enseña la lista, como cuando salen varias. En una capa se sigue abriendo su pila.
+- En la lista, la pila de la rama actual lleva *HEAD*: doble clic o Enter enseña sus capas,
+  sin checkout. En las demás, el doble clic hace checkout, como antes.
+- Lo elegido, lista o capas, se mantiene mientras no cambie la rama, aunque la ventana se
+  refresque.
+- Con la lista delante, las acciones de la pila (*Add Layer*, *Publish*, *Sync*, *Rebase*,
+  *Merge*, *Close*) y sus bandas esperan a que se abra, como fuera de una pila. La banda de un
+  rebase parado sigue saliendo.
+
 ## 0.12.3 — Add Layer sugiere ramas existentes
 
 - **El nombre de la capa nueva se autocompleta** con las ramas locales que gh-stack puede

@@ -54,10 +54,17 @@ object PublishPlans {
 
     /**
      * Las capas activas sin PR por encima de [layer]. `gh stack submit` publica todas las que no
-     * tienen PR: si hay alguna encima, publicar solo esta no se puede.
+     * tienen PR: para dejarlas sin el, [layerPlan] rehace la pila solo hasta [layer].
      */
     fun unpublishedAbove(snapshot: StackSnapshot, layer: StackLayer): List<StackLayer> =
         snapshot.activeAbove(layer).filter { it.pr == null }
+
+    /**
+     * [layer] no se puede publicar desde su menu: hay capas sin PR encima y, con capas fusionadas
+     * o en cola, la pila no se puede rehacer solo hasta ella (ver [LayerPlans.upTo]).
+     */
+    fun layerBlocked(snapshot: StackSnapshot, layer: StackLayer): Boolean =
+        unpublishedAbove(snapshot, layer).isNotEmpty() && snapshot.layers.any { it.isMerged || it.isQueued }
 
     /**
      * Las capas activas sin PR por debajo de [layer]: su PR hace falta como base del suyo, y
@@ -68,14 +75,18 @@ object PublishPlans {
 
     /**
      * Publicar [layer] desde su menu: lo de [calls] solo con las capas que crea `submit`, las de
-     * debajo como draft y esta con [text] y, si [ready], lista para review.
+     * debajo como draft y esta con [text] y, si [ready], lista para review. Si hay capas sin PR
+     * encima, `submit` corre con la pila seguida solo hasta [layer] y ellas se quedan sin PR (ver
+     * [LayerPlans.upTo]); [current], la rama actual, es adonde se vuelve.
      */
-    fun layerCalls(snapshot: StackSnapshot, layer: StackLayer, text: PrText, ready: Boolean, repo: GitHubRepo?): List<GhCall> =
-        calls(
+    fun layerPlan(snapshot: StackSnapshot, layer: StackLayer, text: PrText, ready: Boolean, repo: GitHubRepo?, current: String?): Plan {
+        val calls = calls(
             unpublishedBelow(snapshot, layer).map { PublishLayer(it.branch, null, null, ready = false) } +
                 PublishLayer(layer.branch, null, null, ready = ready, text = text),
             repo,
         )
+        return if (unpublishedAbove(snapshot, layer).isEmpty()) Plan(calls) else LayerPlans.upTo(snapshot, layer, current, calls)
+    }
 
     /**
      * Titulo y descripcion propuestos para el PR de [branch]. El titulo es siempre el nombre de la

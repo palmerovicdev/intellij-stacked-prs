@@ -31,6 +31,29 @@ class PublishLayerFlowTest : FlowTestCase() {
         return awaitState { !it.detailsLoading }
     }
 
+    /** main ← feat/a (#11) ← feat/b ← feat/c, las dos de arriba sin PR, en feat/c. */
+    private fun loadStackWithLayerAbove(): StackState.Loaded {
+        git("switch", "-c", "feat/a")
+        git("switch", "-c", "feat/b")
+        Files.writeString(repoDir.resolve("flows.txt"), "flows\n")
+        git("add", ".")
+        git("commit", "-m", "Flow view", "-m", "Shows the flows.")
+        git("switch", "-c", "feat/c")
+        gh.respond(
+            VIEW,
+            stdout = """
+                {"trunk":"main","currentBranch":"feat/c","branches":[
+                  {"name":"feat/a","isCurrent":false,"isMerged":false,"isQueued":false,"needsRebase":false,
+                   "pr":{"number":11,"url":"${Samples.URL_A}","state":"OPEN"}},
+                  {"name":"feat/b","isCurrent":false,"isMerged":false,"isQueued":false,"needsRebase":false},
+                  {"name":"feat/c","isCurrent":true,"isMerged":false,"isQueued":false,"needsRebase":false}
+                ]}
+            """.trimIndent(),
+        )
+        gh.respond(listOf("api", "graphql"), prefix = true, stdout = Samples.DETAILS_TWO_LAYERS)
+        return awaitState { !it.detailsLoading }
+    }
+
     private fun acceptProposal() {
         UiInterceptors.register(object : UiInterceptors.UiInterceptor<PublishLayerDialog>(PublishLayerDialog::class.java) {
             override fun doIntercept(component: PublishLayerDialog) {
@@ -68,6 +91,47 @@ class PublishLayerFlowTest : FlowTestCase() {
         awaitNotificationWith(msg("op.publish.layer.draft", "feat/b"))
 
         assertEquals(listOf(submit, edit), gh.writes())
+        awaitQuiet()
+    }
+
+    fun `test a layer below an unpublished one is submitted with the stack tracked only up to it`() {
+        val state = loadStackWithLayerAbove()
+        preferredRemote = "origin"
+        val unstack = listOf("stack", "unstack", "--local")
+        val initUpTo = listOf("stack", "init", "--base", "main", "feat/a", "feat/b")
+        val submit = listOf("stack", "submit", "--auto", "--remote", "origin")
+        val edit = listOf("pr", "edit", "feat/b", "--repo", "acme/shop", "--title", "feat/b", "--body", "Shows the flows.")
+        val ready = listOf("pr", "ready", "feat/b", "--repo", "acme/shop")
+        val initWhole = listOf("stack", "init", "--base", "main", "feat/a", "feat/b", "feat/c")
+        listOf(unstack, initUpTo, submit, edit, ready, initWhole).forEach { gh.respond(it) }
+        acceptProposal()
+
+        onEdt { StackFlows.publishLayer(project, state.snapshot.layers[1], ready = true) }
+        awaitNotificationWith(msg("op.publish.layer.ready", "feat/b"))
+
+        assertEquals(listOf(unstack, initUpTo, submit, edit, ready, unstack, initWhole), gh.writes())
+        assertEquals("feat/c", git("branch", "--show-current").trim())
+        awaitQuiet()
+    }
+
+    fun `test if the submit fails the stack is tracked whole again`() {
+        val state = loadStackWithLayerAbove()
+        preferredRemote = "origin"
+        val unstack = listOf("stack", "unstack", "--local")
+        val initUpTo = listOf("stack", "init", "--base", "main", "feat/a", "feat/b")
+        val submit = listOf("stack", "submit", "--auto", "--remote", "origin")
+        val initWhole = listOf("stack", "init", "--base", "main", "feat/a", "feat/b", "feat/c")
+        gh.respond(unstack)
+        gh.respond(initUpTo)
+        gh.respond(submit, exit = 1, stderr = "boom\n")
+        gh.respond(initWhole)
+        acceptProposal()
+
+        onEdt { StackFlows.publishLayer(project, state.snapshot.layers[1], ready = false) }
+        awaitNotificationWith(msg("operation.failed", msg("op.publish.layer", "feat/b")))
+        awaitIdle()
+
+        assertEquals(listOf(unstack, initUpTo, submit, unstack, initWhole), gh.writes())
         awaitQuiet()
     }
 }

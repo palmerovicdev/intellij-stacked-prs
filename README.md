@@ -65,8 +65,10 @@ is approved, why did the rebase stop.
   another stack.
 - **Add Layer…** on top, optionally committing your current changes in the new layer: all
   changes, tracked files only, or just what's staged. If you're not on the top layer, it
-  checks it out first. The name autocompletes with your local branches: pick one and it joins
-  the stack as it is.
+  checks it out first. As you type, it suggests every branch of the project, local and remote,
+  matched by any word of its name (`feat/pay` finds `feat/business-configuration-pay-runs`),
+  and says which ones it can take: pick one and it joins the stack as it is (one only on the
+  remote gets a local branch tracking it first), or type any other name.
 - Every dialog shows the exact `$ gh stack …` line it will run, live as you type.
 
 ### Publish the stack your way
@@ -79,7 +81,8 @@ is approved, why did the rebase stop.
 - Or in one click: **as drafts** (`gh stack submit --auto`) or **ready for review**
   (`--open`, after showing which pull requests will change, because `--open` also marks
   existing drafts ready).
-- **Publish a single layer** from its own menu, when no layer above it is unpublished.
+- **Publish a single layer** from its own menu, any layer without a pull request: the layers
+  below it go as drafts (they are its base) and the ones above stay unpublished.
 - From each layer: **Mark Ready / Convert to Draft**, **Edit Title…**, **Labels…** and a
   **final-layer label** (`stack-final` by default, one per stack).
 
@@ -174,6 +177,9 @@ is approved, why did the rebase stop.
 - **Delete Layer…** for the top layer without a pull request, and **Rename Branch…** for
   layers without one, here and on GitHub. Layers with a pull request can't be renamed:
   GitHub closes the pull request of a renamed branch.
+- **Back to Stacks**, the arrow in the toolbar, lists every local stack without changing
+  branch; double-click yours to see its layers again. On the trunk, that list is what you see
+  first, even with a single stack.
 - **A branch in several stacks** (a layer of one and the base of another): it says so and
   lists them all.
 - **Several remotes**: it asks once which one to use and remembers it per project.
@@ -214,9 +220,10 @@ It needs:
 | Action | Command |
 |---|---|
 | New Stack… | `gh stack init [--base branch] layers…` |
-| Add Layer… | `gh stack add branch` (`gh stack top` first if you're not on top; to commit, `-A` or `-u` and `-m`) |
+| Add Layer… | `gh stack add branch` (`gh stack top` first if you're not on top; to commit, `-A` or `-u` and `-m`; a branch only on the remote, `git branch --track branch origin/branch` first) |
 | Publish Stack… | `gh stack submit --auto`, then `gh pr edit <branch> --title … --body …` for each new pull request and `gh pr ready` (or `--undo`) for each change |
 | Publish as drafts / ready | `gh stack submit --auto` / `gh stack submit --auto --open` |
+| Publish a layer as Draft… / Ready… | `gh stack submit --auto`, `gh pr edit <branch> --title … --body …` and, if ready, `gh pr ready <branch>`; with unpublished layers above, `gh stack unstack --local` and `gh stack init` up to that layer before, and with every layer after |
 | Mark Ready / Convert to Draft | `gh pr ready <url>` / `gh pr ready <url> --undo` |
 | Change Pull Request Base | `gh pr edit <url> --base <layer below>` |
 | Show Layer Changes | the IDE diff, same as `git diff <layer below>...<layer>` |

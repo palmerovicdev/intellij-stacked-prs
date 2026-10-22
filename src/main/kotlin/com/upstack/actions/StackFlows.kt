@@ -388,15 +388,31 @@ internal object StackFlows {
         val topHash = branches.findLocalBranch(top.branch)?.let(branches::getHash)
         val parentHash = branches.findLocalBranch(snapshot.parentOf(top))?.let(branches::getHash)
 
-        val existing = LayerPlans.addCandidates(branches.localBranches.map { it.name }, snapshot, service.localStacks(repository).map { it.stack })
+        // Las del remoto de la pila primero: si una rama esta en varios, se sigue la de ese.
+        val stackRemote = service.stackRemote(repository, snapshot)
+        val remote = branches.remoteBranches
+            .filter { it.nameForRemoteOperations != "HEAD" }
+            .sortedBy { it.remote.name != stackRemote }
+            .distinctBy { it.nameForRemoteOperations }
+            .associate { it.nameForRemoteOperations to it.remote.name }
+        val suggestions = LayerPlans.addSuggestions(
+            branches.localBranches.map { it.name }, remote, snapshot, service.localStacks(repository).map { it.stack },
+        )
 
-        val dialog = AddLayerDialog(project, state, top, needsTop, topIsEmpty = topHash != null && topHash == parentHash, existing)
-        if (!dialog.showAndGet()) return
-        val calls = buildList {
-            if (needsTop) add(GhCall(GhCommands.top()))
-            add(GhCall(GhCommands.add(dialog.branch, dialog.commit)))
-        }
-        service.execute(Operation(message("op.add"), calls, repository, successMessage = message("op.add.done", dialog.branch)))
+        val dialog = AddLayerDialog(project, state, top, needsTop, topIsEmpty = topHash != null && topHash == parentHash, suggestions)
+        // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+        dialog.show()
+        if (!dialog.isOK) return
+        val plan = dialog.plan
+        service.execute(
+            Operation(
+                title = message("op.add"),
+                calls = plan.calls,
+                repository = repository,
+                successMessage = message("op.add.done", dialog.branch),
+                cleanup = plan.cleanup,
+            )
+        )
     }
 
     /**
@@ -443,16 +459,16 @@ internal object StackFlows {
 
     /**
      * Publicar una capa sin PR desde su menu, como draft o lista para review (ver
-     * [PublishPlans.layerCalls]). `gh stack submit` publica todas las que no tienen PR: no se
-     * ofrece si hay alguna encima.
+     * [PublishPlans.layerPlan]). Las de encima sin PR se quedan sin el.
      */
     fun publishLayer(project: Project, layer: StackLayer, ready: Boolean) {
         val service = StackService.getInstance(project)
         val state = service.state.value as? StackState.Loaded ?: return
         val repository = service.repositoryFor(state.repo) ?: return
         val snapshot = state.snapshot
-        if (layer.pr != null || PublishPlans.unpublishedAbove(snapshot, layer).isNotEmpty()) return
+        if (layer.pr != null || PublishPlans.layerBlocked(snapshot, layer)) return
         val github = githubOf(state)
+        val current = repository.currentBranchName
         service.launch {
             val proposal = try {
                 withBackgroundProgress(project, message("publish.reading")) {
@@ -464,17 +480,19 @@ internal object StackFlows {
                 PublishPlans.proposal(layer.branch, emptyList())
             }
             val text = withContext(Dispatchers.EDT) {
-                val dialog = PublishLayerDialog(project, snapshot, layer, proposal, ready, github)
+                val dialog = PublishLayerDialog(project, snapshot, layer, proposal, ready, github, current)
                 // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
                 dialog.show()
                 if (dialog.isOK) dialog.text else null
             } ?: return@launch
+            val plan = PublishPlans.layerPlan(snapshot, layer, text, ready, github, current)
             service.execute(
                 Operation(
                     title = message("op.publish.layer", layer.branch),
-                    calls = PublishPlans.layerCalls(snapshot, layer, text, ready, github),
+                    calls = plan.calls,
                     repository = repository,
                     successMessage = message(if (ready) "op.publish.layer.ready" else "op.publish.layer.draft", layer.branch),
+                    cleanup = plan.cleanup,
                 )
             )
         }

@@ -1,5 +1,9 @@
 package com.upstack.ui
 
+import com.intellij.codeInsight.AutoPopupController
+import com.intellij.codeInsight.completion.PrefixMatcher
+import com.intellij.codeInsight.lookup.CharFilter
+import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.project.Project
@@ -7,11 +11,12 @@ import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.openapi.ui.popup.ListSeparator
+import com.intellij.psi.codeStyle.NameUtil
 import com.intellij.ui.ComboboxSpeedSearch
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.GroupedComboBoxRenderer
-import com.intellij.ui.TextFieldWithAutoCompletion
+import com.intellij.ui.TextFieldWithAutoCompletionListProvider
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBRadioButton
@@ -22,6 +27,8 @@ import com.intellij.ui.components.panels.VerticalLayout
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.TopGap
 import com.intellij.ui.dsl.builder.panel
+import com.intellij.util.text.matching.MatchingMode
+import com.intellij.util.textCompletion.TextFieldWithCompletion
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.NamedColorUtil
@@ -31,7 +38,10 @@ import com.upstack.gh.BranchNameProblem
 import com.upstack.gh.GhCommands
 import com.upstack.gh.LayerCommit
 import com.upstack.gh.Staging
+import com.upstack.stack.AddBranch
+import com.upstack.stack.AddBranchKind
 import com.upstack.stack.GhCall
+import com.upstack.stack.LayerPlans
 import com.upstack.stack.LocalStackEntry
 import com.upstack.stack.Plan
 import com.upstack.stack.Position
@@ -401,9 +411,9 @@ private class StackPreview : JPanel(VerticalLayout(0)) {
  * `gh stack add rama`, con el commit opcional de `-A`/`-u`/`-m`. Si no se esta en la capa
  * superior, antes `gh stack top`: gh-stack solo anade encima de la pila.
  *
- * El nombre se autocompleta con [existing], las ramas locales que gh-stack puede adoptar
- * (ver [com.upstack.stack.LayerPlans.addCandidates]): las adopta tal cual, sin rebase sobre
- * la de arriba.
+ * El nombre se autocompleta con [suggestions], las ramas del proyecto, locales y remotas (ver
+ * [LayerPlans.addSuggestions]): gh-stack adopta una existente tal cual, sin rebase sobre la de
+ * arriba. Son sugerencias: vale cualquier otro nombre, y entonces gh-stack crea la rama.
  */
 internal class AddLayerDialog(
     project: Project,
@@ -411,10 +421,22 @@ internal class AddLayerDialog(
     private val top: StackLayer,
     private val needsTop: Boolean,
     private val topIsEmpty: Boolean,
-    private val existing: List<String>,
+    private val suggestions: List<AddBranch>,
 ) : DialogWrapper(project) {
 
-    private val branchField = TextFieldWithAutoCompletion.create(project, existing, AllIcons.Vcs.Branch, false, prefixOf(top.branch))
+    private val byName = suggestions.associateBy { it.name }
+
+    // Las sugerencias salen solas, al entrar en el campo y al escribir, aunque el IDE tenga
+    // desactivado *Show suggestions as you type*. TextFieldWithAutoCompletion.create no las fuerza.
+    private val branchField = TextFieldWithCompletion(
+        project,
+        BranchSuggestions(suggestions),
+        prefixOf(top.branch),
+        true, // oneLineMode
+        true, // autoPopup
+        true, // forceAutoPopup: al escribir
+        true, // showHint: instala el AUTO_POPUP_ON_FOCUS_GAINED de abajo
+    )
     private val adoptNote = JBLabel("", AllIcons.General.Information, JBLabel.LEFT)
     private val commitBox = JBCheckBox(message("add.commit"))
     private val messageField = JBTextField(32)
@@ -425,6 +447,12 @@ internal class AddLayerDialog(
     private val preview = CommandPreview()
 
     val branch: String get() = branchField.text.trim()
+
+    /** La rama escrita, si es una del proyecto. */
+    private val chosen: AddBranch? get() = byName[branch]
+
+    /** Lo que se ejecuta (ver [LayerPlans.add]). */
+    val plan: Plan get() = LayerPlans.add(branch, commit, needsTop, chosen?.remoteBranch)
 
     val commit: LayerCommit?
         get() = if (commitBox.isSelected) LayerCommit(messageField.text.trim(), staging) else null
@@ -439,8 +467,12 @@ internal class AddLayerDialog(
     init {
         title = message("add.title")
         setOKButtonText(message("add.ok"))
-        // El editor del campo se crea al mostrarse: es entonces cuando el cursor va tras el prefijo.
-        branchField.addSettingsProvider { it.caretModel.moveToOffset(it.document.textLength) }
+        // El editor del campo se crea al mostrarse: es entonces cuando el cursor va tras el prefijo
+        // y las sugerencias se piden al entrar en el campo, ya con el prefijo escrito.
+        branchField.addSettingsProvider {
+            it.caretModel.moveToOffset(it.document.textLength)
+            if (suggestions.isNotEmpty()) it.putUserData(AutoPopupController.AUTO_POPUP_ON_FOCUS_GAINED, true)
+        }
         branchField.onChange(::update)
         messageField.onChange(::update)
         commitBox.addActionListener { update() }
@@ -485,11 +517,18 @@ internal class AddLayerDialog(
 
     override fun getPreferredFocusedComponent(): JComponent = branchField
 
-    override fun doValidate(): ValidationInfo? {
+    /** Escribe [name] en el campo, como el usuario. Los tests no pueden teclear en un dialogo sin pantalla. */
+    internal fun enterName(name: String) {
+        branchField.text = name
+    }
+
+    // Publica: los tests comprueban que el nombre que escriben vale.
+    public override fun doValidate(): ValidationInfo? {
         GhCommands.branchNameProblem(branch)?.let { return ValidationInfo(branchProblemText(it, branch), branchField) }
         if (state.snapshot.layers.any { it.branch == branch } || branch == state.snapshot.trunk) {
             return ValidationInfo(message("add.exists", branch), branchField)
         }
+        if (chosen?.kind == AddBranchKind.OTHER_STACK) return ValidationInfo(message("add.other.stack", branch), branchField)
         if (commitBox.isSelected && messageField.text.isBlank()) return ValidationInfo(message("add.message.empty"), messageField)
         return null
     }
@@ -498,20 +537,71 @@ internal class AddLayerDialog(
         val committing = commitBox.isSelected
         listOf(messageField, stagingAll, stagingTracked, stagingStaged).forEach { it.isEnabled = committing }
         emptyWarning.isVisible = committing && topIsEmpty
-        adoptNote.isVisible = branch in existing
-        adoptNote.text = message("add.adopt", branch, top.branch)
-        val commands = buildList {
-            if (needsTop) add(GhCommands.top())
-            add(GhCommands.add(branch.ifEmpty { "…" }, commit?.let { if (it.message.isEmpty()) it.copy(message = "…") else it }))
+        val chosen = chosen
+        adoptNote.isVisible = chosen?.usable == true
+        adoptNote.text = when (chosen?.kind) {
+            AddBranchKind.REMOTE -> message("add.adopt.remote", branch, top.branch, chosen.remoteBranch.orEmpty())
+            else -> message("add.adopt", branch, top.branch)
         }
-        preview.show(commands)
+        val shown = commit?.let { if (it.message.isEmpty()) it.copy(message = "…") else it }
+        preview.showLines(Help.of(LayerPlans.add(branch.ifEmpty { "…" }, shown, needsTop, chosen?.remoteBranch).calls))
         // Un aviso que aparece no cabe en el alto de antes: el dialogo crece, nunca encoge.
         val window = window ?: return
         if (window.isVisible && window.preferredSize.let { it.height > window.height || it.width > window.width }) pack()
     }
 
-    private companion object {
+    internal companion object {
         /** `feat/payment-domain` -> `feat/`: la capa nueva suele seguir la convencion de la anterior. */
         fun prefixOf(branch: String): String = branch.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }
+    }
+}
+
+/**
+ * Las sugerencias de *Add Layer…*: cada rama dice a la derecha que es. Las que `gh stack add` no
+ * acepta salen al final y en gris: se ven, pero el dialogo no deja usarlas.
+ *
+ * Se buscan como en el popup de ramas del IDE (ver [BranchMatcher]), y `/`, `.` o `-` siguen
+ * filtrando: por defecto, `/` cerraria la lista y `.` insertaria la rama elegida.
+ */
+internal class BranchSuggestions(items: List<AddBranch>) : TextFieldWithAutoCompletionListProvider<AddBranch>(items) {
+
+    override fun getLookupString(item: AddBranch): String = item.name
+
+    override fun getIcon(item: AddBranch): Icon = AllIcons.Vcs.Branch
+
+    override fun getTypeText(item: AddBranch): String = when (item.kind) {
+        AddBranchKind.LOCAL -> message("add.kind.local")
+        AddBranchKind.REMOTE -> item.remote.orEmpty()
+        AddBranchKind.THIS_STACK -> message("add.kind.this.stack")
+        AddBranchKind.OTHER_STACK -> message("add.kind.other.stack")
+    }
+
+    // El orden de la lista: el mismo que LayerPlans.addSuggestions.
+    override fun compare(item1: AddBranch, item2: AddBranch): Int = compareValuesBy(item1, item2, { !it.usable }, { it.name })
+
+    override fun createLookupBuilder(item: AddBranch): LookupElementBuilder =
+        super.createLookupBuilder(item).let { if (item.usable) it else it.withItemTextForeground(NamedColorUtil.getInactiveTextColor()) }
+
+    override fun createPrefixMatcher(prefix: String): PrefixMatcher = BranchMatcher(prefix)
+
+    // Un nombre de rama no lleva espacios: con uno se cierra la lista sin insertar nada.
+    override fun acceptChar(c: Char): CharFilter.Result =
+        if (c.isWhitespace()) CharFilter.Result.HIDE_LOOKUP else CharFilter.Result.ADD_TO_PREFIX
+
+    /**
+     * Por palabras, en cualquier parte del nombre y sin mirar mayusculas: `feat/pay` encuentra
+     * `feat/business-configuration-pay-runs`, y `pay`, cualquier rama con esa palabra. El del
+     * padre solo busca el texto tal cual.
+     */
+    private class BranchMatcher(prefix: String) : PrefixMatcher(prefix) {
+        private val matcher = NameUtil.buildMatcher("*$prefix", MatchingMode.IGNORE_CASE)
+
+        override fun prefixMatches(name: String): Boolean = matcher.matches(name)
+
+        override fun isStartMatch(name: String): Boolean = name.startsWith(prefix, ignoreCase = true)
+
+        override fun matchingDegree(string: String): Int = matcher.matchingDegree(string)
+
+        override fun cloneWithPrefix(prefix: String): PrefixMatcher = if (prefix == this.prefix) this else BranchMatcher(prefix)
     }
 }

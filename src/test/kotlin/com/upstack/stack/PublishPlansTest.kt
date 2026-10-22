@@ -3,6 +3,7 @@ package com.upstack.stack
 import com.upstack.gh.GhCommands
 import com.upstack.gh.GitCommands
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -18,7 +19,7 @@ class PublishPlansTest {
         StackLayer(name, isCurrent = false, isMerged = false, isQueued = false, needsRebase = false, pr = pr?.let { PrRef(it, "", "OPEN") })
 
     @Test
-    fun `a layer is published alone only with no unpublished layer above, and the ones below go as drafts`() {
+    fun `the top layer without a pull request is published with the ones below as drafts`() {
         val stack = StackSnapshot("main", "feat/c", listOf(layer("feat/a", 1019), layer("feat/b"), layer("feat/c")))
         assertEquals(listOf("feat/c"), PublishPlans.unpublishedAbove(stack, stack.layers[1]).map { it.branch })
         assertEquals(emptyList<StackLayer>(), PublishPlans.unpublishedAbove(stack, stack.layers[2]))
@@ -29,12 +30,62 @@ class PublishPlansTest {
                 "gh pr edit feat/c --repo acme/app --title Flows --body ''",
                 "gh pr ready feat/c --repo acme/app",
             ),
-            lines(PublishPlans.layerCalls(stack, stack.layers[2], PrText("Flows", ""), ready = true, repo)),
+            lines(PublishPlans.layerPlan(stack, stack.layers[2], PrText("Flows", ""), ready = true, repo, "feat/c").calls),
         )
+        val draft = PublishPlans.layerPlan(stack, stack.layers[2], PrText("Flows", ""), ready = false, repo, "feat/c")
+        assertEquals(listOf("gh stack submit --auto", "gh pr edit feat/c --repo acme/app --title Flows --body ''"), lines(draft.calls))
+        // Sin rehacer la pila no hay nada que deshacer.
+        assertEquals(emptyList<String>(), lines(draft.cleanup(1)))
+    }
+
+    @Test
+    fun `a layer with unpublished layers above is submitted with the stack tracked only up to it`() {
+        val stack = StackSnapshot("main", "feat/d", listOf(layer("feat/a", 1019), layer("feat/b"), layer("feat/c"), layer("feat/d")))
+        val plan = PublishPlans.layerPlan(stack, stack.layers[2], PrText("Flows", ""), ready = true, repo, "feat/a")
         assertEquals(
-            listOf("gh stack submit --auto", "gh pr edit feat/c --repo acme/app --title Flows --body ''"),
-            lines(PublishPlans.layerCalls(stack, stack.layers[2], PrText("Flows", ""), ready = false, repo)),
+            listOf(
+                "gh stack unstack --local",
+                "gh stack init --base main feat/a feat/b feat/c",
+                "gh stack submit --auto",
+                "gh pr edit feat/c --repo acme/app --title Flows --body ''",
+                "gh pr ready feat/c --repo acme/app",
+                "gh stack unstack --local",
+                "gh stack init --base main feat/a feat/b feat/c feat/d",
+                "git switch feat/a",
+            ),
+            lines(plan.calls),
         )
+        // Solo el submit admite --remote.
+        assertEquals(listOf(false, false, true, false, false, false, false, false), plan.calls.map { it.acceptsRemote })
+        // En la capa de arriba, init ya deja HEAD alli.
+        assertEquals(
+            "gh stack init --base main feat/a feat/b feat/c feat/d",
+            lines(PublishPlans.layerPlan(stack, stack.layers[2], PrText("Flows", ""), ready = false, repo, "feat/d").calls).last(),
+        )
+    }
+
+    @Test
+    fun `cut while the stack is tracked only up to the layer, it is started again whole and HEAD goes back`() {
+        val stack = StackSnapshot("main", "feat/c", listOf(layer("feat/a", 1019), layer("feat/b"), layer("feat/c")))
+        val plan = PublishPlans.layerPlan(stack, stack.layers[1], PrText("Flows", ""), ready = false, repo, "feat/a")
+        val whole = listOf("gh stack init --base main feat/a feat/b feat/c", "git switch feat/a")
+        // unstack, init parcial, submit, edit, unstack, init, switch.
+        assertEquals(7, plan.calls.size)
+        assertEquals(emptyList<String>(), lines(plan.cleanup(0)))
+        assertEquals(whole, lines(plan.cleanup(1)))
+        for (completed in 2..4) assertEquals(listOf("gh stack unstack --local") + whole, lines(plan.cleanup(completed)))
+        assertEquals(whole, lines(plan.cleanup(5)))
+        assertEquals(emptyList<String>(), lines(plan.cleanup(6)))
+    }
+
+    @Test
+    fun `with merged layers only a layer with no unpublished layer above can be published`() {
+        val merged = layer("feat/a", 1019).copy(isMerged = true)
+        val stack = StackSnapshot("main", "feat/c", listOf(merged, layer("feat/b"), layer("feat/c")))
+        assertTrue(PublishPlans.layerBlocked(stack, stack.layers[1]))
+        assertFalse(PublishPlans.layerBlocked(stack, stack.layers[2]))
+        val open = stack.copy(layers = listOf(layer("feat/a", 1019)) + stack.layers.drop(1))
+        assertFalse(PublishPlans.layerBlocked(open, open.layers[1]))
     }
 
     @Test

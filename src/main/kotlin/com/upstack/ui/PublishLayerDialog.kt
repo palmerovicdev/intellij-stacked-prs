@@ -22,7 +22,7 @@ import javax.swing.JComponent
 /**
  * *Publish as Draft…* / *Publish Ready for Review…* desde el menu de una capa sin PR: su titulo
  * (el nombre de la rama) y su descripcion (de sus commits), que se pueden cambiar, y los comandos
- * de [PublishPlans.layerCalls].
+ * de [PublishPlans.layerPlan].
  * Es la confirmacion.
  */
 internal class PublishLayerDialog(
@@ -32,11 +32,14 @@ internal class PublishLayerDialog(
     proposal: PrText,
     private val ready: Boolean,
     private val github: GitHubRepo?,
+    /** La rama actual: si hay que rehacer la pila, se vuelve a ella. */
+    private val current: String?,
 ) : DialogWrapper(project) {
 
     private val titleField = JBTextField(proposal.title, 48)
     private val bodyArea = JBTextArea(proposal.body, 6, 48).apply { lineWrap = true; wrapStyleWord = true }
     private val below = PublishPlans.unpublishedBelow(snapshot, layer)
+    private val above = PublishPlans.unpublishedAbove(snapshot, layer)
     private val preview = CommandPreview()
 
     val text: PrText get() = PrText(titleField.text.trim(), bodyArea.text.trim())
@@ -60,6 +63,12 @@ internal class PublishLayerDialog(
                     .align(AlignX.FILL).resizableColumn()
             }
         }
+        if (above.isNotEmpty()) {
+            row {
+                cell(WrappingText(message("publish.layer.above", above.size, above.joinToString(", ") { it.branch }), AllIcons.General.Information))
+                    .align(AlignX.FILL).resizableColumn()
+            }
+        }
         row { cell(preview).align(AlignX.FILL).resizableColumn() }.topGap(TopGap.SMALL)
     }
 
@@ -70,6 +79,6 @@ internal class PublishLayerDialog(
         if (text.title.isEmpty()) ValidationInfo(message("title.empty"), titleField) else null
 
     private fun update() {
-        preview.showLines(Help.of(PublishPlans.layerCalls(snapshot, layer, text, ready, github)))
+        preview.showLines(Help.of(PublishPlans.layerPlan(snapshot, layer, text, ready, github, current).calls))
     }
 }

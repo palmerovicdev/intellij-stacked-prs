@@ -85,6 +85,32 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.14.0 &mdash; publish any layer</h3>
+            <ul>
+              <li><b>Publish any layer without a pull request</b> from its menu, not just the top one:
+                <i>Publish as Draft&hellip;</i> and <i>Publish Ready for Review&hellip;</i> are no longer disabled
+                when layers above it have no pull request. <code>gh stack submit</code> publishes them all, so the
+                stack is tracked locally only up to that layer for the submit, and then whole again: the layers
+                above stay without one. If it stops halfway, the stack is started again as it was. Not with
+                merged or queued layers.</li>
+              <li><b>Add Layer suggests every branch of the project</b>, local and remote, without asking: when
+                the dialog opens and as you type, even with <i>Show suggestions as you type</i> turned off. Each one
+                says what it is (<i>local</i>, its remote, <i>in this stack</i>, <i>in another stack</i>); the ones
+                <code>gh stack add</code> does not take come last, greyed out, and the dialog says why. They are only
+                suggestions: any other name works.</li>
+              <li><b>A branch only on the remote is adopted</b>: a local branch tracking it is created first
+                (<code>git branch --track</code>). Until now, typing its name created another branch from the top
+                layer, and the next push would have overwritten the remote one.</li>
+            </ul>
+            <h3>0.13.0 &mdash; back to the list of stacks</h3>
+            <ul>
+              <li><b>Back to Stacks</b>, the arrow at the start of the Stacks toolbar: from a stack's layers to
+                the list of local stacks, without changing branch. It works with a single stack too.</li>
+              <li>On the trunk, the window no longer opens its only stack on its own: it lists the stacks, as it
+                does when there are several. On a layer, its stack still opens.</li>
+              <li>In the list, the stack of the current branch is marked <i>HEAD</i>: double-click it (or press
+                Enter) to see its layers again, without a checkout.</li>
+            </ul>
             <h3>0.12.3 &mdash; Add Layer suggests existing branches</h3>
             <ul>
               <li>The new layer's name autocompletes with the local branches gh-stack can adopt: every one

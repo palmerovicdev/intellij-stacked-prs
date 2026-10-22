@@ -63,8 +63,8 @@ cualquier momento.
 - **Renombrar la rama de una capa sin PR** (*Rename Branch…*), aquí y en GitHub si se subió,
   y **cambiar el título de un PR** (*Edit Title…*), por separado.
 - **Publicar una capa desde su menú** (*Publish as Draft…* / *Publish Ready for Review…*),
-  con el nombre de la rama como título propuesto y la descripción de sus commits, si no hay
-  capas sin PR encima.
+  con el nombre de la rama como título propuesto y la descripción de sus commits, en
+  cualquier capa sin PR: las de encima se quedan sin el.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
@@ -94,7 +94,7 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Operación | Comando |
 |---|---|
 | Nueva pila | `gh stack init [--base rama] capas…`: la base puede ser **cualquier rama**, local o solo remota, también una capa de otra pila |
-| Añadir capa | `gh stack add rama` (con `gh stack top` antes si no estás arriba; commit opcional `-A`/`-u` `-m`) |
+| Añadir capa | `gh stack add rama` (con `gh stack top` antes si no estás arriba; commit opcional `-A`/`-u` `-m`; una rama que solo está en el remoto, antes `git branch --track rama origin/rama`) |
 | Publicar decidiendo PR a PR | `gh stack submit --auto`, y después `gh pr edit <rama> --title … --body …` por cada PR nuevo y `gh pr ready` (o `--undo`) por cada cambio |
 | Publicar como drafts | `gh stack submit --auto` |
 | Publicar listos | `gh stack submit --auto --open` (antes muestra qué PRs cambian: `--open` también marca listos los drafts existentes) |
@@ -113,7 +113,7 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Borrar la capa de arriba sin PR | `git switch <capa de debajo>` si estás en ella, `gh stack unstack --local`, `gh stack init --base <trunk> <demás capas>`, `git branch -D <rama>` (y `git push origin --delete <rama>`) |
 | Renombrar la rama de una capa sin PR | `gh stack unstack --local`, `gh api --method POST repos/OWNER/REPO/branches/<rama>/rename -f new_name=<nueva>` si está en GitHub, `git branch -m`, `gh stack init` con el nombre nuevo |
 | Título de un PR | `gh pr edit <url> --title …` |
-| Publicar una capa | `gh stack submit --auto`, `gh pr edit <rama> --title … --body …` y, si es lista, `gh pr ready <rama>` |
+| Publicar una capa | `gh stack submit --auto`, `gh pr edit <rama> --title … --body …` y, si es lista, `gh pr ready <rama>`. Con capas sin PR encima, antes `gh stack unstack --local` y `gh stack init --base <trunk> <capas hasta ella>`, y después otra vez con todas |
 | Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
 | Comprobar el entorno | `gh --version`, `gh auth status --json hosts`, `gh stack --version` y `gh api repos/OWNER/REPO/stacks?per_page=1` (solo leen) |
 | Iniciar sesión | `gh auth login --web --hostname <host>` |
@@ -140,8 +140,10 @@ Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
   Drafts* queda en el mismo diálogo. Para elegir PR a PR está *Publish Stack…*.
 - **El menú de una capa solo tiene acciones de esa capa.** Las de toda la pila dicen
   *Stack* y están en la barra y en el clic derecho fuera de las filas. gh-stack no publica
-  una capa suelta (`gh stack submit` sube todas): el *Publish* de una capa solo se activa si
-  no hay capas sin PR encima, y avisa de las de debajo que salen con ella.
+  una capa suelta (`gh stack submit` sube todas las que no tienen PR): el *Publish* de una
+  capa deja de seguir la pila en local, la vuelve a crear solo hasta ella para el `submit` y
+  después entera, así que las de encima se quedan sin PR. Con capas fusionadas o en cola no
+  se puede, y avisa de las de debajo que salen con ella.
 - **Renombrar solo ramas sin PR.** GitHub cierra el PR cuya rama se renombra, y un PR no
   puede cambiar de rama. Con PR, la acción se ve desactivada y lo explica. El título es otra
   acción, *Edit Title…*.

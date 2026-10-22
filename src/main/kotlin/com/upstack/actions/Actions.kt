@@ -128,7 +128,11 @@ internal class AddLayerAction : ToolbarAction(AllIcons.Vcs.Branch) {
     override fun commands(e: AnActionEvent): List<String> {
         val snapshot = loaded(e)?.snapshot
         val needsTop = snapshot?.top?.let { it.branch != snapshot.currentBranch } == true
-        return listOfNotNull(Help.gh(GhCommands.top()).takeIf { needsTop }, "gh stack add [-A | -u] [-m MESSAGE] BRANCH")
+        return listOfNotNull(
+            "git branch --track BRANCH REMOTE/BRANCH",
+            Help.gh(GhCommands.top()).takeIf { needsTop },
+            "gh stack add [-A | -u] [-m MESSAGE] BRANCH",
+        )
     }
     override fun actionPerformed(e: AnActionEvent) {
         e.project?.let(StackFlows::addLayer)
@@ -428,8 +432,8 @@ internal class DeleteLayerAction : UpstackAction(AllIcons.General.Delete) {
 }
 
 /**
- * Publicar esta capa, sin PR, como draft o lista (ver StackFlows.publishLayer). Si hay capas sin PR
- * encima se ve desactivada: `gh stack submit` las publicaria tambien.
+ * Publicar esta capa, sin PR, como draft o lista (ver StackFlows.publishLayer), en cualquier capa
+ * sin PR: las de encima se quedan sin el. Si la pila no lo permite, desactivada y la ayuda dice por que.
  */
 internal abstract class PublishLayerAction(icon: Icon, private val ready: Boolean) : UpstackAction(icon) {
 
@@ -437,16 +441,20 @@ internal abstract class PublishLayerAction(icon: Icon, private val ready: Boolea
         val selection = e.getData(StackDataKeys.LAYER)
         e.presentation.isVisible = selection != null && !selection.layer.isMerged && selection.layer.pr == null && selection.missing == null
         e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project) && selection != null &&
-            !selection.state.repo.stackRebaseInProgress && PublishPlans.unpublishedAbove(selection.state.snapshot, selection.layer).isEmpty()
+            !selection.state.repo.stackRebaseInProgress && !PublishPlans.layerBlocked(selection.state.snapshot, selection.layer)
     }
 
     override fun help(e: AnActionEvent): Help {
         val selection = e.getData(StackDataKeys.LAYER) ?: return super.help(e)
         val snapshot = selection.state.snapshot
-        val above = PublishPlans.unpublishedAbove(snapshot, selection.layer)
-        if (above.isNotEmpty()) return Help(message("help.publish.layer.above", above.joinToString(", ") { it.branch }))
-        val calls = PublishPlans.layerCalls(snapshot, selection.layer, PrText("TITLE", "BODY"), ready, StackFlows.githubOf(selection.state))
-        return Help(templatePresentation.description.orEmpty(), Help.of(calls))
+        if (PublishPlans.layerBlocked(snapshot, selection.layer)) {
+            val above = PublishPlans.unpublishedAbove(snapshot, selection.layer)
+            return Help(message("help.publish.layer.merged", above.size, above.joinToString(", ") { it.branch }))
+        }
+        val plan = PublishPlans.layerPlan(
+            snapshot, selection.layer, PrText("TITLE", "BODY"), ready, StackFlows.githubOf(selection.state), snapshot.currentBranch,
+        )
+        return Help(templatePresentation.description.orEmpty(), Help.of(plan.calls))
     }
 
     override fun actionPerformed(e: AnActionEvent) {

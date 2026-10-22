@@ -12,10 +12,11 @@
         <ul>
             <li><b>Stacks tool window</b>: the stack as a graph from the top layer down to the
                 trunk, with each layer's pull request, draft or ready state, labels, review
-                decision and CI status.</li>
+                decision and CI status. <b>Back to Stacks</b> lists every local stack without
+                changing branch.</li>
             <li><b>Start a stack</b>, <b>add a layer</b> on top (a new branch or an existing
-                one, optionally committing your changes), <b>publish</b> choosing layer by layer which pull requests are ready for
-                review and the title of the new ones, or in one go as <b>drafts</b>
+                one, local or remote, optionally committing your changes), <b>publish</b> choosing layer by layer which pull requests are ready for
+                review and the title of the new ones, a single layer from its menu, or in one go as <b>drafts</b>
                 (<code>gh stack submit --auto</code>) or <b>ready for review</b>
                 (<code>--open</code>, after showing which pull requests will change),
                 <b>sync</b> and <b>rebase</b>, with conflict handling.</li>

@@ -125,10 +125,47 @@ class LayerPlansTest {
     }
 
     @Test
-    fun `a new layer can adopt any local branch that no stack holds, the trunk of another stack included`() {
+    fun `add layer suggests every branch of the project, the usable ones first`() {
         val local = listOf("main", "feat/a", "feat/b", "feat/c", "spike", "fix/x", "release", "fix/y")
-        val other = LocalStack("release", listOf("fix/x"))
-        assertEquals(listOf("fix/y", "release", "spike"), LayerPlans.addCandidates(local, stack, listOf(other)))
+        val remote = mapOf("feat/a" to "origin", "feat/old" to "origin", "fix/z" to "upstream", "fix/x" to "origin")
+        val other = LocalStack("release", listOf("fix/x", "fix/z"))
+        val suggestions = LayerPlans.addSuggestions(local, remote, stack, listOf(other))
+        assertEquals(
+            listOf(
+                // Locales fuera de toda pila, el trunk de otra incluido, y las que solo estan en un remoto.
+                AddBranch("feat/old", AddBranchKind.REMOTE, "origin"),
+                AddBranch("fix/y", AddBranchKind.LOCAL),
+                AddBranch("release", AddBranchKind.LOCAL),
+                AddBranch("spike", AddBranchKind.LOCAL),
+                // Las que gh stack add no acepta, al final.
+                AddBranch("feat/a", AddBranchKind.THIS_STACK),
+                AddBranch("feat/b", AddBranchKind.THIS_STACK),
+                AddBranch("feat/c", AddBranchKind.THIS_STACK),
+                AddBranch("fix/x", AddBranchKind.OTHER_STACK),
+                AddBranch("fix/z", AddBranchKind.OTHER_STACK),
+                AddBranch("main", AddBranchKind.THIS_STACK),
+            ),
+            suggestions,
+        )
+        assertEquals("origin/feat/old", suggestions.first().remoteBranch)
+    }
+
+    @Test
+    fun `a branch only on a remote is tracked locally before gh stack add adopts it`() {
+        val plan = LayerPlans.add("feat/old", null, needsTop = true, remoteBranch = "origin/feat/old")
+        assertEquals(
+            listOf("git branch --track feat/old origin/feat/old", "gh stack top", "gh stack add feat/old"),
+            lines(plan.calls),
+        )
+        // Cortado tras crear la rama local y antes de que add termine, se borra.
+        assertEquals(emptyList<String>(), lines(plan.cleanup(0)))
+        assertEquals(listOf("git branch -D feat/old"), lines(plan.cleanup(1)))
+        assertEquals(listOf("git branch -D feat/old"), lines(plan.cleanup(2)))
+        assertEquals(emptyList<String>(), lines(plan.cleanup(3)))
+
+        val created = LayerPlans.add("feat/new", null, needsTop = false, remoteBranch = null)
+        assertEquals(listOf("gh stack add feat/new"), lines(created.calls))
+        assertEquals(emptyList<String>(), lines(created.cleanup(0)))
     }
 
     @Test
