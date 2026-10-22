@@ -1,6 +1,7 @@
 package com.upstack.flow
 
 import com.upstack.stack.StackState
+import java.nio.file.Files
 
 /** Lo que pinta la ventana segun lo que conteste `gh stack view --json`. */
 class StackStateFlowTest : FlowTestCase() {
@@ -56,6 +57,44 @@ class StackStateFlowTest : FlowTestCase() {
         assertEquals("GraphQL: Could not resolve to a Repository", state.message)
     }
 
+    fun `test on the trunk of its only stack the window lists the stacks`() {
+        writeLocalStack()
+        val onTrunk = gh.respond(VIEW, stdout = VIEW_ON_TRUNK)
+        gh.respond(listOf("api", "graphql"), prefix = true, stdout = Samples.DETAILS_TWO_LAYERS)
+
+        assertTrue(awaitState<StackState.Loaded> { !it.detailsLoading }.listShown)
+
+        service.openStack()
+        assertFalse(loaded().listShown)
+        // Otra lectura en la misma rama no vuelve a la lista.
+        gh.respond(VIEW, stdout = VIEW_ON_TRUNK.replace(""""needsRebase":false""", """"needsRebase":true"""))
+        onTrunk.remove()
+        assertFalse(awaitState<StackState.Loaded> { it.snapshot.layers.any { l -> l.needsRebase } && !it.detailsLoading }.listShown)
+    }
+
+    fun `test back to stacks lists them until the branch changes`() {
+        writeLocalStack()
+        val onB = gh.respond(VIEW, stdout = Samples.VIEW_TWO_LAYERS)
+        gh.respond(listOf("api", "graphql"), prefix = true, stdout = Samples.DETAILS_TWO_LAYERS)
+
+        assertFalse(awaitState<StackState.Loaded> { !it.detailsLoading }.listShown)
+
+        service.showStackList()
+        assertTrue(loaded().listShown)
+        gh.respond(VIEW, stdout = Samples.VIEW_TWO_LAYERS.replace(""""currentBranch":"feat/b"""", """"currentBranch":"feat/a""""))
+        onB.remove()
+        assertFalse(awaitState<StackState.Loaded> { it.snapshot.currentBranch == "feat/a" && !it.detailsLoading }.listShown)
+    }
+
+    fun `test without its local stack there is no list to go back to`() {
+        gh.respond(VIEW, stdout = VIEW_ON_TRUNK)
+        gh.respond(listOf("api", "graphql"), prefix = true, stdout = Samples.DETAILS_TWO_LAYERS)
+
+        assertFalse(awaitState<StackState.Loaded> { !it.detailsLoading }.listShown)
+        service.showStackList()
+        assertFalse(loaded().listShown)
+    }
+
     fun `test a stopped stack rebase is visible in the state`() {
         leaveStackRebaseInProgress()
         gh.respond(VIEW, stdout = Samples.VIEW_TWO_LAYERS)
@@ -63,5 +102,22 @@ class StackStateFlowTest : FlowTestCase() {
 
         val state = awaitState<StackState.Loaded>()
         assertTrue(state.repo.stackRebaseInProgress)
+    }
+
+    /** La pila de [Samples.VIEW_TWO_LAYERS] en `.git/gh-stack`, como la deja gh-stack. */
+    private fun writeLocalStack() {
+        Files.writeString(
+            repoDir.resolve(".git/gh-stack"),
+            """{"schemaVersion":1,"stacks":[{"trunk":{"branch":"main"},"branches":[{"branch":"feat/a"},{"branch":"feat/b"}]}]}""",
+        )
+    }
+
+    private fun loaded(): StackState.Loaded = service.state.value as StackState.Loaded
+
+    private companion object {
+        /** [Samples.VIEW_TWO_LAYERS] desde main: gh-stack abre la unica pila que sale de el. */
+        val VIEW_ON_TRUNK = Samples.VIEW_TWO_LAYERS
+            .replace(""""currentBranch":"feat/b"""", """"currentBranch":"main"""")
+            .replace(""""isCurrent":true""", """"isCurrent":false""")
     }
 }

@@ -3,6 +3,15 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.12.3 — Add Layer sugiere ramas existentes
+
+- **El nombre de la capa nueva se autocompleta** con las ramas locales que gh-stack puede
+  adoptar: todas menos el trunk y las capas de esta pila, y las capas de cualquier otra pila
+  que siga (con esas `gh stack add` falla). Las que solo están en el remoto no salen: con ellas
+  `add` crea otra rama desde la de arriba.
+- Con una rama que ya existe, el diálogo avisa de que gh-stack la añade tal cual, sin rebase
+  sobre la capa de arriba. La etiqueta del campo pasa de *New branch* a *Branch*.
+
 ## 0.12.2 — Nuevo nombre: Upstack
 
 El nombre anterior ya lo usaba otro plugin del Marketplace. Sin cambios en lo que hace el

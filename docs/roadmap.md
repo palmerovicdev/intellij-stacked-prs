@@ -66,6 +66,7 @@ hecha y el plugin salga al Marketplace (P40).
 | *Rename Branch…* (capas sin PR), *Edit Title…* y *Publish as Draft / Ready…* desde el menú de una capa (P16, en parte)                                 | `0.11.0`                |
 | El título propuesto de un PR nuevo es el nombre de su rama                                                                                             | `0.11.1`                |
 | *Check* del entorno en los ajustes, *Log In…* sin terminal, *Upgrade gh-stack* y aviso si gh-stack no es la v0.1.1 (P4)                                | `0.12.0`                |
+| *Add Layer…* autocompleta el nombre con las ramas locales que gh-stack puede adoptar                                                                   | `0.12.3`                |
 
 ---
 

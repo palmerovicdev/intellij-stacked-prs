@@ -13,8 +13,8 @@
             <li><b>Stacks tool window</b>: the stack as a graph from the top layer down to the
                 trunk, with each layer's pull request, draft or ready state, labels, review
                 decision and CI status.</li>
-            <li><b>Start a stack</b>, <b>add a layer</b> on top (optionally committing your
-                changes), <b>publish</b> choosing layer by layer which pull requests are ready for
+            <li><b>Start a stack</b>, <b>add a layer</b> on top (a new branch or an existing
+                one, optionally committing your changes), <b>publish</b> choosing layer by layer which pull requests are ready for
                 review and the title of the new ones, or in one go as <b>drafts</b>
                 (<code>gh stack submit --auto</code>) or <b>ready for review</b>
                 (<code>--open</code>, after showing which pull requests will change),
@@ -97,6 +97,7 @@
 
     <actions resource-bundle="messages.UpstackBundle">
         <group id="Upstack.Toolbar">
+            <action id="Upstack.ShowStackList" class="com.upstack.actions.ShowStackListAction"/>
             <action id="Upstack.Refresh" class="com.upstack.actions.RefreshAction"/>
             <separator/>
             <action id="Upstack.InitStack" class="com.upstack.actions.InitStackAction"/>

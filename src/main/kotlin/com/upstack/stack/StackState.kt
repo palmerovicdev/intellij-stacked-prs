@@ -76,10 +76,20 @@ sealed interface StackState {
         val missing: List<MissingBranch> = emptyList(),
         /** [detailsError] es que falta la sesion de gh en este host: se arregla con *Log In*. */
         val loginHost: String? = null,
+        /** Todas las pilas locales, para la lista de pilas. */
+        val localStacks: List<LocalStackEntry> = emptyList(),
+        /**
+         * La ventana ensena la lista de pilas y no las capas de esta. Desde el trunk es lo de
+         * entrada: gh-stack abre la unica pila que sale de el, pero no se ha entrado en ella.
+         */
+        val listShown: Boolean = false,
     ) : StackState {
         fun detailsOf(layer: StackLayer): PrDetails? = layer.pr?.let { details[it.number] }
 
         fun missingOf(layer: StackLayer): MissingBranch? = missing.firstOrNull { it.branch == layer.branch }
+
+        /** [localStacks] tiene esta pila: desde la lista se puede volver a sus capas. */
+        val hasStackList: Boolean get() = localStacks.any { it.stack.contains(snapshot.currentBranch) }
     }
 
     data class Failed(val repo: RepoRef?, val message: String) : StackState

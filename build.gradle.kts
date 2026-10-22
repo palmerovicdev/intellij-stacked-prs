@@ -85,6 +85,12 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.12.3 &mdash; Add Layer suggests existing branches</h3>
+            <ul>
+              <li>The new layer's name autocompletes with the local branches gh-stack can adopt: every one
+                except the trunk and the layers of this stack, and the layers of any other stack it tracks.
+                An existing branch joins the stack as it is, without a rebase, and the dialog says so.</li>
+            </ul>
             <h3>0.12.2 &mdash; a new name: Upstack</h3>
             <ul>
               <li>The plugin is now <b>Upstack</b> (<code>com.upstack</code>): its tool window, actions and

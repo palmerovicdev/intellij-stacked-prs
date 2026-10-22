@@ -65,7 +65,8 @@ is approved, why did the rebase stop.
   another stack.
 - **Add Layer…** on top, optionally committing your current changes in the new layer: all
   changes, tracked files only, or just what's staged. If you're not on the top layer, it
-  checks it out first.
+  checks it out first. The name autocompletes with your local branches: pick one and it joins
+  the stack as it is.
 - Every dialog shows the exact `$ gh stack …` line it will run, live as you type.
 
 ### Publish the stack your way

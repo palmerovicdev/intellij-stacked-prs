@@ -194,7 +194,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     }
 
     private fun rows(state: StackState): List<StackRow> = when (state) {
-        is StackState.Loaded -> {
+        is StackState.Loaded -> if (state.listShown) localRows(state.localStacks, state.snapshot.currentBranch, opens = true) else {
             val snapshot = state.snapshot
             val layers = snapshot.layers.mapIndexed { index, layer ->
                 val details = state.detailsOf(layer)
@@ -213,12 +213,17 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             layers.asReversed() + StackRow.Trunk(snapshot.trunk, snapshot.currentBranch == snapshot.trunk)
         }
         is StackState.NotInStack -> state.localStacks.map { StackRow.Local(it) }
-        // Primero las pilas de la rama actual; despues el resto, como fuera de una pila.
-        is StackState.InSeveralStacks -> {
-            val (ofBranch, others) = state.localStacks.partition { it.stack.contains(state.branch) }
-            ofBranch.map { StackRow.Local(it, head = state.branch) } + others.map { StackRow.Local(it) }
-        }
+        is StackState.InSeveralStacks -> localRows(state.localStacks, state.branch)
         else -> emptyList()
+    }
+
+    /**
+     * Primero las pilas de [branch]; despues el resto, como fuera de una pila. [opens]: la de
+     * [branch] es la que ya se leyo (en la lista de pilas, la unica de esa rama).
+     */
+    private fun localRows(stacks: List<LocalStackEntry>, branch: String, opens: Boolean = false): List<StackRow> {
+        val (ofBranch, others) = stacks.partition { it.stack.contains(branch) }
+        return ofBranch.map { StackRow.Local(it, head = branch, opens = opens) } + others.map { StackRow.Local(it) }
     }
 
     private fun renderRepositories() {
@@ -243,7 +248,10 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             summary.add(JBLabel(message("summary.running", title), AnimatedIcon.Default.INSTANCE, JBLabel.LEFT))
         }
         if (running == null) when (current) {
-            is StackState.Loaded -> {
+            is StackState.Loaded -> if (current.listShown) {
+                summary.add(secondary(message("summary.one.stack", current.snapshot.currentBranch)))
+                summary.add(startStackLink())
+            } else {
                 val rows = rows(current).filterIsInstance<StackRow.Layer>()
                 val parts = mutableListOf(message("summary.layers", rows.size, current.snapshot.trunk))
                 rows.count { it.status == LayerStatus.DRAFT }.takeIf { it > 0 }?.let { parts += message("summary.drafts", it) }
@@ -278,7 +286,8 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         val current = state
         val repo = current.repo
         repo?.rebase?.let(::renderRebaseStop)
-        if (current is StackState.Loaded) {
+        // Con la lista de pilas delante, lo de una pila no: hay que abrirla.
+        if (current is StackState.Loaded && !current.listShown) {
             current.detailsError?.let { error ->
                 val host = current.loginHost
                 banners.add(
@@ -297,7 +306,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 renderPushPending(current)
             }
         }
-        if (current !is StackState.Loaded || current.snapshot.upstackStart == null || current.repo.stackRebaseInProgress) {
+        if (current !is StackState.Loaded || current.listShown || current.snapshot.upstackStart == null || current.repo.stackRebaseInProgress) {
             hideUpstackTip()
         }
         banners.isVisible = banners.componentCount > 0
@@ -523,7 +532,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 !row.layer.isCurrent -> service.checkout(repository, row.layer.branch)
             }
             is StackRow.Trunk -> if (!row.isCurrent) service.checkout(repository, row.name)
-            is StackRow.Local -> activateLocal(repository, row.entry)
+            is StackRow.Local -> if (row.opens) service.openStack() else activateLocal(repository, row.entry)
             null -> Unit
         }
     }

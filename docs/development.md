@@ -163,7 +163,7 @@ del VFS y de Git4Idea al terminar.
 
 ## Versiones
 
-Versión actual: **0.12.2**. La regla de versiones está en el
+Versión actual: **0.12.3**. La regla de versiones está en el
 [roadmap](roadmap.md#versiones), y qué trae cada una, en el [CHANGELOG](../CHANGELOG.md).
 
 ## Publicar

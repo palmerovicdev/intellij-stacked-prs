@@ -72,10 +72,11 @@ internal sealed interface StackRow {
     }
 
     /**
-     * Una pila guardada en local, cuando la rama actual no esta en ninguna o esta en varias.
-     * [head]: la rama actual, si es de esta pila.
+     * Una pila guardada en local, cuando la rama actual no esta en ninguna o esta en varias, o
+     * en la lista de pilas. [head]: la rama actual, si es de esta pila. [opens]: es la pila que
+     * ya se leyo; un doble clic ensena sus capas, sin checkout.
      */
-    data class Local(val entry: LocalStackEntry, val head: String? = null) : StackRow {
+    data class Local(val entry: LocalStackEntry, val head: String? = null, val opens: Boolean = false) : StackRow {
         override val key: String get() = "local:${entry.stack.branches.last()}"
         override val searchText: String get() = entry.stack.branches.joinToString(" ")
 
@@ -90,6 +91,7 @@ internal sealed interface StackRow {
         private fun action(): String {
             val target = entry.checkoutTarget.orEmpty()
             return when {
+                opens -> message("tooltip.local.open")
                 entry.isStale -> message("tooltip.local.stale")
                 target == head -> message("tooltip.local.blocked")
                 target !in entry.localBranches -> message("tooltip.local.remote", target)

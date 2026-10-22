@@ -89,8 +89,19 @@ internal abstract class ToolbarAction(icon: Icon) : UpstackAction(icon) {
     protected fun loaded(e: AnActionEvent): StackState.Loaded? =
         e.project?.getServiceIfCreated(StackService::class.java)?.state?.value as? StackState.Loaded
 
+    /** La pila cuyas capas ensena la ventana: con la lista de pilas delante, ninguna. */
+    protected fun shown(state: StackState): StackState.Loaded? = (state as? StackState.Loaded)?.takeUnless { it.listShown }
+
     protected fun hasActiveLayers(state: StackState): Boolean =
-        state is StackState.Loaded && state.snapshot.layers.any { !it.isMerged }
+        shown(state)?.snapshot?.layers?.any { !it.isMerged } == true
+}
+
+/** De las capas a la lista de pilas, sin cambiar de rama. Doble clic en la pila la vuelve a abrir. */
+internal class ShowStackListAction : ToolbarAction(AllIcons.Actions.Back) {
+    override fun isEnabled(state: StackState): Boolean = shown(state)?.hasStackList == true
+    override fun actionPerformed(e: AnActionEvent) {
+        e.project?.let { StackService.getInstance(it).showStackList() }
+    }
 }
 
 internal class RefreshAction : ToolbarAction(AllIcons.Actions.Refresh) {
@@ -171,7 +182,7 @@ internal class RebaseGroup : DefaultActionGroup(), TooltipDescriptionProvider {
     override fun update(e: AnActionEvent) {
         val project = e.project
         val service = project?.getServiceIfCreated(StackService::class.java)
-        val state = service?.state?.value as? StackState.Loaded
+        val state = (service?.state?.value as? StackState.Loaded)?.takeUnless { it.listShown }
         e.presentation.isEnabled = state != null && service.running.value == null &&
             !state.repo.stackRebaseInProgress && state.snapshot.layers.any { !it.isMerged }
         e.presentation.showHelp(Help(templatePresentation.description.orEmpty(), listOf("gh stack rebase [--upstack | --downstack] [--no-trunk]")))
@@ -192,7 +203,7 @@ internal abstract class RebaseScopeAction(icon: Icon, private val scope: RebaseS
     override fun commands(e: AnActionEvent): List<String> = listOf(Help.gh(GhCommands.rebase(scope)))
 
     override fun isEnabled(state: StackState): Boolean =
-        state is StackState.Loaded && !state.repo.stackRebaseInProgress && hasActiveLayers(state) && appliesTo(state.snapshot)
+        shown(state)?.let { !it.repo.stackRebaseInProgress && hasActiveLayers(it) && appliesTo(it.snapshot) } == true
 
     protected open fun appliesTo(snapshot: StackSnapshot): Boolean = true
 
@@ -235,7 +246,7 @@ internal class RebaseLayersAction : RebaseScopeAction(AllIcons.Vcs.Branch, Rebas
 internal class CloseStackAction : ToolbarAction(AllIcons.Actions.Cancel) {
 
     // Con un rebase parado a medias no: las ramas estan a medio reescribir.
-    override fun isEnabled(state: StackState): Boolean = state is StackState.Loaded && !state.repo.stackRebaseInProgress
+    override fun isEnabled(state: StackState): Boolean = shown(state)?.repo?.stackRebaseInProgress == false
 
     override fun commands(e: AnActionEvent): List<String> {
         val state = loaded(e) ?: return listOf(Help.gh(GhCommands.unstack()))
@@ -257,7 +268,7 @@ internal class CloseStackAction : ToolbarAction(AllIcons.Actions.Cancel) {
 internal class MergeStackAction : ToolbarAction(AllIcons.Vcs.Merge) {
 
     override fun isEnabled(state: StackState): Boolean =
-        state is StackState.Loaded && !state.repo.stackRebaseInProgress && MergePlans.targets(state.snapshot, state.details).candidates.isNotEmpty()
+        shown(state)?.let { !it.repo.stackRebaseInProgress && MergePlans.targets(it.snapshot, it.details).candidates.isNotEmpty() } == true
 
     override fun help(e: AnActionEvent): Help {
         val state = loaded(e) ?: return super.help(e)

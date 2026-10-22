@@ -247,7 +247,9 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             val branch = repository.currentBranchName
             val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
             when {
-                result.ok -> StackJson.parseView(result.stdout).let { showSnapshot(ref, it, missingBranches(repository, it)) }
+                result.ok -> StackJson.parseView(result.stdout).let {
+                    showSnapshot(ref, it, missingBranches(repository, it), localStacks(repository))
+                }
                 // Con el rebase parado HEAD esta suelto y gh-stack no sabe en que rama esta (lee
                 // `git symbolic-ref HEAD`): `view` sale con 2. La pila de antes sigue siendo esa.
                 result.exitCode == GhExit.NOT_IN_STACK && ref.stackRebaseInProgress && previous != null ->
@@ -269,7 +271,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         }
     }
 
-    private suspend fun showSnapshot(ref: RepoRef, snapshot: StackSnapshot, missing: List<MissingBranch>) {
+    private suspend fun showSnapshot(ref: RepoRef, snapshot: StackSnapshot, missing: List<MissingBranch>, localStacks: List<LocalStackEntry>) {
         val numbers = snapshot.layers.mapNotNull { it.pr?.number }.toSet()
         // Mientras llegan los datos nuevos se ensenan los anteriores: sin parpadeo.
         val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
@@ -277,7 +279,13 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         // La que ya salio de la pila deja de estar pendiente de sacar.
         val layers = snapshot.layers.mapTo(HashSet()) { it.branch }
         _removals.update { all -> all[ref.root]?.let { all + (ref.root to it.filterTo(HashSet(), layers::contains)) } ?: all }
-        val loaded = StackState.Loaded(ref, snapshot, cached, detailsLoading = numbers.isNotEmpty(), detailsError = null, missing = missing)
+        // Lo elegido (lista o capas) vale mientras no cambie la rama; en otra, se empieza de nuevo.
+        val listShown = previous?.takeIf { it.snapshot.currentBranch == snapshot.currentBranch }?.listShown
+            ?: (snapshot.currentBranch == snapshot.trunk)
+        val loaded = StackState.Loaded(
+            ref, snapshot, cached, detailsLoading = numbers.isNotEmpty(), detailsError = null, missing = missing,
+            localStacks = localStacks,
+        ).let { it.copy(listShown = listShown && it.hasStackList) }
         _state.value = loaded
         if (numbers.isEmpty()) return
 
@@ -292,6 +300,18 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         val error = if (details.isEmpty()) result.errorText.lineSequence().firstOrNull { it.isNotBlank() }
             ?: message("details.failed") else null
         finishDetails(snapshot, details, error, if (error != null && result.needsLogin) Environment.loginHost(github) else null)
+    }
+
+    /** La lista de pilas en vez de las capas de la que se muestra. No cambia de rama. */
+    fun showStackList() = setListShown(true)
+
+    /** Desde la lista, otra vez las capas de la pila que se muestra. */
+    fun openStack() = setListShown(false)
+
+    private fun setListShown(shown: Boolean) {
+        _state.update { current ->
+            if (current is StackState.Loaded && (!shown || current.hasStackList)) current.copy(listShown = shown) else current
+        }
     }
 
     private fun finishDetails(snapshot: StackSnapshot, details: Map<Int, PrDetails>, error: String?, loginHost: String? = null) {
