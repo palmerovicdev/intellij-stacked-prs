@@ -34,6 +34,11 @@ tasks.withType<JavaCompile>().configureEach {
 // instalada). No-null -> todo contra el IDE ya instalado.
 val localIde: String? = providers.gradleProperty("localIdePath").orNull?.takeIf(String::isNotBlank)
 
+// La rama (262, 263...) del IDE instalado, de su product-info.json; null en el camino de CI.
+val localIdeBranch: Int? = localIde?.let { file("$it/Contents/Resources/product-info.json") }
+    ?.takeIf { it.isFile }
+    ?.let { Regex("\"buildNumber\"\\s*:\\s*\"(\\d+)").find(it.readText())?.groupValues?.get(1)?.toInt() }
+
 dependencies {
     testImplementation("junit:junit:4.13.2")
     // El framework de pruebas de la plataforma lo pide en tiempo de ejecucion.
@@ -50,6 +55,13 @@ dependencies {
         // plataforma no entran solos en el classpath.
         bundledModule("intellij.platform.vcs.dvcs")
         bundledModule("intellij.platform.vcs.dvcs.impl")
+        // Desde 2026.3 (263) el VCS es un plugin incluido y parte de sus clases (Hash,
+        // CommitContext) estan en modulos aparte; en 262 todo eso iba en el nucleo.
+        if (localIdeBranch != null && localIdeBranch >= 263) {
+            bundledPlugin("com.intellij.platform.vcs")
+            bundledModule("intellij.platform.vcs.shared")
+            bundledModule("intellij.platform.vcs.core")
+        }
 
         // El plugin GitHub NO se compila: solo se referencian sus grupos de acciones por
         // id en upstack-github.xml. Ni una clase suya en el classpath -> imposible usar
