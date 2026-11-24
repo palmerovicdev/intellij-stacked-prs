@@ -32,12 +32,15 @@ enum class RenameBlock {
     NO_GITHUB,
 }
 
-/** Que pasa con una rama del proyecto si se elige en *Add Layer…*. Ver [LayerPlans.addSuggestions]. */
+/**
+ * Que pasa con una rama del proyecto si se elige en *Add Layer…* o *Create Stack…*. Ver
+ * [LayerPlans.addSuggestions] y [StackPlans.initSuggestions].
+ */
 enum class AddBranchKind {
-    /** Local y fuera de toda pila: `gh stack add` la adopta tal cual. */
+    /** Local y fuera de toda pila: `gh stack add` (o `init`) la adopta tal cual. */
     LOCAL,
 
-    /** Solo en un remoto: antes se crea la local que la sigue, y `add` la adopta (ver [LayerPlans.add]). */
+    /** Solo en un remoto: antes se crea la local que la sigue, y `add` o `init` la adopta (ver [LayerPlans.add], [StackPlans.init]). */
     REMOTE,
 
     /** Capa o trunk de esta pila: ya esta. */
@@ -47,7 +50,7 @@ enum class AddBranchKind {
     OTHER_STACK,
 }
 
-/** Una rama que sugiere *Add Layer…*. [remote]: donde esta, solo en [AddBranchKind.REMOTE]. */
+/** Una rama que sugiere *Add Layer…* o *Create Stack…*. [remote]: donde esta, solo en [AddBranchKind.REMOTE]. */
 data class AddBranch(val name: String, val kind: AddBranchKind, val remote: String? = null) {
     /** `gh stack add` la acepta. */
     val usable: Boolean get() = kind == AddBranchKind.LOCAL || kind == AddBranchKind.REMOTE

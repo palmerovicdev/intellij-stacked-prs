@@ -83,5 +83,35 @@ object StackPlans {
         else -> GitCommands.branch(missing.branch, missing.lastCommit ?: missing.parent)
     }
 
+    /**
+     * `gh stack init` con [branches] sobre [base]. Las de [tracking] (nombre -> `origin/nombre`)
+     * solo estan en un remoto: antes se crea la local que la sigue, para que init la adopte en vez
+     * de crear otra con ese nombre desde la base. Si se corta despues de crear alguna, se borran.
+     */
+    fun init(branches: List<String>, base: String?, tracking: Map<String, String>): Plan {
+        val created = tracking.keys.toList()
+        val calls = tracking.map { (name, remoteBranch) -> git(GitCommands.branchTracking(name, remoteBranch)) } +
+            GhCall(GhCommands.init(branches, base))
+        return Plan(calls) { completed ->
+            val made = created.take(minOf(completed, created.size))
+            if (made.isEmpty() || completed >= calls.size) emptyList() else listOf(git(GitCommands.deleteBranches(made)))
+        }
+    }
+
+    /**
+     * Las ramas que sugiere *Create Stack…*, como las de *Add Layer…* (ver [LayerPlans.addSuggestions]):
+     * locales, las que solo estan en un remoto, y en gris las capas de otra pila activa, que init
+     * rechaza. Las de una pila sin ramas valen: esa pila se olvida antes del init.
+     */
+    fun initSuggestions(local: Collection<String>, remote: Map<String, String>, tracked: List<LocalStackEntry>): List<AddBranch> {
+        val active = tracked.filterNot { it.isStale }.flatMapTo(HashSet()) { it.stack.branches }
+        val locals = local.toSet()
+        val all = locals.map { AddBranch(it, if (it in active) AddBranchKind.OTHER_STACK else AddBranchKind.LOCAL) } +
+            remote.filterKeys { it !in locals }.map { (name, where) ->
+                if (name in active) AddBranch(name, AddBranchKind.OTHER_STACK) else AddBranch(name, AddBranchKind.REMOTE, where)
+            }
+        return all.sortedWith(compareBy({ !it.usable }, { it.name }))
+    }
+
     private fun git(args: List<String>) = GhCall(args, tool = Tool.GIT)
 }

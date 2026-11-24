@@ -61,8 +61,9 @@ is approved, why did the rebase stop.
 ![The New Stack dialog based on main with three layers, search/fuzzy-matching, search/typo-tolerance and search/results-page, drawn as a graph above the gh stack init command it will run; below it, Add Layer creating refunds/refund-emails on top of refunds/audit-log and committing all current changes, with its gh stack top && gh stack add command](docs/marketplace/03-start-a-stack.png)
 
 - **New Stack…**: type the layer names and see the resulting stack as a graph before
-  anything runs. The base can be **any branch**, local or only on the remote, even a layer of
-  another stack.
+  anything runs. Each name is suggested as you type, like in Add Layer: every branch of the
+  project, local and remote (one only on the remote gets a local branch tracking it first).
+  The base can be **any branch**, local or only on the remote, even a layer of another stack.
 - **Add Layer…** on top, optionally committing your current changes in the new layer: all
   changes, tracked files only, or just what's staged. If you're not on the top layer, it
   checks it out first. As you type, it suggests every branch of the project, local and remote,

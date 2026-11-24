@@ -40,7 +40,6 @@ import com.upstack.gh.LayerCommit
 import com.upstack.gh.Staging
 import com.upstack.stack.AddBranch
 import com.upstack.stack.AddBranchKind
-import com.upstack.stack.GhCall
 import com.upstack.stack.LayerPlans
 import com.upstack.stack.LocalStackEntry
 import com.upstack.stack.Plan
@@ -203,12 +202,26 @@ internal class InitStackDialog(
     private val leaveLayerFor: String?,
     private val tracked: List<LocalStackEntry> = emptyList(),
     private val from: Position = Position(repository.currentBranchName, repository.currentRevision),
+    /** Las ramas del proyecto que se autocompletan en el campo de capas (ver [StackPlans.initSuggestions]). */
+    internal val suggestions: List<AddBranch> = emptyList(),
 ) : DialogWrapper(project) {
 
+    private val byName = suggestions.associateBy { it.name }
     private val localBranches = repository.branches.localBranches.map { it.name }.toSet()
     private val staleNote = JBLabel("", AllIcons.General.Warning, JBLabel.LEFT)
     private val restoreBox = JBCheckBox("", true)
-    private val branchesField = JBTextField(layersSuggestion.orEmpty(), 32)
+
+    // Varias ramas separadas por espacios: se sugiere la palabra que se esta escribiendo, como
+    // en Add Layer (el prefijo del proveedor es lo que va tras el ultimo espacio).
+    private val branchesField = TextFieldWithCompletion(
+        project,
+        BranchSuggestions(suggestions),
+        layersSuggestion.orEmpty(),
+        true, // oneLineMode
+        true, // autoPopup
+        true, // forceAutoPopup: al escribir
+        true, // showHint: instala el AUTO_POPUP_ON_FOCUS_GAINED de abajo
+    )
     private val baseCombo = ComboBox(baseOptions(repository).toTypedArray())
     private val stackPreview = StackPreview()
     private val preview = CommandPreview()
@@ -232,11 +245,20 @@ internal class InitStackDialog(
         return forgetFirst.flatMap { it.restorable.entries }.filter { it.key in names }.associate { it.key to it.value }
     }
 
-    /** Toda la secuencia: olvidar las pilas sin ramas, recuperar ramas y `gh stack init`. */
+    /** Capas que solo estan en un remoto (nombre -> `origin/nombre`): antes del init se crea la local que la sigue. */
+    private val tracking: Map<String, String>
+        get() {
+            val restored = restore.keys
+            return branches.filterNot { it in restored }.mapNotNull { name ->
+                byName[name]?.takeIf { it.kind == AddBranchKind.REMOTE }?.remoteBranch?.let { name to it }
+            }.toMap()
+        }
+
+    /** Toda la secuencia: olvidar las pilas sin ramas, recuperar ramas, seguir las remotas y `gh stack init`. */
     fun plan(): Plan? {
         var plan = Plan(emptyList())
         for (entry in forgetFirst) plan = plan.then(StackPlans.forget(entry.stack, from) ?: return null)
-        return plan.then(StackPlans.restore(restore)).then(listOf(GhCall(GhCommands.init(branches, base))))
+        return plan.then(StackPlans.restore(restore)).then(StackPlans.init(branches, base, tracking))
     }
 
     init {
@@ -244,6 +266,13 @@ internal class InitStackDialog(
         setOKButtonText(message("init.ok"))
         val options = (0 until baseCombo.itemCount).map(baseCombo::getItemAt)
         baseCombo.renderer = BaseOptionRenderer(baseCombo, repository.currentBranchName, options)
+        // El ancho de antes, el de un campo de 32 columnas: el editor no crece con lo escrito.
+        branchesField.setPreferredWidth(JBTextField(32).preferredSize.width)
+        branchesField.addSettingsProvider {
+            it.caretModel.moveToOffset(it.document.textLength)
+            // Con capas ya propuestas, la lista se abre al escribir, no al entrar.
+            if (suggestions.isNotEmpty() && it.document.textLength == 0) it.putUserData(AutoPopupController.AUTO_POPUP_ON_FOCUS_GAINED, true)
+        }
         // Tan ancho como el campo de capas: una rama remota de nombre largo no ensancha el dialogo.
         baseCombo.setMinimumAndPreferredWidth(branchesField.preferredSize.width)
         ComboboxSpeedSearch.installSpeedSearch(baseCombo) { it.branch ?: message("init.base.default") }
@@ -281,7 +310,13 @@ internal class InitStackDialog(
 
     override fun getPreferredFocusedComponent(): JComponent = branchesField
 
-    override fun doValidate(): ValidationInfo? {
+    /** Escribe [text] en el campo de capas, como el usuario. Los tests no pueden teclear en un dialogo sin pantalla. */
+    internal fun enterNames(text: String) {
+        branchesField.text = text
+    }
+
+    // Publica: los tests comprueban que las capas que escriben valen.
+    public override fun doValidate(): ValidationInfo? {
         val names = branches
         if (names.isEmpty()) return ValidationInfo(message("branch.problem.empty"), branchesField)
         for (name in names) {
@@ -312,7 +347,7 @@ internal class InitStackDialog(
         val steps = plan()?.calls?.dropLast(1).orEmpty().map { GhCommands.display(it.args, it.tool) }
         val init = GhCommands.display(GhCommands.init(branches.ifEmpty { listOf("…") }, base))
         preview.showLines(listOfNotNull(leaveLayerFor?.let { "git checkout $it" }) + steps + init)
-        stackPreview.show(branches, baseOption, localBranches + restore.keys)
+        stackPreview.show(branches, baseOption, localBranches + restore.keys + tracking.keys)
         // La vista previa crece con cada capa: el dialogo crece con ella, nunca encoge.
         val window = window ?: return
         if (window.isVisible && window.preferredSize.let { it.height > window.height || it.width > window.width }) pack()

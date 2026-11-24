@@ -3,6 +3,16 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.3 — Create Stack autocompleta las capas
+
+- **El campo de capas de *Create Stack…* sugiere las ramas del proyecto** mientras escribes,
+  como *Add Layer…*: locales y remotas, buscadas por cualquier palabra del nombre, y cada una
+  dice a la derecha qué es. Se sugiere la palabra que estás escribiendo, así que sirve para
+  cada capa de la lista. Las capas de otra pila activa salen al final y en gris.
+- **Una rama que solo está en el remoto se adopta**: antes de `gh stack init` se crea la local
+  que la sigue (`git branch --track`), y si el init falla se borra. Antes, init creaba otra
+  rama con ese nombre desde la base.
+
 ## 0.15.2 — Merge Stack siempre a la vista
 
 - *Merge Stack…* y *Close Stack…* pasan al principio de la barra, justo tras *Refresh*. Antes

@@ -97,6 +97,16 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.3 &mdash; Create Stack completes the layer names</h3>
+            <ul>
+              <li><b>The layers field of Create Stack… suggests the project's branches</b> as you
+                type, like Add Layer: local and remote, matched by any word of the name, each one
+                saying what it is. It completes the word you are typing, so it works for every
+                layer of the list; layers of another active stack come last, greyed out.</li>
+              <li><b>A branch only on the remote is adopted</b>: a local branch tracking it is
+                created before <code>gh stack init</code>, and deleted if init fails. Before, init
+                created another branch with that name from the base.</li>
+            </ul>
             <h3>0.15.2 &mdash; Merge Stack always in view</h3>
             <ul>
               <li><b>Merge Stack…</b> and <b>Close Stack…</b> move to the start of the toolbar,

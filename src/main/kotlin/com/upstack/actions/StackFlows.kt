@@ -110,8 +110,14 @@ internal object StackFlows {
         // Tras salir de la capa, HEAD esta en su trunk: desde ahi se olvida y se vuelve.
         val from = if (leaveLayerFor != null) Position(leaveLayerFor, null) else Position(current, repository.currentRevision)
 
-        val dialog = InitStackDialog(project, repository, layers, base, leaveLayerFor, service.localStacks(repository), from)
-        if (!dialog.showAndGet()) return
+        val tracked = service.localStacks(repository)
+        val suggestions = StackPlans.initSuggestions(
+            repository.branches.localBranches.map { it.name }, remoteBranches(repository, preferred = "origin"), tracked,
+        )
+        val dialog = InitStackDialog(project, repository, layers, base, leaveLayerFor, tracked, from, suggestions)
+        // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
+        dialog.show()
+        if (!dialog.isOK) return
         val plan = dialog.plan() ?: return
         val init = Operation(
             title = message("op.init"),
@@ -389,12 +395,7 @@ internal object StackFlows {
         val parentHash = branches.findLocalBranch(snapshot.parentOf(top))?.let(branches::getHash)
 
         // Las del remoto de la pila primero: si una rama esta en varios, se sigue la de ese.
-        val stackRemote = service.stackRemote(repository, snapshot)
-        val remote = branches.remoteBranches
-            .filter { it.nameForRemoteOperations != "HEAD" }
-            .sortedBy { it.remote.name != stackRemote }
-            .distinctBy { it.nameForRemoteOperations }
-            .associate { it.nameForRemoteOperations to it.remote.name }
+        val remote = remoteBranches(repository, preferred = service.stackRemote(repository, snapshot))
         val suggestions = LayerPlans.addSuggestions(
             branches.localBranches.map { it.name }, remote, snapshot, service.localStacks(repository).map { it.stack },
         )
@@ -926,4 +927,12 @@ internal object StackFlows {
         val pr = requireNotNull(layer.pr)
         return pr.url.ifEmpty { "https://${github.host}/${github.owner}/${github.name}/pull/${pr.number}" }
     }
+
+    /** Por nombre corto (`feat/a`), el remoto que tiene cada rama; si esta en varios, cuenta [preferred]. */
+    private fun remoteBranches(repository: GitRepository, preferred: String?): Map<String, String> =
+        repository.branches.remoteBranches
+            .filter { it.nameForRemoteOperations != "HEAD" }
+            .sortedBy { it.remote.name != preferred }
+            .distinctBy { it.nameForRemoteOperations }
+            .associate { it.nameForRemoteOperations to it.remote.name }
 }

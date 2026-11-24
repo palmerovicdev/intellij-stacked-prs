@@ -67,6 +67,46 @@ class StackPlansTest {
     }
 
     @Test
+    fun `init suggests local and remote branches, and greys out the layers of active stacks`() {
+        val active = LocalStackEntry.of(LocalStack("main", listOf("feat/a")), local = setOf("feat/a"), remote = emptySet())
+        val gone = LocalStackEntry.of(LocalStack("main", listOf("feat/old")), local = emptySet(), remote = emptySet())
+        val suggestions = StackPlans.initSuggestions(
+            local = listOf("main", "feat/a", "feat/b"),
+            remote = mapOf("feat/b" to "origin", "feat/c" to "origin", "feat/old" to "origin"),
+            tracked = listOf(active, gone),
+        )
+        assertEquals(
+            listOf(
+                AddBranch("feat/b", AddBranchKind.LOCAL),
+                AddBranch("feat/c", AddBranchKind.REMOTE, "origin"),
+                // Su pila ya no tiene ramas: se olvida antes del init, asi que el nombre vale.
+                AddBranch("feat/old", AddBranchKind.REMOTE, "origin"),
+                AddBranch("main", AddBranchKind.LOCAL),
+                AddBranch("feat/a", AddBranchKind.OTHER_STACK),
+            ),
+            suggestions,
+        )
+    }
+
+    @Test
+    fun `init tracks the layers only on a remote first, and deletes them if it stops`() {
+        val plan = StackPlans.init(listOf("feat/a", "feat/c", "feat/d"), "main", mapOf("feat/c" to "origin/feat/c", "feat/d" to "origin/feat/d"))
+        assertEquals(
+            listOf(
+                "git branch --track feat/c origin/feat/c",
+                "git branch --track feat/d origin/feat/d",
+                "gh stack init --base main feat/a feat/c feat/d",
+            ),
+            lines(plan.calls),
+        )
+        assertEquals(emptyList<String>(), lines(plan.cleanup(0)))
+        assertEquals(listOf("git branch -D feat/c"), lines(plan.cleanup(1)))
+        assertEquals(listOf("git branch -D feat/c feat/d"), lines(plan.cleanup(2)))
+        // Sin ramas remotas, el init de siempre.
+        assertEquals(listOf("gh stack init feat/a"), lines(StackPlans.init(listOf("feat/a"), null, emptyMap()).calls))
+    }
+
+    @Test
     fun `local stack entries know what is left of their branches`() {
         val stack = LocalStack("main", listOf("a", "b", "c"), mapOf("a" to "1", "c" to "3"))
         val partial = LocalStackEntry.of(stack, local = setOf("a"), remote = setOf("b"))

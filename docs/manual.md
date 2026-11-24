@@ -95,7 +95,7 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 
 | Operación | Comando |
 |---|---|
-| Nueva pila | `gh stack init [--base rama] capas…`: la base puede ser **cualquier rama**, local o solo remota, también una capa de otra pila |
+| Nueva pila | `gh stack init [--base rama] capas…`: la base puede ser **cualquier rama**, local o solo remota, también una capa de otra pila. Las capas se autocompletan con las ramas del proyecto, como en *Añadir capa*; una que solo está en el remoto, antes `git branch --track rama origin/rama` |
 | Añadir capa | `gh stack add rama` (con `gh stack top` antes si no estás arriba; commit opcional `-A`/`-u` `-m`; una rama que solo está en el remoto, antes `git branch --track rama origin/rama`) |
 | Publicar decidiendo PR a PR | `gh stack submit --auto`, y después `gh pr edit <rama> --title … --body …` por cada PR nuevo y `gh pr ready` (o `--undo`) por cada cambio |
 | Publicar como drafts | `gh stack submit --auto` |
