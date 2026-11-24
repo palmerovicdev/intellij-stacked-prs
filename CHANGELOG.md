@@ -3,6 +3,13 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.1 — Los avisos de Add Layer ya no ensanchan el diálogo
+
+- Los avisos de *Add Layer…* (que se cambia antes a la capa de arriba, que la rama ya existe o
+  solo está en el remoto, que la capa de arriba no tiene commits) se parten en líneas al ancho
+  del diálogo. Antes cada uno iba en una sola línea y, con nombres de rama largos, el diálogo
+  se hacía tan ancho como el aviso.
+
 ## 0.15.0 — gh-stack 0.2.1 y enlace al repositorio
 
 - Compatibilidad con gh-stack 0.2.1: lectura del catálogo compartido entre worktrees y aviso

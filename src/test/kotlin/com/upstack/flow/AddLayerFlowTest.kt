@@ -6,6 +6,7 @@ import com.upstack.actions.StackFlows
 import com.upstack.stack.StackState
 import com.upstack.ui.AddLayerDialog
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicReference
 
 /** *Add Layer…*: una capa encima con una rama nueva, o con una del proyecto que gh-stack adopta. */
 class AddLayerFlowTest : FlowTestCase() {
@@ -68,6 +69,28 @@ class AddLayerFlowTest : FlowTestCase() {
         assertEquals(listOf(add), gh.writes())
         // Sin ella, gh stack add habria creado otra feat/old desde feat/b y el push pisaria la de origin.
         assertEquals("origin/feat/old", git("rev-parse", "--abbrev-ref", "feat/old@{upstream}").trim())
+        awaitQuiet()
+    }
+
+    fun `test the note on a branch of the project wraps instead of widening the dialog`() {
+        loadStack()
+        val long = "feat/" + "a-very-long-branch-name-".repeat(6)
+        onlyOnOrigin("${long}x")
+        val widths = AtomicReference<List<Int>>()
+        UiInterceptors.register(object : UiInterceptors.UiInterceptor<AddLayerDialog>(AddLayerDialog::class.java) {
+            override fun doIntercept(component: AddLayerDialog) {
+                // Same length, so the field is as wide: only the first one shows the note.
+                widths.set(listOf("${long}y", "${long}x").map { component.enterName(it); component.center.preferredSize.width })
+                component.close(DialogWrapper.CANCEL_EXIT_CODE)
+            }
+        })
+
+        onEdt { StackFlows.addLayer(project) }
+        waitUntil("the dialog is measured") { widths.get() != null }
+
+        val (withoutNote, withNote) = widths.get()
+        assertEquals(withoutNote, withNote)
+        assertEquals(emptyList<List<String>>(), gh.writes())
         awaitQuiet()
     }
 

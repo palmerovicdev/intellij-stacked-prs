@@ -437,13 +437,13 @@ internal class AddLayerDialog(
         true, // forceAutoPopup: al escribir
         true, // showHint: instala el AUTO_POPUP_ON_FOCUS_GAINED de abajo
     )
-    private val adoptNote = JBLabel("", AllIcons.General.Information, JBLabel.LEFT)
+    private val adoptNote = WrappingText(icon = AllIcons.General.Information)
     private val commitBox = JBCheckBox(message("add.commit"))
     private val messageField = JBTextField(32)
     private val stagingAll = JBRadioButton(message("add.staging.all"), true)
     private val stagingTracked = JBRadioButton(message("add.staging.tracked"))
     private val stagingStaged = JBRadioButton(message("add.staging.staged"))
-    private val emptyWarning = JBLabel(message("add.empty.top", top.branch), AllIcons.General.Warning, JBLabel.LEFT)
+    private val emptyWarning = WrappingText(message("add.empty.top", top.branch), AllIcons.General.Warning)
     private val preview = CommandPreview()
 
     val branch: String get() = branchField.text.trim()
@@ -485,6 +485,10 @@ internal class AddLayerDialog(
         update()
     }
 
+    /** El panel del centro. Sin pantalla, `contentPanel` es null: los tests miden este. */
+    internal lateinit var center: JComponent
+        private set
+
     override fun createCenterPanel(): JComponent = panel {
         val pr = top.pr?.let { " (#${it.number})" }.orEmpty()
         row(message("add.on.top")) {
@@ -492,13 +496,14 @@ internal class AddLayerDialog(
         }
         if (needsTop) {
             row {
-                cell(JBLabel(message("add.needs.top", state.snapshot.currentBranch, top.branch), AllIcons.General.Information, JBLabel.LEFT))
+                cell(WrappingText(message("add.needs.top", state.snapshot.currentBranch, top.branch), AllIcons.General.Information))
+                    .align(AlignX.FILL).resizableColumn()
             }
         }
         row(message("add.branch")) {
             cell(branchField).align(AlignX.FILL)
         }
-        row { cell(adoptNote) }
+        row { cell(adoptNote).align(AlignX.FILL).resizableColumn() }
         row { cell(commitBox) }
         indent {
             row(message("add.message")) { cell(messageField).align(AlignX.FILL) }
@@ -510,10 +515,10 @@ internal class AddLayerDialog(
                     cell(stagingStaged)
                 }
             }
-            row { cell(emptyWarning) }
+            row { cell(emptyWarning).align(AlignX.FILL).resizableColumn() }
         }
         row { cell(preview).align(AlignX.FILL).resizableColumn() }
-    }
+    }.also { center = it }
 
     override fun getPreferredFocusedComponent(): JComponent = branchField
 

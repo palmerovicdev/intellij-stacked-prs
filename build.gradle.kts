@@ -97,6 +97,12 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.1 &mdash; Add Layer notes no longer widen the dialog</h3>
+            <ul>
+              <li>The notes in <b>Add Layer…</b> (switching to the top layer first, a branch that
+                already exists or is only on the remote, a top layer without commits) wrap to the
+                dialog's width instead of stretching it to the length of the note.</li>
+            </ul>
             <h3>0.15.0 &mdash; gh-stack 0.2.1 and repository link</h3>
             <ul>
               <li>Supports <b>gh-stack 0.2.1</b> and its shared stack catalog across Git worktrees,
