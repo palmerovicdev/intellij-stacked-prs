@@ -3,6 +3,11 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.2 — Merge Stack siempre a la vista
+
+- *Merge Stack…* y *Close Stack…* pasan al principio de la barra, justo tras *Refresh*. Antes
+  iban al final y, con la ventana estrecha, quedaban escondidos en el desborde (›).
+
 ## 0.15.1 — Los avisos de Add Layer ya no ensanchan el diálogo
 
 - Los avisos de *Add Layer…* (que se cambia antes a la capa de arriba, que la rama ya existe o

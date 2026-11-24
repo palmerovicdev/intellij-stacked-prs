@@ -97,6 +97,12 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.2 &mdash; Merge Stack always in view</h3>
+            <ul>
+              <li><b>Merge Stack…</b> and <b>Close Stack…</b> move to the start of the toolbar,
+                right after Refresh. They used to be last and fell into the overflow (›) when the
+                tool window was narrow.</li>
+            </ul>
             <h3>0.15.1 &mdash; Add Layer notes no longer widen the dialog</h3>
             <ul>
               <li>The notes in <b>Add Layer…</b> (switching to the top layer first, a branch that

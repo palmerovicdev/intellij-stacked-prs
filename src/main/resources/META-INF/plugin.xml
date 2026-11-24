@@ -101,6 +101,10 @@
             <action id="Upstack.ShowStackList" class="com.upstack.actions.ShowStackListAction"/>
             <action id="Upstack.Refresh" class="com.upstack.actions.RefreshAction"/>
             <separator/>
+            <!-- Justo tras refrescar: fusionar se usa mucho y aqui no se pierde en el desborde (›). -->
+            <action id="Upstack.MergeStack" class="com.upstack.actions.MergeStackAction"/>
+            <action id="Upstack.CloseStack" class="com.upstack.actions.CloseStackAction"/>
+            <separator/>
             <action id="Upstack.InitStack" class="com.upstack.actions.InitStackAction"/>
             <action id="Upstack.AddLayer" class="com.upstack.actions.AddLayerAction"/>
             <separator/>
@@ -116,9 +120,6 @@
                 <action id="Upstack.RebaseDownstack" class="com.upstack.actions.RebaseDownstackAction"/>
                 <action id="Upstack.RebaseLayers" class="com.upstack.actions.RebaseLayersAction"/>
             </group>
-            <separator/>
-            <action id="Upstack.MergeStack" class="com.upstack.actions.MergeStackAction"/>
-            <action id="Upstack.CloseStack" class="com.upstack.actions.CloseStackAction"/>
             <separator/>
             <action id="Upstack.OpenSettings" class="com.upstack.actions.OpenSettingsAction"/>
         </group>

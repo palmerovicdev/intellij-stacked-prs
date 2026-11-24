@@ -23,9 +23,11 @@ cualquier momento.
   capas que necesitan rebase, los PRs cuya base en GitHub no es la capa de debajo
   (*Wrong base*) y los que GitHub no puede fusionar sin conflictos (*Conflicts*) o sin
   ponerse al día con su base (*Behind*).
-- Barra: refrescar, **nueva pila**, **añadir capa encima**, **publicar como drafts**,
-  **publicar listos para revisión**, **sync**, **rebase** (desplegable: upstack desde la
-  capa actual, pila entera, downstack y capas entre sí), **fusionar**, **cerrar** y ajustes.
+- Barra: refrescar, **fusionar**, **cerrar**, **nueva pila**, **añadir capa encima**,
+  **publicar como drafts**, **publicar listos para revisión**, **sync**, **rebase**
+  (desplegable: upstack desde la capa actual, pila entera, downstack y capas entre sí) y
+  ajustes. Fusionar y cerrar van justo tras refrescar para que no se pierdan en el desborde
+  (›) cuando la ventana es estrecha.
 - Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. Checkout, **ver los
   cambios de la capa** (el diff del IDE contra la de debajo, lo mismo que enseña su PR),
   abrir o copiar el PR, **rebase upstack desde aquí**, **fusionar hasta aquí**, **cambiar la base del PR** a la capa
