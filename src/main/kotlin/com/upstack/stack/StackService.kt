@@ -353,7 +353,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
 
     /** gh-stack deja este fichero mientras un `gh stack rebase` espera `--continue`/`--abort`. */
     fun stackRebaseInProgress(repository: GitRepository): Boolean =
-        gitDir(repository)?.resolve(REBASE_STATE_FILE)?.let(Files::exists) == true
+        stateFile(repository, REBASE_STATE_FILE)?.let(Files::exists) == true
 
     /**
      * Donde esta parado el `gh stack rebase`, o null si no lo esta. Solo con lo que dice git: la
@@ -362,13 +362,15 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
      */
     suspend fun rebaseStop(repository: GitRepository): RebaseStop? {
         if (!stackRebaseInProgress(repository)) return null
+        val journal = rebaseWorktree(repository)
+        val otherWorktree = otherRebaseWorktree(repository, journal)
         val gitDir = gitDir(repository)
-        val branch = REBASE_DIRS.firstNotNullOfOrNull { dir ->
+        val branch = journal?.first ?: REBASE_DIRS.firstNotNullOfOrNull { dir ->
             gitDir?.resolve(dir)?.resolve("head-name")?.takeIf(Files::isRegularFile)
                 ?.let { runCatching { Files.readString(it).trim() }.getOrNull() }
         }?.takeIf { it.startsWith(HEADS) }?.removePrefix(HEADS)
         val stack = branch?.let { name -> localStacks(repository).map { it.stack }.firstOrNull { name in it.branches } }
-        val head = try {
+        val head = if (otherWorktree != null) null else try {
             GhCli.run(repository.root.toNioPath(), GitCommands.rebaseHead(), tool = Tool.GIT)
         } catch (e: CancellationException) {
             throw e
@@ -378,6 +380,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         val commit = head?.takeIf { it.ok }?.stdout?.trim()?.split(UNIT_SEPARATOR, limit = 2)?.takeIf { it.size == 2 }
         return RebaseStop(
             branch = branch,
+            otherWorktree = otherWorktree,
             position = branch?.let { stack?.positionOf(it) },
             layers = stack?.branches?.size,
             commit = commit?.get(0),
@@ -395,12 +398,24 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
     /** El IDE termino de repasar los cambios: cuantos conflictos quedan, si hay rebase parado. */
     internal fun onChangesUpdated() {
         val repository = repository()
-        _conflicts.value = repository?.takeIf(::stackRebaseInProgress)?.let { conflictedFiles(it.root).size }
+        _conflicts.value = repository?.takeIf {
+            stackRebaseInProgress(it) && otherRebaseWorktree(it, rebaseWorktree(it)) == null
+        }?.let { conflictedFiles(it.root).size }
     }
+
+    private fun rebaseWorktree(repository: GitRepository): Pair<String?, String?>? =
+        stateFile(repository, REBASE_STATE_FILE)?.let {
+            runCatching { StackJson.parseRebaseWorktree(Files.readString(it)) }.getOrNull()
+        }
+
+    private fun otherRebaseWorktree(repository: GitRepository, journal: Pair<String?, String?>?): String? =
+        journal?.second?.takeIf { path ->
+            runCatching { !Files.isSameFile(Path.of(path), repository.root.toNioPath()) }.getOrDefault(true)
+        }
 
     /** Las pilas que gh-stack sigue en local, con lo que queda de sus ramas. */
     fun localStacks(repository: GitRepository): List<LocalStackEntry> {
-        val file = gitDir(repository)?.resolve(STACK_FILE) ?: return emptyList()
+        val file = stateFile(repository, STACK_FILE) ?: return emptyList()
         val stacks = try {
             if (Files.isRegularFile(file)) StackJson.parseLocalStacks(Files.readString(file)) else emptyList()
         } catch (_: Exception) {
@@ -413,19 +428,10 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
     }
 
     // En un worktree `.git` es un fichero que apunta al directorio real.
-    private fun gitDir(repository: GitRepository): Path? {
-        val dotGit = repository.root.toNioPath().resolve(".git")
-        return when {
-            Files.isDirectory(dotGit) -> dotGit
-            Files.isRegularFile(dotGit) -> runCatching {
-                Files.readString(dotGit).lineSequence()
-                    .firstOrNull { it.startsWith("gitdir:") }
-                    ?.removePrefix("gitdir:")?.trim()
-                    ?.let { dotGit.parent.resolve(it).normalize() }
-            }.getOrNull()
-            else -> null
-        }
-    }
+    private fun gitDir(repository: GitRepository): Path? = StackFiles.gitDir(repository.root.toNioPath())
+
+    private fun stateFile(repository: GitRepository, name: String): Path? =
+        StackFiles.stateFile(repository.root.toNioPath(), name)
 
     // ---------------------------------------------------------------- escritura
 
@@ -482,7 +488,9 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             requestRefresh()
         }
         // Despues de syncIde: el dialogo espera al repaso de cambios que ve los conflictos nuevos.
-        if (stoppedOnConflicts) withContext(Dispatchers.EDT) { resolveConflicts(opened = true) }
+        if (stoppedOnConflicts && repository?.let { rebaseStop(it)?.otherWorktree } == null) {
+            withContext(Dispatchers.EDT) { resolveConflicts(opened = true) }
+        }
     }
 
     private suspend fun run(repository: GitRepository?, workDir: Path, call: GhCall): GhResult {
@@ -529,7 +537,8 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             (result.exitCode == GhExit.CONFLICT || result.exitCode == GhExit.REBASE_ACTIVE) && stop != null ->
                 Notifier.warning(
                     project, message("conflict.title"),
-                    stop.branch?.let { message("conflict.rebase.layer", it) } ?: message("conflict.rebase"),
+                    stop.otherWorktree?.let { message("conflict.rebase.worktree", it) }
+                        ?: stop.branch?.let { message("conflict.rebase.layer", it) } ?: message("conflict.rebase"),
                     Notifier.action(message("action.resolve.conflicts")) { resolveConflicts() },
                     Notifier.action(message("action.rebase.continue")) { continueRebase() },
                     Notifier.action(message("action.rebase.abort")) { abortRebase() },
@@ -922,6 +931,11 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
      */
     fun resolveConflicts(opened: Boolean = false) {
         val repository = repository() ?: return
+        val other = otherRebaseWorktree(repository, rebaseWorktree(repository))
+        if (other != null) {
+            if (!opened) Notifier.info(project, message("conflict.rebase.worktree", other))
+            return
+        }
         val changes = ChangeListManager.getInstance(project)
         changes.invokeAfterUpdate(true) {
             val files = conflictedFiles(repository.root)

@@ -20,13 +20,15 @@ class EnvironmentTest {
     }
 
     @Test
-    fun `only the reference version of gh-stack is known`() {
+    fun `checked versions of gh-stack are known`() {
         assertEquals(VersionStatus.KNOWN, StackExtension(true, "0.1.1").status)
+        assertEquals(VersionStatus.KNOWN, StackExtension(true, "0.2.1").status)
         assertEquals(VersionStatus.OLDER, StackExtension(true, "0.1.0").status)
         assertEquals(VersionStatus.OLDER, StackExtension(true, "0.0.9").status)
-        assertEquals(VersionStatus.NEWER, StackExtension(true, "0.2.0").status)
+        assertEquals(VersionStatus.OLDER, StackExtension(true, "0.2.0").status)
         // Por numeros, no por texto: 10 va despues de 1.
-        assertEquals(VersionStatus.NEWER, StackExtension(true, "0.1.10").status)
+        assertEquals(VersionStatus.OLDER, StackExtension(true, "0.1.10").status)
+        assertEquals(VersionStatus.NEWER, StackExtension(true, "0.2.10").status)
         assertEquals(VersionStatus.NEWER, StackExtension(true, "1.0").status)
         assertEquals(VersionStatus.UNREADABLE, StackExtension(true, "dev").status)
         assertEquals(VersionStatus.UNREADABLE, StackExtension(true, null).status)

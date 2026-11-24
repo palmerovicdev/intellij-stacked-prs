@@ -172,6 +172,15 @@ object StackJson {
         }
     }
 
+    /** Ubicacion del conflicto en el diario compartido de gh-stack 0.2. */
+    fun parseRebaseWorktree(text: String): Pair<String?, String?>? {
+        val root = parse(text) as? JsonObject ?: return null
+        val worktrees = root.obj("worktrees") ?: return null
+        val branch = worktrees.string("pending") ?: root.string("conflictBranch")
+        val location = branch?.let { worktrees.obj("owners")?.obj(it) } ?: worktrees.obj("origin")
+        return branch to location?.string("path")
+    }
+
     // gh escribe avisos por stderr, pero por si alguna version los mezcla con la salida,
     // se empieza en el primer caracter que abre JSON.
     private fun parse(text: String): JsonElement? {

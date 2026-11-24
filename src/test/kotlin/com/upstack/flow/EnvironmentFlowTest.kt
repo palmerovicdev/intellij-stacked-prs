@@ -50,7 +50,7 @@ class EnvironmentFlowTest : FlowTestCase() {
         assertEquals("2.102.0", report.ghVersion)
         assertEquals(listOf("octo"), report.session?.accounts?.map { it.login })
         assertTrue(report.session?.signedInTo("github.com") == true)
-        assertEquals("0.1.1", report.extension?.version)
+        assertEquals("0.2.1", report.extension?.version)
         assertEquals(VersionStatus.KNOWN, report.extension?.status)
         val repository = requireNotNull(report.repository)
         assertEquals(listOf("origin" to "acme/shop", "upstream" to "acme-upstream/shop"), repository.remotes.map { it.name to it.github?.cliName })
@@ -153,7 +153,7 @@ class EnvironmentFlowTest : FlowTestCase() {
 /** El aviso de una version de gh-stack que no es la de referencia: una vez, y sin bloquear nada. */
 class StackVersionFlowTest : FlowTestCase() {
 
-    override fun stackVersion(): String = if ("newer" in name) "0.2.0" else "0.1.0"
+    override fun stackVersion(): String = if ("newer" in name) "0.3.0" else "0.1.0"
 
     override fun beforeFirstRefresh() {
         if ("already" in name) UpstackSettings.getInstance().warnedStackVersion = "0.1.0"
@@ -161,7 +161,7 @@ class StackVersionFlowTest : FlowTestCase() {
 
     fun `test an older gh-stack warns once and offers to upgrade`() {
         val notification = awaitNotificationWith(msg("version.title"))
-        assertEquals(msg("version.older", "0.1.0", "0.1.1"), notification.content)
+        assertEquals(msg("version.older", "0.1.0", "0.2.1"), notification.content)
         assertEquals(listOf(msg("action.upgrade.extension"), msg("action.open.settings")), notification.actions.map { it.templateText })
         // Es un aviso: la pila se lee igual.
         awaitState<StackState.NotInStack>()
@@ -177,7 +177,7 @@ class StackVersionFlowTest : FlowTestCase() {
 
     fun `test a newer gh-stack warns without offering an upgrade`() {
         val notification = awaitNotificationWith(msg("version.title"))
-        assertEquals(msg("version.newer", "0.2.0", "0.1.1"), notification.content)
+        assertEquals(msg("version.newer", "0.3.0", "0.2.1"), notification.content)
         assertEquals(listOf(msg("action.open.settings")), notification.actions.map { it.templateText })
     }
 
@@ -215,7 +215,7 @@ class EnvironmentUiFlowTest : FlowTestCase() {
             listOf(
                 msg("environment.gh", "2.102.0", gh.executable.toString()),
                 msg("environment.signed.out", "github.com") + " | " + msg("action.log.in"),
-                msg("version.older", "0.1.0", "0.1.1") + " | " + msg("action.upgrade.extension"),
+                msg("version.older", "0.1.0", "0.2.1") + " | " + msg("action.upgrade.extension"),
                 msg("environment.remote", "origin", "acme/shop", "git@github.com:acme/shop.git"),
                 msg("environment.remote", "upstream", "acme-upstream/shop", "git@github.com:acme-upstream/shop.git"),
             ),

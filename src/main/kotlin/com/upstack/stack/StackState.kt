@@ -22,6 +22,8 @@ data class RepoRef(
  */
 data class RebaseStop(
     val branch: String? = null,
+    /** Worktree externo donde hay que resolver el conflicto, si se conoce. */
+    val otherWorktree: String? = null,
     /** Posicion de [branch] en su pila, 1 la de abajo, y cuantas capas tiene la pila. */
     val position: Int? = null,
     val layers: Int? = null,

@@ -3,6 +3,12 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.0 — gh-stack 0.2.1 y enlace al repositorio
+
+- Compatibilidad con gh-stack 0.2.1: lectura del catálogo compartido entre worktrees y aviso
+  cuando un rebase se detiene en otro worktree. Se conserva el soporte para 0.1.1.
+- La ficha del plugin incluye el enlace al repositorio público.
+
 ## 0.14.0 — Publicar cualquier capa
 
 - **Publicar cualquier capa sin PR desde su menú**, no solo la de arriba: *Publish as Draft…*

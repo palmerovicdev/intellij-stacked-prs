@@ -11,7 +11,7 @@ every button runs the same `gh stack` or `gh pr` command you would type. No acco
 server: it uses your own `gh` and its login.
 
 [![IntelliJ IDEA 2026.2+](https://img.shields.io/badge/IntelliJ%20IDEA-2026.2%2B-000?logo=intellijidea)](#install)
-[![gh-stack v0.1.1](https://img.shields.io/badge/gh--stack-v0.1.1-8250DF?logo=github)](https://github.com/github/gh-stack)
+[![gh-stack v0.2.1](https://img.shields.io/badge/gh--stack-v0.2.1-8250DF?logo=github)](https://github.com/github/gh-stack)
 [![License: MIT](https://img.shields.io/github/license/palmerovicdev/intellij-stacked-prs)](LICENSE)
 
 [Install](#install) · [Feature tour](#feature-tour) · [Commands](#every-button-is-a-command) · [Full manual](docs/manual.md) · [Changelog](CHANGELOG.md)
@@ -164,7 +164,7 @@ is approved, why did the rebase stop.
   **Install**, **Upgrade gh-stack** or **Log In…**.
 - **Log In without a terminal**: `gh auth login --web` gets a one-time code, and a dialog
   shows it, copies it and opens GitHub. The token stays with `gh`; Upstack never sees it.
-- If `gh-stack` isn't v0.1.1, the version whose JSON and exit codes the plugin reads, it
+- If `gh-stack` isn't v0.2.1 or v0.1.1, the versions the plugin recognizes, it
   says so once. It blocks nothing.
 
 ### And also
@@ -201,7 +201,7 @@ It needs:
   optional: only the *Pull Requests* menus use it.
 - The [GitHub CLI](https://cli.github.com), signed in (`gh auth login`, or *Log In…* from
   the plugin).
-- The `gh-stack` extension, v0.1.1 (`gh extension install github/gh-stack`). The plugin
+- The `gh-stack` extension, v0.2.1 or v0.1.1 (`gh extension install github/gh-stack`). The plugin
   offers to install it if it's missing, and warns about any other version.
 - A GitHub repository with stacked pull requests. *Check* tells you if it doesn't have them.
 

@@ -329,6 +329,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 else -> message("banner.rebase")
             },
             stop.commit?.let { message("banner.rebase.commit", it, stop.subject.orEmpty()) },
+            stop.otherWorktree?.let { message("conflict.rebase.worktree", it) },
             when (conflicts) {
                 null -> message("banner.rebase.unknown")
                 0 -> message("banner.rebase.resolved")
@@ -337,7 +338,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         ).joinToString(" ")
         val status = if (conflicts == 0) EditorNotificationPanel.Status.Info else EditorNotificationPanel.Status.Warning
         val banner = banner(text, status)
-        if (conflicts != 0) {
+        if (conflicts != 0 && stop.otherWorktree == null) {
             banner.withAction(message("action.resolve.conflicts"), Helps.resolveConflicts()) { service.resolveConflicts() }
         }
         if (conflicts == null || conflicts == 0) {

@@ -49,10 +49,10 @@ data class StackExtension(val installed: Boolean, val version: String?) {
 
     companion object {
         /** La version de la que se leyeron el JSON y los codigos de salida. */
-        const val REFERENCE = "0.1.1"
+        const val REFERENCE = "0.2.1"
 
         /** Las comprobadas: con cualquier otra, un aviso y no un bloqueo. */
-        val KNOWN = setOf(REFERENCE)
+        val KNOWN = setOf("0.1.1", REFERENCE)
 
         /** `0.2.0-rc1` -> 0, 2, 0. */
         private fun numbers(version: String): List<Int>? {

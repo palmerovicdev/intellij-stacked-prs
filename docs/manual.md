@@ -84,7 +84,7 @@ cualquier momento.
   solo uso, y un diálogo lo enseña, lo copia y abre la página de GitHub donde se escribe.
   Se ofrece también en la ventana, en una banda, cuando los datos de los PRs fallan por
   falta de sesión, y en el aviso de una escritura que falla por lo mismo.
-- **Aviso si gh-stack no es la v0.1.1**, una vez por versión: el plugin lee su JSON y sus
+- **Aviso si gh-stack no es la v0.2.1 ni la v0.1.1**, una vez por versión: el plugin lee su JSON y sus
   códigos de salida de esa versión. No bloquea nada.
 - Pestaña **Log** con cada comando ejecutado y su salida.
 
@@ -125,7 +125,7 @@ Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
 
 - [GitHub CLI](https://cli.github.com) con sesión iniciada (`gh auth login`, o *Log In…*
   desde el plugin).
-- La extensión `gh-stack` (`gh extension install github/gh-stack`), en su v0.1.1. Si falta,
+- La extensión `gh-stack` (`gh extension install github/gh-stack`), en su v0.2.1 o v0.1.1. Si falta,
   el plugin ofrece instalarla; si es otra versión, avisa.
 - IntelliJ IDEA 2026.2 o posterior, con el plugin Git activo.
 
@@ -156,7 +156,7 @@ Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
   espera. Va sin `--git-protocol`, para no cambiar el protocolo de git del host. El token lo
   guarda gh; el plugin solo ve el código, que también queda en el Log.
 - **La versión de gh-stack se avisa, no se exige.** Una vez por sesión se mira
-  `gh stack --version`; si no es la v0.1.1, sale un aviso (uno por versión) con *Upgrade* si
+  `gh stack --version`; si no es la v0.2.1 ni la v0.1.1, sale un aviso (uno por versión) con *Upgrade* si
   es anterior. Con una posterior todo sigue igual: el JSON se lee de forma tolerante.
 - **Varios remotos**: si gh-stack no sabe cuál usar, se pregunta una vez y se recuerda por
   proyecto.

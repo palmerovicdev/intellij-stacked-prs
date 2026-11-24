@@ -1,4 +1,4 @@
-<idea-plugin>
+<idea-plugin url="https://github.com/palmerovicdev/intellij-stacked-prs">
     <!-- id, name, version e idea-version los inyecta Gradle desde gradle.properties. -->
     <vendor email="palmerodev@gmail.com">Victor Palmero</vendor>
 
@@ -61,8 +61,8 @@
         </ul>
         <p>Requires the <a href="https://cli.github.com">GitHub CLI</a>, signed in
             (<code>gh auth login</code>, or <i>Log In</i> from the plugin), and the
-            <code>gh-stack</code> extension, v0.1.1 (the plugin offers to install it, and warns
-            about any other version).</p>
+            <code>gh-stack</code> extension, v0.2.1 or v0.1.1 (the plugin offers to install it,
+            and warns about other versions).</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

@@ -85,6 +85,14 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.0 &mdash; gh-stack 0.2.1 and repository link</h3>
+            <ul>
+              <li>Supports <b>gh-stack 0.2.1</b> and its shared stack catalog across Git worktrees,
+                while continuing to support 0.1.1.</li>
+              <li>When a stack rebase stops in another worktree, Upstack shows where to resolve and
+                stage the conflicts before continuing.</li>
+              <li>The plugin page now links to the public source repository.</li>
+            </ul>
             <h3>0.14.0 &mdash; publish any layer</h3>
             <ul>
               <li><b>Publish any layer without a pull request</b> from its menu, not just the top one:

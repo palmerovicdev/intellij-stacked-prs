@@ -18,6 +18,17 @@ class ConflictsFlowTest : FlowTestCase() {
 
     private val rebaseUpstack = listOf("stack", "rebase", "--upstack", "--no-trunk")
 
+    fun `test a conflict in another worktree reports its location without counting local files`() {
+        val other = repoDir.resolveSibling("other-worktree")
+        Files.writeString(repoDir.resolve(".git/gh-stack-rebase-state"),
+            """{"worktrees":{"origin":{"path":"$repoDir"},"pending":"feat/a","owners":{"feat/a":{"path":"$other"}}}}""")
+        val stop = requireNotNull(awaitState<StackState> { it.repo?.rebase?.otherWorktree != null }.repo?.rebase)
+        assertEquals("feat/a", stop.branch)
+        assertEquals(other.toString(), stop.otherWorktree)
+        service.onChangesUpdated()
+        assertNull(service.conflicts.value)
+    }
+
     /** `feat/a` y `main` cambian la misma linea; git se para al rebasar `feat/a` sobre `main`. */
     private fun stopOnConflict() {
         Files.writeString(
