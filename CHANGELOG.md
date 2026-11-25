@@ -3,6 +3,26 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.12 — Plantillas de PR y un md por capa
+
+- **Plantillas.** *Settings → Version Control → Upstack → Pull request templates*: una lista de
+  plantillas (nombre, título y descripción) que se pueden añadir, editar y quitar. `{branch}` se
+  sustituye por la rama de la capa y `{commits}` por lo que se propone de sus commits.
+- **Dónde se escribe el PR.** Los diálogos *Publish as Draft…*, *Publish Ready for Review…* y,
+  por cada capa nueva, *Publish Stack…* dejan elegir entre **escribirlo ahí** o **en un md de la
+  capa**: `.upstack/<rama>.md` en la raíz del repositorio (la primera línea `# Título` es el
+  título; el resto, la descripción). Con el md, lo que diga el archivo al aceptar el diálogo es
+  lo que va a GitHub con `gh pr edit --title … --body …`. *Open in Editor* cierra el diálogo
+  (es modal) y abre el archivo; se vuelve a publicar cuando esté listo. Al cambiar al md sin
+  que exista, se crea con lo que había en los campos. Se recuerda la última elección.
+- **Aplicar una plantilla o empezar vacío.** *Template:* ofrece *Empty* y las plantillas;
+  *Apply Template* rellena los campos o, editando en el md, reescribe el archivo (pregunta antes
+  de pisar otro texto).
+- **Editar título y descripción de un PR.** *Edit Title…* pasa a *Edit Title and Description…*:
+  lee la descripción (`gh pr view --json body`) y, si cambia, la manda con el título
+  (`gh pr edit --title … --body …`); si no cambia, solo el título, como antes. Mismo editor
+  (campos o md, plantilla o vacío).
+
 ## 0.15.11 — La ventana se refresca sola, cada el tiempo que elijas
 
 - Mientras la pestaña *Stack* de la ventana *Stacks* está en pantalla, la pila se vuelve a leer

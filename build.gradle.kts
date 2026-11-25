@@ -97,6 +97,27 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.12 &mdash; Pull request templates and a Markdown file per layer</h3>
+            <ul>
+              <li><b>Templates.</b> <b>Settings | Version Control | Upstack | Pull request templates</b>
+                keeps a list of templates (name, title, description) you can add, edit and remove.
+                <code>{branch}</code> becomes the layer's branch and <code>{commits}</code> what is
+                proposed from its commits.</li>
+              <li><b>Where a pull request is written.</b> <b>Publish as Draft…</b>, <b>Publish Ready for
+                Review…</b> and, for each new layer, <b>Publish Stack…</b> let you write it in the dialog or
+                in a Markdown file of the layer, <code>.upstack/&lt;branch&gt;.md</code> at the repository root
+                (the first <code># Title</code> line is the title, the rest the description). With the file,
+                what it says when you accept the dialog goes to GitHub with
+                <code>gh pr edit --title … --body …</code>. <b>Open in Editor</b> closes the dialog (it is
+                modal) and opens the file; publish again when it is ready.</li>
+              <li><b>Apply a template, or start empty.</b> <b>Template:</b> offers <b>Empty</b> and your
+                templates; <b>Apply Template</b> fills the fields or, when you edit in the file, rewrites it
+                (it asks before replacing other text).</li>
+              <li><b>Edit the title and the description of a pull request.</b> <b>Edit Title…</b> is now
+                <b>Edit Title and Description…</b>: it reads the description
+                (<code>gh pr view --json body</code>) and sends it with the title only if you changed it
+                (<code>gh pr edit --title … --body …</code>). Same editor: fields or file, template or empty.</li>
+            </ul>
             <h3>0.15.11 &mdash; The window refreshes on its own, as often as you choose</h3>
             <ul>
               <li>While the <b>Stack</b> tab of the <b>Stacks</b> window is on screen, the stack is read

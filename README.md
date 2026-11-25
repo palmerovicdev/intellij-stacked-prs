@@ -95,9 +95,14 @@ is approved, why did the rebase stop.
   existing drafts ready).
 - **Publish a single layer** from its own menu, any layer without a pull request: the layers
   below it go as drafts (they are its base) and the ones above stay unpublished.
-- From each layer: **Mark Ready / Convert to Draft**, **Edit Title…**, **Labels…** and a
+- From each layer: **Mark Ready / Convert to Draft**, **Edit Title and Description…**, **Labels…** and a
   **final-layer label** (`stack-final` by default, one per stack). Its name, color and
   description are set in *Settings → Version Control → Upstack*.
+- **Pull request templates and a Markdown file per layer.** Keep templates (title and
+  description, with `{branch}` and `{commits}`) in *Settings → Version Control → Upstack*. When you
+  publish a layer, or edit a pull request's title and description, write them in the dialog or in
+  `.upstack/<branch>.md` at the repository root (`# Title` on the first line, the description
+  below), starting empty or from a template; what the file says when you accept is what goes to GitHub.
 
 ### Rebase only what changed
 
@@ -249,7 +254,7 @@ It needs:
 | Change Pull Request Base | `gh pr edit <url> --base <layer below>` |
 | Show Layer Changes | the IDE diff, same as `git diff <layer below>...<layer>` |
 | Labels…, final layer | `gh pr edit <url> --add-label … --remove-label …` |
-| Edit Title… | `gh pr edit <url> --title …` |
+| Edit Title and Description… | `gh pr view <url> --json body` (read only), then `gh pr edit <url> --title …` (with `--body …` if the description changed) |
 | Checks… (or the Checks badge) | `gh pr checks <pr> --repo OWNER/REPO --json name,state,bucket,link,workflow,description` (read only) |
 | Why it failed | `gh run view <run> --repo OWNER/REPO --log-failed` (read only; GitHub Actions) |
 | Re-run | `gh run rerun <run> --failed --repo OWNER/REPO` (GitHub Actions only) |
@@ -274,7 +279,7 @@ The full table, with *Delete Layer…* and *Rename Branch…*, is in the
 
 | Where | What | In version control |
 |---|---|---|
-| `upstack.xml`, in the IDE settings | The path to `gh`, the final-layer label (name, color, description, and whether Merge Stack adds it first), what to do after a commit on a lower layer and how often the window refreshes | No |
+| `upstack.xml`, in the IDE settings | The path to `gh`, the final-layer label (name, color, description, and whether Merge Stack adds it first), what to do after a commit on a lower layer, how often the window refreshes, the pull request templates and whether the text of a pull request is edited in the dialog or in its Markdown file | No |
 | The project's `workspace.xml` | The repository and remote to use, and the last merge method | No |
 | The repository's git config | Your `git rerere` answer, in the same keys `gh stack` uses | No |
 

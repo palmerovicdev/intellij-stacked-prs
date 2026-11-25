@@ -18,11 +18,11 @@ Objective: PR title/body templates, a Markdown file per layer as the source of a
 
 | ID | Specs | Plan | Route | Status | Evidence |
 |----|-------|------|-------|--------|----------|
-| T1 | S1, S2, A1 | `PrTemplate` + `PrTemplates` (render placeholders) in settings; `PrFile` (path, parse, render) | inline | pending | |
-| T2 | S1 | Settings UI: template list editor | inline | pending | |
-| T3 | S2-S6 | Shared `PrTextEditor` (mode, template combo, Apply, file link) used by PublishLayerDialog and PublishDialog rows | inline | pending | |
-| T3b | S8 | *Edit Title…* → edit title and body (`gh pr edit --title --body`), body read with `gh pr view --json body`, same `PrTextEditor` | inline | pending | |
-| T4 | S7 | Version 0.15.12, CHANGELOG, changeNotes, manual; buildPlugin | inline | pending | |
+| T1 | S1, S2, A1 | `PrTemplate` (render placeholders) + `PrFile` (path, parse, format) + settings storage | inline | done | PrTemplatesTest, UpstackSettingsTest green; commit C1 |
+| T2 | S1 | Settings UI: template list editor | inline | done | compiles, backed by UpstackSettingsTest; not exercised by a UI test; commit C1 |
+| T3 | S2-S6 | Shared `PrTextEditor` (mode, template combo, Apply, file link) used by PublishLayerDialog and PublishDialog rows | inline | done | PublishLayerFlowTest: template, empty, md published, switch creates file / template rewrites it, Publish Stack with md; commit C2 |
+| T3b | S8 | *Edit Title…* → edit title and body (`gh pr edit --title --body`), body read with `gh pr view --json body`, same `PrTextEditor` | inline | done | GitHubWritesFlowTest: title only, title+body, unreadable body left alone; commit C2 |
+| T4 | S7 | Version 0.15.12, CHANGELOG, changeNotes, manual; buildPlugin | inline | done | build/distributions/upstack-0.15.12.zip; commit C3 |
 
 Route declaration: all inline (one understood feature, no parallel independent units, no writer trigger).
 
@@ -31,3 +31,5 @@ Route declaration: all inline (one understood feature, no parallel independent u
 - L1 (2026-11-25): "mira vamos a hacer una version menor menor mas, o sea 0.15.+ que nos permita configurar plantillas de titulos, y body para prs, nos permita tener un archivo .md e la raiz del proyecto que sea el md que se coge para conformar el pr, con titulo y body, y al cual se le puede aplicar una plantilla, las plantillas se pueden agregar y tener varias, y cuando se da en apply template te permite cambiar el md para que tome la plantilla y al subir el pr a draft o ready se ponga el titulo y body como dice el md, fijate que debe existir la posibilidad de hacer lo mismo en el editor de pr, o sea puedo seleccionar si quiero editraar en un archivo md o en el mismo editor que se muestra cuando vas a crear el pr o sea este [screenshot: Publish fix/paged-seaches-with-more-than-50 as Draft: Pull request, Title, Description, command preview]"
 - L2 (2026-11-25): "y en este editor entonces te debe dejar elegir una plantilla o empezar vacio". Answers to my questions: md → "Un md por capa"; templates → "Ajustes del IDE".
 - L3 (2026-11-25): [screenshot of the layer context menu of fix/leaked-secrets #1347 Ready: Check Out Branch, Show Layer Changes, Open Pull Request in Browser, Checks…, Copy Pull Request Link, Rebase Upstack from Here, Rename Branch…, Merge Up to Here…, Convert to Draft, Edit Title…, Labels…, Mark as Final Layer] "aqui debe dejar editar el titulo y body"
+- L4 (2026-11-25): Design decisions made without asking (flag in the report): md at `.upstack/<branch>.md`; modal dialog cannot let you edit a file at the same time, so *Open in Editor* closes the dialog and opens the file, publish again afterwards; switching to file mode creates the md from the fields if absent; a body that could not be read is not sent unless typed; `Edit Title…` renamed *Edit Title and Description…*.
+- L5 (2026-11-25): Verification: `./gradlew test --offline`: 285 tests, 0 failures. RED not observed for the new flow tests (written together with the code); the first run after wiring failed everywhere on a DSL error (radio buttons need `buttonsGroup`), which the existing tests caught. Not verified: the UI in a real IDE (never run), Marketplace install. Engram mirror pending (tools unavailable).

@@ -93,10 +93,18 @@ cualquier momento.
 - **Borrar la capa de arriba sin PR** (*Delete Layer…*): sale de la pila sin
   `gh stack modify`, con su rama local y, si se marca, la remota.
 - **Renombrar la rama de una capa sin PR** (*Rename Branch…*), aquí y en GitHub si se subió,
-  y **cambiar el título de un PR** (*Edit Title…*), por separado.
+  y **cambiar el título y la descripción de un PR** (*Edit Title and Description…*), por separado.
 - **Publicar una capa desde su menú** (*Publish as Draft…* / *Publish Ready for Review…*),
   con el nombre de la rama como título propuesto y la descripción de sus commits, en
   cualquier capa sin PR: las de encima se quedan sin el.
+- **Plantillas y md por capa.** En *Settings → Version Control → Upstack* hay una lista de
+  plantillas de PR (nombre, título y descripción; `{branch}` y `{commits}`). Los diálogos de
+  publicar y el de *Edit Title and Description…* dejan escribir el PR en sus campos o en
+  `.upstack/<rama>.md` (en la raíz del repositorio; `# Título` en la primera línea y la
+  descripción debajo), y elegir una plantilla o empezar vacío. Con el md, al aceptar se
+  publica lo que diga el archivo en ese momento. El diálogo es modal: *Open in Editor* lo
+  cierra y abre el archivo, y se vuelve a publicar. El plugin no toca `.gitignore`: añade
+  `.upstack/` si no quieres versionar esos archivos.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
@@ -201,7 +209,7 @@ Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
   se puede, y avisa de las de debajo que salen con ella.
 - **Renombrar solo ramas sin PR.** GitHub cierra el PR cuya rama se renombra, y un PR no
   puede cambiar de rama. Con PR, la acción se ve desactivada y lo explica. El título es otra
-  acción, *Edit Title…*.
+  acción, *Edit Title and Description…*.
 - **Menús de lista, no `JPopupMenu`**, para que cada opción enseñe su tooltip. El menú
   *Stack* de Pull Requests es del plugin GitHub: ahí la explicación y el comando solo salen
   en la barra de estado.
