@@ -544,47 +544,71 @@ internal class RemoveFromStackAction : MissingBranchAction(AllIcons.General.Remo
 
 // ---------------------------------------------------------------------- una pila local sin ramas
 
-/** Acciones sobre una pila local cuyas ramas ya no existen (ver StackFlows.cleanUpStaleStack). */
+/**
+ * Acciones sobre pilas locales cuyas ramas ya no existen (ver StackFlows.cleanUpStaleStack). Solo
+ * se ven si todas las pilas sobre las que actuan estan asi: las que siguen en uso no se tocan.
+ */
 internal abstract class StaleStackAction(icon: Icon? = null) : UpstackAction(icon) {
 
+    /** Las pilas elegidas sobre las que actua; vacia si no aplica. */
+    protected abstract fun entries(e: AnActionEvent): List<LocalStackEntry>
+
     override fun updateState(e: AnActionEvent) {
-        val entry = e.getData(StackDataKeys.LOCAL_STACK)
-        e.presentation.isVisible = entry != null && entry.isStale
+        val entries = entries(e)
+        e.presentation.isVisible = entries.isNotEmpty() && entries.all { it.isStale }
         e.presentation.isEnabled = e.presentation.isVisible && !busy(e.project)
     }
 
     override fun commands(e: AnActionEvent): List<String> {
-        val entry = e.getData(StackDataKeys.LOCAL_STACK) ?: return emptyList()
+        val entries = entries(e).ifEmpty { return emptyList() }
         val repository = e.project?.getServiceIfCreated(StackService::class.java)?.repository() ?: return emptyList()
-        return commands(entry, Position(repository.currentBranchName, repository.currentRevision))
+        return commands(entries, Position(repository.currentBranchName, repository.currentRevision))
     }
 
-    /** [from]: donde esta HEAD, adonde se vuelve tras olvidar la pila. */
-    protected abstract fun commands(entry: LocalStackEntry, from: Position): List<String>
+    /** [from]: donde esta HEAD, adonde se vuelve tras olvidar cada pila. */
+    protected abstract fun commands(entries: List<LocalStackEntry>, from: Position): List<String>
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        perform(project, e.getData(StackDataKeys.LOCAL_STACK) ?: return)
+        perform(project, entries(e).ifEmpty { return })
     }
 
-    protected abstract fun perform(project: Project, entry: LocalStackEntry)
+    protected abstract fun perform(project: Project, entries: List<LocalStackEntry>)
 
-    protected fun forget(entry: LocalStackEntry, from: Position): List<String> =
-        StackPlans.forget(entry.stack, from)?.calls?.let(Help::of).orEmpty()
+    protected fun forget(entries: List<LocalStackEntry>, from: Position): List<String> =
+        StackFlows.forgetPlan(entries, from)?.calls?.let(Help::of).orEmpty()
 }
 
+/** Una o varias pilas elegidas en la lista: todas se olvidan en una sola operacion. */
 internal class ForgetStackAction : StaleStackAction(AllIcons.Actions.GC) {
-    override fun commands(entry: LocalStackEntry, from: Position): List<String> = forget(entry, from)
-    override fun perform(project: Project, entry: LocalStackEntry) = StackFlows.forgetStack(project, entry)
+    override fun entries(e: AnActionEvent): List<LocalStackEntry> = e.getData(StackDataKeys.LOCAL_STACKS).orEmpty()
+
+    override fun updateState(e: AnActionEvent) {
+        super.updateState(e)
+        val count = entries(e).size
+        e.presentation.text = if (count > 1) message("action.forget.several", count) else templateText
+    }
+
+    override fun help(e: AnActionEvent): Help {
+        val count = entries(e).size
+        return if (count > 1) Help(message("action.forget.several.description", count), commands(e)) else super.help(e)
+    }
+
+    override fun commands(entries: List<LocalStackEntry>, from: Position): List<String> = forget(entries, from)
+    override fun perform(project: Project, entries: List<LocalStackEntry>) = StackFlows.forgetStacks(project, entries)
 }
 
-/** Lo que propone el dialogo de pila nueva: olvidarla, recuperar sus ramas y `gh stack init`. */
+/** Lo que propone el dialogo de pila nueva: olvidarla, recuperar sus ramas y `gh stack init`. Solo una pila. */
 internal class RecreateStackAction : StaleStackAction(AllIcons.Actions.Restart) {
-    override fun commands(entry: LocalStackEntry, from: Position): List<String> =
-        forget(entry, from) + Help.of(StackPlans.restore(entry.restorable).calls) +
-            Help.gh(GhCommands.init(entry.stack.branches, "BASE"))
+    override fun entries(e: AnActionEvent): List<LocalStackEntry> = listOfNotNull(e.getData(StackDataKeys.LOCAL_STACK))
 
-    override fun perform(project: Project, entry: LocalStackEntry) = StackFlows.initStack(project, prefill = entry.stack)
+    override fun commands(entries: List<LocalStackEntry>, from: Position): List<String> {
+        val entry = entries.single()
+        return forget(entries, from) + Help.of(StackPlans.restore(entry.restorable).calls) +
+            Help.gh(GhCommands.init(entry.stack.branches, "BASE"))
+    }
+
+    override fun perform(project: Project, entries: List<LocalStackEntry>) = StackFlows.initStack(project, prefill = entries.single().stack)
 }
 
 // ---------------------------------------------------------------------- un PR (Stacks y Pull Requests)

@@ -53,7 +53,9 @@ cualquier momento.
   pide confirmación: deshace también las capas ya rebasadas.
 - **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
   *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
-  último commit de cada rama. *New Stack* también limpia antes los nombres que retienen.
+  último commit de cada rama. Se pueden elegir varias en la lista (Mayúsculas o Cmd/Ctrl +
+  clic) y olvidarlas todas a la vez (*Forget N Stacks*, una sola confirmación).
+  *New Stack* también limpia antes los nombres que retienen.
 - **Una capa sin rama dentro de una pila activa** (se borró a mano o al cerrar su PR):
   se marca *Branch deleted* (o *Only on origin*) y una banda avisa de que gh-stack no puede
   rebasar, sincronizar ni subir la pila sin ella. **Restore Branch** (o doble clic) la

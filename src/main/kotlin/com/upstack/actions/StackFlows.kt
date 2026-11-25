@@ -35,6 +35,7 @@ import com.upstack.stack.RemoteRename
 import com.upstack.stack.RenameBlock
 import com.upstack.stack.MissingBranch
 import com.upstack.stack.Operation
+import com.upstack.stack.Plan
 import com.upstack.stack.Position
 import com.upstack.stack.PublishPlans
 import com.upstack.stack.StackJson
@@ -157,21 +158,49 @@ internal object StackFlows {
     }
 
     /** Deja de seguir en local una pila sin ramas. Ni GitHub ni el arbol de trabajo se tocan. */
-    fun forgetStack(project: Project, entry: LocalStackEntry) {
+    fun forgetStack(project: Project, entry: LocalStackEntry) = forgetStacks(project, listOf(entry))
+
+    /**
+     * Deja de seguir en local varias pilas sin ramas (las elegidas en la lista), en una sola
+     * operacion: el olvido de cada una tras el de la anterior ([forgetPlan]). Con mas de una se
+     * confirma antes, con todas en la lista. Las que aun tienen ramas no se olvidan desde aqui.
+     */
+    fun forgetStacks(project: Project, entries: List<LocalStackEntry>) {
+        val stale = entries.filter { it.isStale }.ifEmpty { return }
         val service = StackService.getInstance(project)
         val repository = service.repository() ?: return
-        val plan = StackPlans.forget(entry.stack, Position(repository.currentBranchName, repository.currentRevision))
+        val plan = forgetPlan(stale, Position(repository.currentBranchName, repository.currentRevision))
             ?: return Notifier.warning(project, message("op.forget"), message("init.detached"))
+        val single = stale.singleOrNull()
+        if (single == null && !confirmForget(project, stale)) return
         service.execute(
             Operation(
-                title = message("op.forget"),
+                title = if (single != null) message("op.forget") else message("op.forget.several", stale.size),
                 calls = plan.calls,
                 repository = repository,
-                successMessage = message("op.forget.done", describe(entry)),
+                successMessage = if (single != null) message("op.forget.done", describe(single))
+                else message("op.forget.several.done", stale.size, stale.joinToString(", ", transform = ::describe)),
                 cleanup = plan.cleanup,
             )
         )
     }
+
+    /**
+     * Olvidar [entries]: [StackPlans.forget] de cada una, encadenados. Cada tramo sale de [from]
+     * y vuelve alli, y si se corta deshace solo lo suyo. null si no se sabe volver.
+     */
+    fun forgetPlan(entries: List<LocalStackEntry>, from: Position): Plan? =
+        entries.map { StackPlans.forget(it.stack, from) ?: return null }.reduceOrNull { plan, next -> plan.then(next) }
+
+    private fun confirmForget(project: Project, entries: List<LocalStackEntry>): Boolean =
+        MessageDialogBuilder.okCancel(
+            message("action.forget.several", entries.size),
+            message("forget.several.text", entries.size, entries.joinToString("\n") { "• " + describe(it) }),
+        )
+            .yesText(message("action.forget.several", entries.size))
+            .noText(CommonBundle.getCancelButtonText())
+            .icon(Messages.getWarningIcon())
+            .ask(project)
 
     private fun describe(entry: LocalStackEntry): String = (listOf(entry.stack.trunk) + entry.stack.branches).joinToString(" ← ")
 

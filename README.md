@@ -175,6 +175,7 @@ is approved, why did the rebase stop.
   its last known commit; **Remove From Stack…** takes it out.
 - **Stacks whose branches are all gone**: **Forget Stack** stops tracking one without
   touching anything else, and **Recreate on Another Base…** starts the same layers again.
+  Select several in the list (Shift or Cmd/Ctrl-click) to forget them all in one go.
 - **Delete Layer…** for the top layer without a pull request, and **Rename Branch…** for
   layers without one, here and on GitHub. Layers with a pull request can't be renamed:
   GitHub closes the pull request of a renamed branch.

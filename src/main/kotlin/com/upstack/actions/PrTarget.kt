@@ -24,8 +24,11 @@ data class LayerSelection(val state: StackState.Loaded, val layer: StackLayer) {
 object StackDataKeys {
     val LAYER: DataKey<LayerSelection> = DataKey.create("upstack.layer")
 
-    /** Una pila local seleccionada, cuando la rama actual no esta en ninguna. */
+    /** La pila local seleccionada en la lista de pilas, solo si es la unica: lo que actua sobre una. */
     val LOCAL_STACK: DataKey<LocalStackEntry> = DataKey.create("upstack.local.stack")
+
+    /** Todas las pilas locales seleccionadas, una o varias: lo que sirve con varias a la vez. */
+    val LOCAL_STACKS: DataKey<List<LocalStackEntry>> = DataKey.create("upstack.local.stacks")
 }
 
 /**

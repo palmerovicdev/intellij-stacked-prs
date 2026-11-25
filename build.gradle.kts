@@ -97,6 +97,16 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.4 &mdash; Forget several stacks at once</h3>
+            <ul>
+              <li><b>The list of stacks takes several at once</b> (Shift or Cmd/Ctrl-click). When
+                every selected stack has lost its branches, the right-click menu offers
+                <b>Forget N Stacks</b>: one confirmation listing them and one operation that
+                forgets them one after another (<code>gh stack unstack --local</code> from a
+                temporary branch of each, as when forgetting one). It is not offered if any of
+                them still has branches. Recreate on Another Base… stays for one stack, and
+                double-click and Enter still act on one row.</li>
+            </ul>
             <h3>0.15.3 &mdash; Create Stack completes the layer names</h3>
             <ul>
               <li><b>The layers field of Create Stack… suggests the project's branches</b> as you

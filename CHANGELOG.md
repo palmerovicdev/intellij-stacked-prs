@@ -3,6 +3,15 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.4 — Olvidar varias pilas a la vez
+
+- **En la lista de pilas se pueden elegir varias a la vez** (Mayúsculas o Cmd/Ctrl + clic). Con
+  todas las elegidas sin ramas (*Branches deleted*), el clic derecho ofrece *Forget N Stacks*:
+  una confirmación con la lista y una sola operación que las olvida una tras otra
+  (`gh stack unstack --local` desde una rama temporal de cada una, como al olvidar una sola).
+  Si alguna de las elegidas aún tiene ramas, no se ofrece. *Recreate on Another Base…* sigue
+  siendo de una sola pila, y el doble clic y Enter siguen actuando sobre una fila.
+
 ## 0.15.3 — Create Stack autocompleta las capas
 
 - **El campo de capas de *Create Stack…* sugiere las ramas del proyecto** mientras escribes,

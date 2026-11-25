@@ -121,6 +121,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 
         // El menu es el de la fila bajo el raton, no el de la que estuviera seleccionada: se
         // selecciona antes de abrirlo, y fuera de las filas se quita la seleccion (menu de la pila).
+        // Si la fila ya estaba entre las seleccionadas, el menu es el de todas (olvidar varias pilas).
         // Un popup de lista y no un JPopupMenu: solo asi cada opcion ensena su tooltip.
         list.addMouseListener(object : PopupHandler() {
             override fun invokePopup(comp: Component, x: Int, y: Int) {
@@ -176,21 +177,33 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         val loaded = state as? StackState.Loaded
         val row = list.selectedValue as? StackRow.Layer
         sink[StackDataKeys.LAYER] = if (loaded != null && row != null) LayerSelection(loaded, row.layer) else null
-        sink[StackDataKeys.LOCAL_STACK] = (list.selectedValue as? StackRow.Local)?.entry
+        // Varias pilas elegidas: solo lo que sirve para todas (olvidarlas); lo de una, con una sola.
+        val selected = list.selectedValuesList
+        val locals = selected.filterIsInstance<StackRow.Local>().map { it.entry }
+        sink[StackDataKeys.LOCAL_STACK] = locals.singleOrNull()?.takeIf { selected.size == 1 }
+        sink[StackDataKeys.LOCAL_STACKS] = locals.takeIf { it.isNotEmpty() && it.size == selected.size }
     }
 
     // ---------------------------------------------------------------- pintado
 
     private fun render(newState: StackState) {
-        val selectedKey = list.selectedValue?.key
+        val selectedKeys = list.selectedValuesList.mapTo(HashSet()) { it.key }
         state = newState
         renderRepositories()
         renderSummary()
         renderBanners()
         renderEmptyText()
-        model.replaceAll(rows(newState))
-        val index = model.items.indexOfFirst { it.key == selectedKey }
-        if (index >= 0) list.selectedIndex = index
+        val newRows = rows(newState)
+        // Varias filas a la vez solo en la lista de pilas locales, para olvidar varias juntas. Las
+        // capas y la base se eligen de una en una, como siempre.
+        list.selectionMode = if (newRows.isNotEmpty() && newRows.all { it is StackRow.Local }) {
+            ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
+        } else {
+            ListSelectionModel.SINGLE_SELECTION
+        }
+        model.replaceAll(newRows)
+        val indices = model.items.indices.filter { model.items[it].key in selectedKeys }
+        if (indices.isNotEmpty()) list.selectedIndices = indices.toIntArray()
     }
 
     private fun rows(state: StackState): List<StackRow> = when (state) {
@@ -524,9 +537,10 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         is StackRow.Trunk, null -> STACK_POPUP_GROUP
     }
 
+    /** Doble clic o Enter: lo de esa fila. Con varias pilas elegidas no hay una sola que abrir. */
     private fun activateSelection() {
         val repository = state.repo?.let(service::repositoryFor) ?: return
-        when (val row = list.selectedValue) {
+        when (val row = list.selectedValuesList.singleOrNull()) {
             // Sin rama no hay checkout: recuperarla es lo que la vuelve a hacer util.
             is StackRow.Layer -> when {
                 row.missing != null -> StackFlows.restoreBranches(project, listOf(row.missing))
@@ -605,12 +619,16 @@ private class StackList(private val rows: CollectionListModel<StackRow>) : JBLis
     override fun getScrollableTracksViewportWidth(): Boolean = true
 
     /**
-     * Selecciona la fila bajo [point] o, si no hay ninguna, quita la seleccion. El menu por
-     * teclado se abre dentro de la fila seleccionada, asi que ahi no cambia nada.
+     * Selecciona la fila bajo [point] o, si no hay ninguna, quita la seleccion. Si la fila ya
+     * estaba seleccionada no cambia nada: con varias pilas elegidas, el menu es el de todas. El
+     * menu por teclado se abre dentro de la fila seleccionada, asi que ahi tampoco.
      */
     fun selectAt(point: Point) {
         val index = locationToIndex(point)
-        if (index >= 0 && getCellBounds(index, index)?.contains(point) == true) selectedIndex = index else clearSelection()
+        when {
+            index < 0 || getCellBounds(index, index)?.contains(point) != true -> clearSelection()
+            !isSelectedIndex(index) -> selectedIndex = index
+        }
     }
 
     /**
