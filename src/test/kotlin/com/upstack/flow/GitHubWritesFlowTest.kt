@@ -7,6 +7,7 @@ import com.intellij.ui.UiInterceptors
 import com.upstack.actions.LayerSelection
 import com.upstack.actions.PrTarget
 import com.upstack.actions.StackFlows
+import com.upstack.settings.UpstackSettings
 import com.upstack.stack.GitHubRepo
 import com.upstack.stack.StackState
 import com.upstack.ui.EditTitleDialog
@@ -190,5 +191,29 @@ class GitHubWritesFlowTest : FlowTestCase() {
         assertTrue("--force" in writes[2])
         assertEquals(add, writes[3])
         assertEquals(4, writes.size)
+    }
+
+    fun `test Create It and Retry creates the label with the color and description of Settings`() {
+        val settings = UpstackSettings.getInstance()
+        // Lo que no es un color hex de 6 cifras no se guarda: se queda el de siempre.
+        settings.finalLabelColor = "purple"
+        assertEquals("8250DF", settings.finalLabelColor)
+        settings.finalLabelColor = "#0e8a16"
+        settings.finalLabelDescription = "Last PR of the stack"
+        val add = listOf("pr", "edit", Samples.URL_A, "--add-label", "stack-final")
+        gh.respond(listOf("pr", "view", Samples.URL_A, "--json", "labels"), stdout = """{"labels":[]}""")
+        gh.respond(add, exit = 1, stderr = "could not add label: 'stack-final' not found\n", times = 1)
+        gh.respond(listOf("label", "create", "stack-final"), prefix = true)
+        gh.respond(add)
+
+        onEdt { StackFlows.toggleFinal(project, fromPullRequests(Samples.URL_A, 11)) }
+        val missing = awaitNotificationWith(msg("final.missing", "stack-final", "acme/shop"))
+        awaitIdle()
+        press(missing, msg("final.create"))
+        awaitNotificationWith(msg("op.final.added", "stack-final", 11))
+        assertEquals(
+            listOf("label", "create", "stack-final", "--repo", "acme/shop", "--color", "0E8A16", "--description", "Last PR of the stack", "--force"),
+            gh.writes()[2],
+        )
     }
 }

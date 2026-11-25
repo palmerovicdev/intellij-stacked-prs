@@ -3,6 +3,22 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.9 — La label de capa final, a tu gusto, y antes de Merge Stack si quieres
+
+- **La label en Settings.** *Settings | Version Control | Upstack* tiene un grupo *Final-layer
+  label* con su nombre, su color (selector de color o código hex) y su descripción; por defecto,
+  los de siempre (`stack-final`, `8250DF`, "Top layer of a stack of pull requests"). Cada campo
+  dice para qué sirve y con qué comando se usa. *Create It and Retry* (cuando el repositorio no
+  tiene la label) la crea con ese color y esa descripción:
+  `gh label create NOMBRE --repo DUEÑO/REPO --color RRGGBB --description TEXTO --force`.
+- **Ponerla antes de Merge Stack (opcional, apagado por defecto).** Con la casilla *Before Merge
+  Stack, add the label to the last pull request being merged if it does not have it*, si el PR de
+  arriba de lo que se fusiona no tiene la label, *Merge Stack…* y *Merge Up to Here…* primero la
+  crean (o la actualizan) con `gh label create … --force`, se la ponen a ese PR
+  (`gh pr edit <PR> --add-label NOMBRE`), se la quitan a cualquier otra capa de la pila que la
+  tenga, como *Mark as Final Layer*, y después fusionan. El diálogo de merge enseña todos esos
+  comandos. Si uno falla, no se fusiona nada y el aviso dice por qué.
+
 ## 0.15.8 — La ayuda de Close Stack… en la lista de pilas
 
 - La ayuda de *Close Stack…* en una fila de la lista de pilas mostraba la de la casilla

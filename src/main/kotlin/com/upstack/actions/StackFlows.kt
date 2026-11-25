@@ -14,6 +14,8 @@ import com.upstack.gh.GhCommands
 import com.upstack.gh.GhNotFoundException
 import com.upstack.gh.GhExit
 import com.upstack.settings.UpstackProjectSettings
+import com.upstack.stack.FinalLabelPlans
+import com.upstack.stack.MergeChoice
 import com.upstack.stack.MergeOutcome
 import com.upstack.stack.MergePlans
 import com.upstack.stack.MergeTargets
@@ -393,6 +395,10 @@ internal object StackFlows {
         val github = githubOf(state) ?: return Notifier.error(project, message("merge.title"), message("details.no.github"))
         val root = repository.root.toNioPath()
         val remembered = UpstackProjectSettings.getInstance(project)
+        // Lo mismo en la vista previa del dialogo y en la operacion: la label de capa final, si
+        // Settings lo pide y el PR de arriba no la tiene, y el merge.
+        val label = UpstackSettings.getInstance().labelBeforeMerge
+        val plan = { choice: MergeChoice -> MergePlans.calls(choice, state.snapshot, state.details, github, label) }
         service.launch {
             val settings = try {
                 withBackgroundProgress(project, message("merge.reading")) {
@@ -402,7 +408,7 @@ internal object StackFlows {
                 return@launch Notifier.error(project, message("merge.title"), message("state.gh.missing"))
             }
             val choice = withContext(Dispatchers.EDT) {
-                val dialog = MergeStackDialog(project, state, targets, settings, remembered.mergeMethod, initial)
+                val dialog = MergeStackDialog(project, state, targets, settings, remembered.mergeMethod, initial, plan)
                 dialog.show()
                 if (dialog.isOK) dialog.choice else null
             } ?: return@launch
@@ -423,10 +429,11 @@ internal object StackFlows {
             }
 
             val prs = targets.upTo(choice.target).joinToString(", ") { "#${it.number}" }
+            val merge = MergePlans.call(choice)
             service.execute(
                 Operation(
                     title = message("op.merge", prs),
-                    calls = listOf(MergePlans.call(choice)),
+                    calls = plan(choice),
                     repository = repository,
                     onOutput = { result ->
                         val outcome = MergePlans.outcome(result) ?: if (settings?.usesMergeQueue == true) MergeOutcome.QUEUED else MergeOutcome.MERGED
@@ -440,12 +447,23 @@ internal object StackFlows {
                         }
                     },
                     onFailure = { result ->
-                        // gh-stack sale con 3 si GitHub encontro conflictos: no es un rebase local.
-                        val conflict = result.exitCode == GhExit.CONFLICT
-                        if (conflict) {
-                            Notifier.error(project, message("operation.failed", message("op.merge", prs)), message("merge.conflict", targets.trunk), showLog(project))
+                        when {
+                            // Fallo un paso de la label, antes del merge: la operacion paro ahi.
+                            label != null && result.args != merge.args -> {
+                                Notifier.error(
+                                    project, message("merge.label.failed.title"),
+                                    message("merge.label.failed", label.name, number) + "<br>" + Notifier.html(result.errorText),
+                                    showLog(project),
+                                )
+                                true
+                            }
+                            // gh-stack sale con 3 si GitHub encontro conflictos: no es un rebase local.
+                            result.exitCode == GhExit.CONFLICT -> {
+                                Notifier.error(project, message("operation.failed", message("op.merge", prs)), message("merge.conflict", targets.trunk), showLog(project))
+                                true
+                            }
+                            else -> false
                         }
-                        conflict
                     },
                 )
             )
@@ -900,7 +918,8 @@ internal object StackFlows {
      * de la pila se quita de las demas capas que la tuvieran: una pila tiene un solo final.
      */
     fun toggleFinal(project: Project, target: PrTarget) {
-        val label = UpstackSettings.getInstance().finalLabel
+        val spec = UpstackSettings.getInstance().finalLabelSpec
+        val label = spec.name
         val service = StackService.getInstance(project)
         service.launch {
             // Desde Stacks ya se sabe; desde Pull Requests hay que preguntarlo.
@@ -927,19 +946,18 @@ internal object StackFlows {
             }
 
             val others = otherFinalLayers(target, label)
-            val calls = listOf(GhCall(GhCommands.editLabels(target.url, listOf(label), emptyList()))) +
-                others.map { GhCall(GhCommands.editLabels(urlOf(it, target.github), emptyList(), listOf(label))) }
+            val calls = FinalLabelPlans.mark(target.url, others, label, target.github)
             val success = if (others.isEmpty()) message("op.final.added", label, target.number)
             else message("op.final.moved", label, target.number, others.joinToString(", ") { "#${it.pr?.number}" })
             val title = message("op.final.add", label, target.number)
 
             executeOnPr(project, target, title, calls, success, onFailure = { result ->
-                // La label no existe en el repositorio: se ofrece crearla y repetir.
+                // La label no existe en el repositorio: se ofrece crearla (color y descripcion de Settings) y repetir.
                 if (!result.errorText.contains("not found", ignoreCase = true)) return@executeOnPr false
                 Notifier.warning(
                     project, message("final.missing.title", label), message("final.missing", label, target.github.cliName),
                     Notifier.action(message("final.create")) {
-                        executeOnPr(project, target, title, listOf(GhCall(GhCommands.createLabel(target.github, label))) + calls, success)
+                        executeOnPr(project, target, title, listOf(GhCall(spec.create(target.github))) + calls, success)
                     },
                 )
                 true
@@ -949,10 +967,7 @@ internal object StackFlows {
 
     /** Las otras capas de la pila con la label de capa final: al ponerla en [target], se les quita. */
     fun otherFinalLayers(target: PrTarget, label: String): List<StackLayer> = target.selection?.state?.let { stack ->
-        stack.snapshot.layers.filter { layer ->
-            val pr = layer.pr
-            pr != null && pr.number != target.number && stack.detailsOf(layer)?.hasLabel(label) == true
-        }
+        FinalLabelPlans.othersWith(stack.snapshot, stack.details, target.number, label)
     }.orEmpty()
 
     fun checkoutFromPullRequest(project: Project, target: PrTarget) {
@@ -1102,10 +1117,7 @@ internal object StackFlows {
         (target.selection?.state?.repo?.root ?: service.repositoryFor(target.github)?.root ?: service.repository()?.root)
             ?.toNioPath() ?: Path.of(System.getProperty("user.home"))
 
-    fun urlOf(layer: StackLayer, github: GitHubRepo): String {
-        val pr = requireNotNull(layer.pr)
-        return pr.url.ifEmpty { "https://${github.host}/${github.owner}/${github.name}/pull/${pr.number}" }
-    }
+    fun urlOf(layer: StackLayer, github: GitHubRepo): String = FinalLabelPlans.prUrl(layer, github)
 
     /** Por nombre corto (`feat/a`), el remoto que tiene cada rama; si esta en varios, cuenta [preferred]. */
     private fun remoteBranches(repository: GitRepository, preferred: String?): Map<String, String> =

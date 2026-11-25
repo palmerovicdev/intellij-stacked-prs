@@ -15,6 +15,7 @@ import com.intellij.testFramework.LoggedErrorProcessor
 import com.intellij.ui.UiInterceptors
 import com.upstack.UpstackBundle.message
 import com.upstack.gh.StackExtension
+import com.upstack.settings.FinalLabel
 import com.upstack.settings.UpstackProjectSettings
 import com.upstack.settings.UpstackSettings
 import com.upstack.stack.StackService
@@ -47,6 +48,10 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
 
     private var previousGhPath = ""
     private var previousWarnedVersion: String? = null
+    private var previousFinalLabel = FinalLabel(
+        UpstackSettings.DEFAULT_FINAL_LABEL, UpstackSettings.DEFAULT_FINAL_LABEL_COLOR, UpstackSettings.DEFAULT_FINAL_LABEL_DESCRIPTION,
+    )
+    private var previousFinalLabelBeforeMerge = false
 
     /** Lo que contesta `gh stack --version`: la de referencia, para que nadie avise de la version. */
     protected open fun stackVersion(): String = StackExtension.REFERENCE
@@ -71,6 +76,11 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         previousWarnedVersion = settings.warnedStackVersion
         settings.ghPath = gh.executable.toString()
         settings.warnedStackVersion = null
+        // La label de capa final, la de por defecto y sin ponerla antes de Merge Stack.
+        previousFinalLabel = settings.finalLabelSpec
+        previousFinalLabelBeforeMerge = settings.finalLabelBeforeMerge
+        setFinalLabel(FinalLabel(UpstackSettings.DEFAULT_FINAL_LABEL, UpstackSettings.DEFAULT_FINAL_LABEL_COLOR, UpstackSettings.DEFAULT_FINAL_LABEL_DESCRIPTION))
+        settings.finalLabelBeforeMerge = false
         beforeFirstRefresh()
 
         project.messageBus.connect(testRootDisposable).subscribe(
@@ -105,11 +115,20 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
             UiInterceptors.clear()
             UpstackSettings.getInstance().ghPath = previousGhPath
             UpstackSettings.getInstance().warnedStackVersion = previousWarnedVersion
+            setFinalLabel(previousFinalLabel)
+            UpstackSettings.getInstance().finalLabelBeforeMerge = previousFinalLabelBeforeMerge
         } catch (e: Throwable) {
             addSuppressedException(e)
         } finally {
             super.tearDown()
         }
+    }
+
+    private fun setFinalLabel(label: FinalLabel) {
+        val settings = UpstackSettings.getInstance()
+        settings.finalLabel = label.name
+        settings.finalLabelColor = label.color
+        settings.finalLabelDescription = label.description
     }
 
     /** Git4Idea descubre el repositorio por los mapeos de VCS, en segundo plano. */

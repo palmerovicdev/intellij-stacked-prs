@@ -92,7 +92,8 @@ is approved, why did the rebase stop.
 - **Publish a single layer** from its own menu, any layer without a pull request: the layers
   below it go as drafts (they are its base) and the ones above stay unpublished.
 - From each layer: **Mark Ready / Convert to Draft**, **Edit Title…**, **Labels…** and a
-  **final-layer label** (`stack-final` by default, one per stack).
+  **final-layer label** (`stack-final` by default, one per stack). Its name, color and
+  description are set in *Settings → Version Control → Upstack*.
 
 ### Rebase only what changed
 
@@ -144,6 +145,11 @@ is approved, why did the rebase stop.
 - The dialog shows which layers go in, with their review and CI, and only the merge methods
   the repository allows, remembering the last one. With a **merge queue**, they join the
   queue.
+- **Optional, off by default:** turn on *Before Merge Stack, add the label to the last pull
+  request being merged if it does not have it* in the settings, and the merge first creates or
+  updates the final-layer label, adds it to the top pull request being merged and removes it
+  from any other layer that has it. The dialog shows those commands too; if one fails, nothing
+  is merged.
 - Before running it, it checks that the number isn't also a *stack* number, so it never
   merges the wrong thing. Afterwards, **Sync and Prune** (`gh stack sync --prune`) deletes
   the merged branches.
@@ -248,6 +254,7 @@ It needs:
 | Other rebases | `gh stack rebase --downstack` and `gh stack rebase --no-trunk` |
 | Push Stack | `gh stack push` |
 | Merge Stack… | `gh stack merge <pr> --yes --squash` (or `--merge`, `--rebase`; no method with a merge queue) |
+| Final-layer label before merging (if turned on and the top pull request lacks it) | `gh label create <label> --repo OWNER/REPO --color <hex> --description <text> --force`, `gh pr edit <url> --add-label <label>` and `gh pr edit <url> --remove-label <label>` on any other layer that has it, before `gh stack merge` |
 | Sync and Prune | `gh stack sync --prune` |
 | Close Stack… | `gh stack unstack`, then `gh pr close <url>`, `git push origin --delete …` and `git branch -D …` |
 | Close Stack… on a stack in the list | `git checkout <a layer only that stack has>`, then the same as Close Stack… |
@@ -263,7 +270,7 @@ The full table, with *Delete Layer…* and *Rename Branch…*, is in the
 
 | Where | What | In version control |
 |---|---|---|
-| `upstack.xml`, in the IDE settings | The path to `gh`, the final-layer label and what to do after a commit on a lower layer | No |
+| `upstack.xml`, in the IDE settings | The path to `gh`, the final-layer label (name, color, description, and whether Merge Stack adds it first) and what to do after a commit on a lower layer | No |
 | The project's `workspace.xml` | The repository and remote to use, and the last merge method | No |
 | The repository's git config | Your `git rerere` answer, in the same keys `gh stack` uses | No |
 

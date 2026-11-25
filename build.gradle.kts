@@ -97,6 +97,21 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.9 &mdash; The final-layer label your way, and before Merge Stack if you want</h3>
+            <ul>
+              <li><b>The label in Settings.</b> <i>Settings | Version Control | Upstack</i> has a
+                <i>Final-layer label</i> group with its name, color (color picker or hex code) and
+                description; the defaults are the usual ones (<code>stack-final</code>,
+                <code>8250DF</code>). Each field says what it is for and the command that uses it.
+                <b>Create It and Retry</b> creates the label with that color and description
+                (<code>gh label create NAME --color RRGGBB --description TEXT --force</code>).</li>
+              <li><b>Add it before Merge Stack (optional, off by default).</b> With the new checkbox
+                on, when the top pull request being merged lacks the label, <b>Merge Stack…</b> and
+                <b>Merge Up to Here…</b> first create or update the label, add it to that pull
+                request and remove it from any other layer that has it, as <b>Mark as Final
+                Layer</b> does, then merge. The merge dialog shows every command. If one fails,
+                nothing is merged and the notification says why.</li>
+            </ul>
             <h3>0.15.8 &mdash; The help of Close Stack… in the stack list</h3>
             <ul>
               <li>The help of <b>Close Stack…</b> on a row of the stack list showed the help of the

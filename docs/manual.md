@@ -105,6 +105,17 @@ cualquier momento.
   entran, su review y su CI, y el método (solo los que admite el repositorio; se recuerda el
   último). Con cola de merge, entran en la cola. Después, **Sync and Prune** borra las ramas
   fusionadas, desde el aviso o desde la banda que se queda hasta hacerlo.
+- **La label de capa final** (*Settings | Version Control | Upstack*, grupo *Final-layer
+  label*): nombre, color (selector o código hex) y descripción, por defecto `stack-final`,
+  `8250DF` y "Top layer of a stack of pull requests". Cuando Upstack crea la label (*Create It
+  and Retry*, o antes de fusionar) usa ese color y esa descripción, con `--force`: si ya existe,
+  la actualiza.
+- **Poner la label antes de fusionar** (opcional, **apagado por defecto**): con la casilla
+  *Before Merge Stack, add the label to the last pull request being merged if it does not have
+  it*, si el PR de arriba de lo que se fusiona no tiene la label, *Merge Stack…* y *Merge Up to
+  Here…* primero la crean o actualizan, se la ponen a ese PR y se la quitan a las otras capas que
+  la tengan (como *Mark as Final Layer*), y después fusionan. El diálogo enseña todos los
+  comandos; si uno falla, no se fusiona nada.
 - **Cerrar una pila entera** (*Close Stack…*): deshacerla en GitHub, cerrar sus PRs
   abiertos con un comentario opcional y borrar sus ramas remotas y locales. El diálogo lista
   cada PR y rama que toca y los comandos en el orden en que se ejecutan.
@@ -140,6 +151,7 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Otros rebase | `gh stack rebase --downstack` y `gh stack rebase --no-trunk` |
 | Push tras el rebase | `gh stack push` |
 | Fusionar | `gh stack merge <pr> --yes --squash` (o `--merge`, `--rebase`; sin método con cola de merge), tras comprobar con `gh api repos/OWNER/REPO/stacks/<pr>` que no hay una pila con ese número |
+| Label antes de fusionar (si está activado y el PR de arriba no la tiene) | `gh label create <label> --repo OWNER/REPO --color <hex> --description <texto> --force`, `gh pr edit <url> --add-label <label>` y `gh pr edit <url> --remove-label <label>` en las otras capas que la tengan, antes de `gh stack merge` |
 | Tras fusionar | `gh stack sync --prune` |
 | Cerrar una pila desde la lista | `git checkout <capa solo de esa pila>` y después lo de *Close Stack…*: `gh stack unstack`, `gh pr close <url>`, `git push origin --delete …`, `git switch <trunk>` y `git branch -D …` |
 | Recuperar la rama de una capa | `git branch <rama> <último commit>` o `git branch --track <rama> origin/<rama>` |
@@ -171,7 +183,7 @@ Cada diálogo muestra en vivo la línea `$ gh …` que va a ejecutar.
 
 - **`stack-final` es única por pila.** Al marcar una capa como final desde Stacks se quita
   de las otras capas que la tuvieran. Si la label no existe en el repositorio, se ofrece
-  crearla.
+  crearla, con el color y la descripción de *Settings*.
 - **Publicar listos pide confirmación** y enseña qué PRs cambian. La opción *Publish as
   Drafts* queda en el mismo diálogo. Para elegir PR a PR está *Publish Stack…*.
 - **El menú de una capa solo tiene acciones de esa capa.** Las de toda la pila dicen

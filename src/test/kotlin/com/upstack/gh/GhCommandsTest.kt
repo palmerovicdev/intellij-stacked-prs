@@ -83,6 +83,15 @@ class GhCommandsTest {
     }
 
     @Test
+    fun `a label is created with the color and description it is given, updating one that exists`() {
+        val repo = GitHubRepo("github.com", "acme", "shop")
+        assertEquals(
+            "gh label create release-top --repo acme/shop --color 0E8A16 --description 'Last PR of the stack' --force",
+            GhCommands.display(GhCommands.createLabel(repo, "release-top", "0E8A16", "Last PR of the stack")),
+        )
+    }
+
+    @Test
     fun `graphql query has one alias per pull request and hides itself in the log`() {
         val repo = GitHubRepo("github.com", "acme", "shop")
         val args = GhCommands.prDetails(repo, listOf(12, 13, 12))

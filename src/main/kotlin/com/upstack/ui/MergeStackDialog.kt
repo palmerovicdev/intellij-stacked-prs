@@ -21,6 +21,7 @@ import com.upstack.UpstackBundle.message
 import com.upstack.gh.GhCommands
 import com.upstack.gh.MergeMethod
 import com.upstack.stack.ChecksState
+import com.upstack.stack.GhCall
 import com.upstack.stack.MergeBlock
 import com.upstack.stack.MergeCandidate
 import com.upstack.stack.MergeChoice
@@ -43,6 +44,9 @@ import javax.swing.JPanel
  *
  * [settings]: lo que admite el repositorio; null si no se pudo leer, y entonces se ofrecen los
  * tres metodos y GitHub lo comprueba al fusionar. Con cola de merge no se elige metodo.
+ *
+ * [plan]: los comandos de una eleccion, los mismos que se ejecutan (MergePlans.calls): el merge y,
+ * antes, la label de capa final si Settings lo pide.
  */
 internal class MergeStackDialog(
     project: Project,
@@ -51,6 +55,7 @@ internal class MergeStackDialog(
     private val settings: MergeSettings?,
     lastMethod: MergeMethod?,
     private val initial: MergeCandidate,
+    private val plan: (MergeChoice) -> List<GhCall>,
 ) : DialogWrapper(project) {
 
     private val trunk = targets.trunk
@@ -125,13 +130,14 @@ internal class MergeStackDialog(
         warning.isVisible = warning.text.isNotEmpty()
         setOKButtonText(message(if (queue) "merge.ok.queue" else "merge.ok", included.size))
 
-        upTo.showHelp(Help(message("help.merge.up.to", trunk), listOf(Help.gh(GhCommands.merge(target.number, choice.method)))))
+        val calls = plan(choice)
+        upTo.showHelp(Help(message("help.merge.up.to", trunk), calls.map { Help.gh(it.args) }))
         methods.forEach { (method, button) ->
             val help = if (button.isEnabled) Help(methodHelp(method), listOf(Help.gh(GhCommands.merge(target.number, method))))
             else Help(message("help.merge.method.disallowed", methodText(method)))
             button.showHelp(help)
         }
-        preview.show(listOf(MergePlans.call(choice).args))
+        preview.show(calls.map { it.args })
         // La nota de avisos aparece y desaparece: el dialogo crece con ella, nunca encoge.
         val window = window ?: return
         if (window.isVisible && window.preferredSize.height > window.height) pack()

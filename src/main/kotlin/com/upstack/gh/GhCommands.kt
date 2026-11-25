@@ -210,12 +210,15 @@ object GhCommands {
         }
     }
 
-    /** `--force`: si ya existe se actualiza en vez de fallar, y el reintento es idempotente. */
-    fun createLabel(repo: GitHubRepo, name: String): List<String> = listOf(
+    /**
+     * [color]: hex de 6 cifras sin `#`. `--force`: si ya existe se actualiza (color y
+     * descripcion) en vez de fallar, y el reintento es idempotente.
+     */
+    fun createLabel(repo: GitHubRepo, name: String, color: String, description: String): List<String> = listOf(
         "label", "create", name,
         "--repo", repo.cliName,
-        "--color", FINAL_LABEL_COLOR,
-        "--description", "Top layer of a stack of pull requests",
+        "--color", color,
+        "--description", description,
         "--force",
     )
 
@@ -295,8 +298,6 @@ object GhCommands {
             if (arg.startsWith("query=") && arg.length > 60) append("query='…'") else append(quote(arg))
         }
     }
-
-    private const val FINAL_LABEL_COLOR = "8250DF"
 
     // La de RepoMergeConfig y BaseBranchUsesMergeQueue de gh-stack (merge_async.go de la v0.1.1), en una.
     private const val MERGE_SETTINGS_QUERY =

@@ -279,12 +279,25 @@ internal class MergeStackAction : ToolbarAction(AllIcons.Vcs.Merge) {
         val state = loaded(e) ?: return super.help(e)
         val targets = MergePlans.targets(state.snapshot, state.details)
         val top = targets.candidates.lastOrNull() ?: return super.help(e)
-        return Help(templatePresentation.description.orEmpty(), listOf(mergeCommand(e.project, top.number)))
+        return Help(templatePresentation.description.orEmpty(), labelBeforeMerge(top) + mergeCommand(e.project, top.number))
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         e.project?.let { StackFlows.mergeStack(it) }
     }
+}
+
+/**
+ * Con *Before Merge Stack, add the label…* activo en Settings y sin la label en [target]: lo que
+ * Merge Stack hace antes del merge (ver [MergePlans.calls]). Si no, nada.
+ */
+internal fun labelBeforeMerge(target: com.upstack.stack.MergeCandidate): List<String> {
+    val label = UpstackSettings.getInstance().labelBeforeMerge ?: return emptyList()
+    if (target.details.hasLabel(label.name)) return emptyList()
+    return listOf(
+        "gh label create ${label.name} --color ${label.color} --description '${label.description}' --force",
+        "gh pr edit ${target.number} --add-label ${label.name}",
+    )
 }
 
 /** `gh stack merge` con el ultimo metodo usado en el proyecto, o los tres si aun no se uso ninguno. */
@@ -384,7 +397,7 @@ internal class MergeUpToLayerAction : UpstackAction(AllIcons.Vcs.Merge) {
             return Help(message("help.merge.unavailable", name, mergeBlockText(blocker.reason)))
         }
         val prs = targets.upTo(candidate).joinToString(", ") { "#${it.number}" }
-        return Help(message("help.merge.up.to.layer", prs, targets.trunk), listOf(mergeCommand(e.project, candidate.number)))
+        return Help(message("help.merge.up.to.layer", prs, targets.trunk), labelBeforeMerge(candidate) + mergeCommand(e.project, candidate.number))
     }
 
     override fun actionPerformed(e: AnActionEvent) {

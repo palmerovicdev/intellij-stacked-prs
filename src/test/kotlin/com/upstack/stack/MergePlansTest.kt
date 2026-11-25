@@ -3,6 +3,7 @@ package com.upstack.stack
 import com.upstack.gh.GhCommands
 import com.upstack.gh.GhResult
 import com.upstack.gh.MergeMethod
+import com.upstack.settings.FinalLabel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -79,6 +80,59 @@ class MergePlansTest {
         val target = MergePlans.targets(snapshot, ready).candidateOf("feat/b")!!
         assertEquals("gh stack merge 12 --yes --squash", GhCommands.display(MergePlans.call(MergeChoice(target, MergeMethod.SQUASH)).args))
         assertEquals("gh stack merge 12 --yes", GhCommands.display(MergePlans.call(MergeChoice(target, null)).args))
+    }
+
+    // ---------------------------------------------------------------- label de capa final antes del merge
+
+    private val github = GitHubRepo("github.com", "acme", "app")
+    private val label = FinalLabel("stack-final", "8250DF", "Top layer of a stack of pull requests")
+
+    private fun labelled(number: Int, name: String = "stack-final") = details(number).copy(labels = listOf(PrLabel(name, "8250DF")))
+
+    private fun commands(choice: MergeChoice, details: Map<Int, PrDetails>, label: FinalLabel?) =
+        MergePlans.calls(choice, snapshot, details, github, label).map { GhCommands.display(it.args) }
+
+    @Test
+    fun `with the option off only the merge runs, as before`() {
+        val details = ready + (12 to labelled(12))
+        val target = MergePlans.targets(snapshot, details).candidateOf("feat/c")!!
+        val choice = MergeChoice(target, MergeMethod.SQUASH)
+        assertEquals(listOf(MergePlans.call(choice)), MergePlans.calls(choice, snapshot, details, github, null))
+        assertEquals(listOf("gh stack merge 13 --yes --squash"), commands(choice, details, null))
+    }
+
+    @Test
+    fun `with the option on, the top of what is merged gets the label first and the other layers lose it`() {
+        val details = ready + (11 to labelled(11))
+        val target = MergePlans.targets(snapshot, details).candidateOf("feat/c")!!
+        assertEquals(
+            listOf(
+                "gh label create stack-final --repo acme/app --color 8250DF --description 'Top layer of a stack of pull requests' --force",
+                "gh pr edit https://github.com/acme/app/pull/13 --add-label stack-final",
+                "gh pr edit https://github.com/acme/app/pull/11 --remove-label stack-final",
+                "gh stack merge 13 --yes --squash",
+            ),
+            commands(MergeChoice(target, MergeMethod.SQUASH), details, label),
+        )
+        // Hasta una capa de en medio: la de arriba de lo que se fusiona, y se le quita a la cima.
+        val middle = MergePlans.targets(snapshot, ready + (13 to labelled(13))).candidateOf("feat/b")!!
+        assertEquals(
+            listOf(
+                "gh label create stack-final --repo acme/app --color 8250DF --description 'Top layer of a stack of pull requests' --force",
+                "gh pr edit https://github.com/acme/app/pull/12 --add-label stack-final",
+                "gh pr edit https://github.com/acme/app/pull/13 --remove-label stack-final",
+                "gh stack merge 12 --yes",
+            ),
+            commands(MergeChoice(middle, null), ready + (13 to labelled(13)), label),
+        )
+    }
+
+    @Test
+    fun `with the option on, a top that already has the label is merged as before`() {
+        // GitHub no distingue mayusculas en las labels.
+        val details = ready + (13 to labelled(13, name = "Stack-Final"))
+        val target = MergePlans.targets(snapshot, details).candidateOf("feat/c")!!
+        assertEquals(listOf("gh stack merge 13 --yes --rebase"), commands(MergeChoice(target, MergeMethod.REBASE), details, label))
     }
 
     private fun result(exit: Int, stdout: String = "", stderr: String = "") = GhResult(emptyList(), exit, stdout, stderr)

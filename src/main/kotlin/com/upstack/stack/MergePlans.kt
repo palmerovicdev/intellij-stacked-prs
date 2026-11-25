@@ -3,6 +3,7 @@ package com.upstack.stack
 import com.upstack.gh.GhCommands
 import com.upstack.gh.GhResult
 import com.upstack.gh.MergeMethod
+import com.upstack.settings.FinalLabel
 
 /** Una capa que `gh stack merge` puede fusionar: su PR esta abierto y no es draft. */
 data class MergeCandidate(val layer: StackLayer, val number: Int, val details: PrDetails)
@@ -58,7 +59,10 @@ enum class NumberCheck {
     OTHER_STACK,
 }
 
-/** *Merge Up to Here…* y *Merge Stack…*: un unico `gh stack merge`, nunca sin el dialogo. */
+/**
+ * *Merge Up to Here…* y *Merge Stack…*: un unico `gh stack merge` (antes, si Settings lo pide, la
+ * label de capa final: ver [calls]), nunca sin el dialogo.
+ */
 object MergePlans {
 
     /** Ver [MergeTargets]. Sin datos de GitHub de un PR no se sabe si es draft: para ahi. */
@@ -89,7 +93,23 @@ object MergePlans {
             ?: MergeMethod.entries.first { it in allowed }
     }
 
+    /** `gh stack merge N`: siempre la ultima de [calls], y la que dice como fue ([outcome]). */
     fun call(choice: MergeChoice): GhCall = GhCall(GhCommands.merge(choice.target.number, choice.method))
+
+    /**
+     * Lo que se ejecuta al fusionar, en orden; lo mismo que ensena el dialogo. Con [label] (en
+     * Settings, ponerla antes de Merge Stack; null si no) y el PR de arriba de lo que se fusiona
+     * sin ella: antes se crea la label (`--force`: si ya existe, se actualiza), se le pone a ese PR
+     * y se quita de las demas capas que la tengan, como *Mark as Final Layer*. Si una de esas
+     * falla, la operacion para ahi y no se fusiona nada.
+     */
+    fun calls(choice: MergeChoice, snapshot: StackSnapshot, details: Map<Int, PrDetails>, github: GitHubRepo, label: FinalLabel?): List<GhCall> {
+        val target = choice.target
+        if (label == null || target.details.hasLabel(label.name)) return listOf(call(choice))
+        val others = FinalLabelPlans.othersWith(snapshot, details, target.number, label.name)
+        val url = FinalLabelPlans.prUrl(target.layer, github)
+        return listOf(GhCall(label.create(github))) + FinalLabelPlans.mark(url, others, label.name, github) + call(choice)
+    }
 
     /**
      * La respuesta de [GhCommands.remoteStack] para el numero del PR [target]. null si no se pudo
@@ -110,5 +130,30 @@ object MergePlans {
             "Merged #" in output -> MergeOutcome.MERGED
             else -> null
         }
+    }
+}
+
+/**
+ * La label de capa final en una pila: una pila tiene un solo final. La comparten *Mark as Final
+ * Layer* (StackFlows.toggleFinal) y Merge Stack con la opcion de Settings ([MergePlans.calls]).
+ */
+object FinalLabelPlans {
+
+    /** Las capas de la pila con la label [label], menos la del PR [number]. GitHub no distingue mayusculas. */
+    fun othersWith(snapshot: StackSnapshot, details: Map<Int, PrDetails>, number: Int, label: String): List<StackLayer> =
+        snapshot.layers.filter { layer ->
+            val pr = layer.pr
+            pr != null && pr.number != number && details[pr.number]?.hasLabel(label) == true
+        }
+
+    /** Ponerla en el PR [url] y quitarla de [others], cada uno con su `gh pr edit`. */
+    fun mark(url: String, others: List<StackLayer>, label: String, github: GitHubRepo): List<GhCall> =
+        listOf(GhCall(GhCommands.editLabels(url, listOf(label), emptyList()))) +
+            others.map { GhCall(GhCommands.editLabels(prUrl(it, github), emptyList(), listOf(label))) }
+
+    /** La URL del PR de [layer]; si gh-stack aun no la tiene, la de siempre en [github]. */
+    fun prUrl(layer: StackLayer, github: GitHubRepo): String {
+        val pr = requireNotNull(layer.pr)
+        return pr.url.ifEmpty { "https://${github.host}/${github.owner}/${github.name}/pull/${pr.number}" }
     }
 }

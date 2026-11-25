@@ -6,6 +6,7 @@ import com.intellij.ui.UiInterceptors
 import com.upstack.actions.StackFlows
 import com.upstack.gh.MergeMethod
 import com.upstack.settings.UpstackProjectSettings
+import com.upstack.settings.UpstackSettings
 import com.upstack.stack.StackState
 import com.upstack.ui.MergeStackDialog
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,10 +35,73 @@ class MergeStackFlowTest : FlowTestCase() {
 
     private fun stackRead(number: Int) = listOf("api", "repos/acme/shop/stacks/$number", "--hostname", "github.com")
 
-    private fun loadStack(): StackState.Loaded {
+    private fun loadStack(details: String = Samples.DETAILS_READY): StackState.Loaded {
         gh.respond(VIEW, stdout = Samples.VIEW_TWO_LAYERS)
-        gh.respond(listOf("api", "graphql"), prefix = true, stdout = Samples.DETAILS_READY)
+        gh.respond(listOf("api", "graphql"), prefix = true, stdout = details)
         return awaitState { !it.detailsLoading }
+    }
+
+    /** [Samples.DETAILS_READY] sin la label de capa final en ningun PR. */
+    private val unlabelled = Samples.DETAILS_READY.replace("""{"name":"stack-final","color":"8250DF"}""", "")
+
+    private val createLabel = listOf(
+        "label", "create", "stack-final", "--repo", "acme/shop",
+        "--color", "8250DF", "--description", "Top layer of a stack of pull requests", "--force",
+    )
+    private val addLabel = listOf("pr", "edit", Samples.URL_B, "--add-label", "stack-final")
+    private val merge = listOf("stack", "merge", "12", "--yes", "--squash")
+
+    fun `test with the option on, the top pull request gets the label before the merge`() {
+        UpstackSettings.getInstance().finalLabelBeforeMerge = true
+        mergeSettings()
+        loadStack(unlabelled)
+        noStackNumbered(12)
+        gh.respond(createLabel)
+        gh.respond(addLabel)
+        gh.respond(merge, stderr = "✓ Merged #11, #12 into main (abc1234)\n")
+        answerNextDialog(accept = true)
+
+        onEdt { StackFlows.mergeStack(project) }
+        awaitNotificationWith(msg("op.merge.done", "#11, #12", "main"))
+        awaitIdle()
+        awaitQuiet()
+        assertEquals(listOf(createLabel, addLabel, merge), gh.writes())
+    }
+
+    fun `test with the option on, a top pull request that has the label is only merged`() {
+        UpstackSettings.getInstance().finalLabelBeforeMerge = true
+        mergeSettings()
+        loadStack()
+        noStackNumbered(12)
+        gh.respond(merge, stderr = "✓ Merged #11, #12 into main (abc1234)\n")
+        answerNextDialog(accept = true)
+
+        onEdt { StackFlows.mergeStack(project) }
+        awaitNotificationWith(msg("op.merge.done", "#11, #12", "main"))
+        awaitIdle()
+        awaitQuiet()
+        assertEquals(listOf(merge), gh.writes())
+    }
+
+    fun `test a label step that fails stops before the merge and says nothing was merged`() {
+        UpstackSettings.getInstance().finalLabelBeforeMerge = true
+        mergeSettings()
+        loadStack(unlabelled)
+        noStackNumbered(12)
+        gh.respond(createLabel)
+        gh.respond(addLabel, exit = 1, stderr = "GraphQL: Resource not accessible by integration (addLabelsToLabelable)\n")
+        answerNextDialog(accept = true)
+
+        onEdt { StackFlows.mergeStack(project) }
+        val error = awaitNotificationWith(msg("merge.label.failed.title"))
+        assertEquals(NotificationType.ERROR, error.type)
+        assertTrue(error.content.startsWith(msg("merge.label.failed", "stack-final", 12)))
+        assertTrue("Resource not accessible by integration" in error.content)
+        awaitIdle()
+        awaitQuiet()
+        assertEquals(listOf(createLabel, addLabel), gh.writes())
+        // Solo ese aviso: no el generico de operacion fallida.
+        assertEquals(1, notifications.count { it.type == NotificationType.ERROR })
     }
 
     fun `test merges the whole stack with the method used last time`() {
