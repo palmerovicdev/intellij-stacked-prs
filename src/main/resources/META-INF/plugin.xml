@@ -132,13 +132,16 @@
         <action id="Upstack.EditLabels" class="com.upstack.actions.EditLabelsAction"/>
         <action id="Upstack.ToggleFinal" class="com.upstack.actions.ToggleFinalAction"/>
 
-        <!-- Clic derecho sobre una fila: solo lo de esa capa (o esa pila local), nada con «Stack».
-             Lo de la pila entera esta en Upstack.Stack.Popup, fuera de las filas. -->
+        <!-- Clic derecho sobre una fila: solo lo de esa capa (o esa pila local). Lo de la pila
+             entera esta en Upstack.Stack.Popup, fuera de las filas; en una capa nada dice «Stack». -->
         <group id="Upstack.Layer.Popup">
             <!-- Solo sobre pilas locales cuyas ramas ya no existen: Recreate con una elegida,
                  Forget con una o varias (todas en una operacion). -->
             <action id="Upstack.RecreateStack" class="com.upstack.actions.RecreateStackAction"/>
             <action id="Upstack.ForgetStack" class="com.upstack.actions.ForgetStackAction"/>
+            <!-- Solo sobre una pila local elegida que aun tiene ramas: la fila es la pila. Antes
+                 cambia a una capa solo suya, que es desde donde gh-stack sabe cual cerrar. -->
+            <action id="Upstack.CloseLocalStack" class="com.upstack.actions.CloseLocalStackAction"/>
             <!-- Solo sobre una capa cuya rama ya no existe en local. -->
             <action id="Upstack.RestoreBranch" class="com.upstack.actions.RestoreBranchAction"/>
             <action id="Upstack.RemoveFromStack" class="com.upstack.actions.RemoveFromStackAction"/>

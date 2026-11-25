@@ -3,6 +3,17 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.5 — Cerrar una pila desde la lista de pilas
+
+- **Dos pilas sobre la misma base se pueden cerrar una a una.** En una rama que es la base de
+  las dos (las dos sobre `main`), gh-stack no sabe cuál enseñar ni cuál cerrar, y nada
+  quitaba ninguna. Ahora cada pila con ramas de la lista tiene *Close Stack…* en su menú de
+  clic derecho: cambia a una capa que solo tiene esa pila (`git checkout`), espera a que se
+  cargue y abre el diálogo de siempre de *Close Stack…* para esa pila sola. Si cancelas el
+  diálogo, te quedas en esa capa. Si la pila no tiene ninguna capa local solo suya (sus ramas
+  solo están en el remoto, o cada una es base de otra pila), la opción sale desactivada y dice
+  por qué.
+
 ## 0.15.4 — Olvidar varias pilas a la vez
 
 - **En la lista de pilas se pueden elegir varias a la vez** (Mayúsculas o Cmd/Ctrl + clic). Con

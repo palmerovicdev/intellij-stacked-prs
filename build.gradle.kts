@@ -97,6 +97,16 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.5 &mdash; Close a stack from the list of stacks</h3>
+            <ul>
+              <li><b>Two stacks on the same base can be closed one by one.</b> On a branch that is
+                the base of both (both on <code>main</code>), gh stack cannot tell which one to
+                show or close, and nothing removed either of them. Now each stack with branches in
+                the list has <b>Close Stack…</b> in its right-click menu: it checks out a layer
+                that only that stack has, waits for it to load, and opens the usual Close Stack
+                dialog for that stack alone. Cancel the dialog and you stay on that layer. When a
+                stack has no local layer of its own, the option is disabled and says why.</li>
+            </ul>
             <h3>0.15.4 &mdash; Forget several stacks at once</h3>
             <ul>
               <li><b>The list of stacks takes several at once</b> (Shift or Cmd/Ctrl-click). When

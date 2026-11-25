@@ -16,6 +16,14 @@ object Samples {
         ]}
     """.trimIndent()
 
+    /** main ← feat/a (#11), en feat/a: una pila de una capa, como otra que tambien sale de main. */
+    val VIEW_ONE_LAYER = """
+        {"trunk":"main","currentBranch":"feat/a","branches":[
+          {"name":"feat/a","isCurrent":true,"isMerged":false,"isQueued":false,"needsRebase":false,
+           "pr":{"number":11,"url":"$URL_A","state":"OPEN"}}
+        ]}
+    """.trimIndent()
+
     /** La misma pila sin publicar todavia. */
     val VIEW_UNPUBLISHED = """
         {"trunk":"main","currentBranch":"feat/b","branches":[

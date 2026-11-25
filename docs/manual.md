@@ -28,7 +28,9 @@ cualquier momento.
   (desplegable: upstack desde la capa actual, pila entera, downstack y capas entre sí) y
   ajustes. Fusionar y cerrar van justo tras refrescar para que no se pierdan en el desborde
   (›) cuando la ventana es estrecha.
-- Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. Checkout, **ver los
+- Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. En la lista de pilas,
+  el menú de cada pila: cerrarla (*Close Stack…*) o, si ya no tiene ramas, olvidarla o
+  recrearla. Checkout, **ver los
   cambios de la capa** (el diff del IDE contra la de debajo, lo mismo que enseña su PR),
   abrir o copiar el PR, **rebase upstack desde aquí**, **fusionar hasta aquí**, **cambiar la base del PR** a la capa
   de debajo cuando no coincide, **marcar listo / volver a draft**,
@@ -72,6 +74,13 @@ cualquier momento.
 - **Una rama en varias pilas** (capa de una y base de otra, o base de varias): se dice en
   cuántas está y se listan primero, marcadas *HEAD*. Cada una se abre desde su capa más alta
   que no sea base de otra pila, que es desde donde gh-stack la enseña.
+- **Cerrar una pila desde la lista** (*Close Stack…* en el menú de su fila): gh-stack solo
+  sabe qué pila cerrar desde una de sus ramas, y en la base de varias (dos pilas sobre
+  `main`) no hay ninguna. Cambia antes a una capa que solo tiene esa pila (`git checkout`),
+  espera a que se cargue y abre el diálogo de siempre de *Close Stack…*. Si se cancela, HEAD
+  se queda en esa capa. Sin una capa local solo suya (todas son base de otra pila, o solo
+  están en el remoto) sale desactivada y dice por qué. No se ofrece en las capas, ni con
+  varias pilas elegidas, ni en las pilas sin ramas (esas se olvidan).
 - **Fusionar la pila** (*Merge Stack…* o, desde una capa, *Merge Up to Here…*): GitHub
   fusiona ese PR y todos los de debajo de una vez, o ninguno. El diálogo enseña qué capas
   entran, su review y su CI, y el método (solo los que admite el repositorio; se recuerda el
@@ -113,6 +122,7 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Push tras el rebase | `gh stack push` |
 | Fusionar | `gh stack merge <pr> --yes --squash` (o `--merge`, `--rebase`; sin método con cola de merge), tras comprobar con `gh api repos/OWNER/REPO/stacks/<pr>` que no hay una pila con ese número |
 | Tras fusionar | `gh stack sync --prune` |
+| Cerrar una pila desde la lista | `git checkout <capa solo de esa pila>` y después lo de *Close Stack…*: `gh stack unstack`, `gh pr close <url>`, `git push origin --delete …`, `git switch <trunk>` y `git branch -D …` |
 | Recuperar la rama de una capa | `git branch <rama> <último commit>` o `git branch --track <rama> origin/<rama>` |
 | Borrar la capa de arriba sin PR | `git switch <capa de debajo>` si estás en ella, `gh stack unstack --local`, `gh stack init --base <trunk> <demás capas>`, `git branch -D <rama>` (y `git push origin --delete <rama>`) |
 | Renombrar la rama de una capa sin PR | `gh stack unstack --local`, `gh api --method POST repos/OWNER/REPO/branches/<rama>/rename -f new_name=<nueva>` si está en GitHub, `git branch -m`, `gh stack init` con el nombre nuevo |

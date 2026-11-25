@@ -12,6 +12,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.upstack.UpstackBundle.message
 import com.upstack.gh.GhCommands
+import com.upstack.gh.GitCommands
 import com.upstack.gh.RebaseScope
 import com.upstack.settings.UpstackConfigurable
 import com.upstack.settings.UpstackProjectSettings
@@ -609,6 +610,65 @@ internal class RecreateStackAction : StaleStackAction(AllIcons.Actions.Restart) 
     }
 
     override fun perform(project: Project, entries: List<LocalStackEntry>) = StackFlows.initStack(project, prefill = entries.single().stack)
+}
+
+// ---------------------------------------------------------------------- una pila local con ramas
+
+/**
+ * *Close Stack…* en la fila de una pila de la lista, con ramas (ver StackFlows.closeFromList).
+ * La fila es la pila, asi que aqui si va una accion de pila entera; en las capas no se ve, ni
+ * con varias filas elegidas. Sin una capa local solo suya, desactivada y la ayuda dice por que.
+ */
+internal class CloseLocalStackAction : UpstackAction(AllIcons.Actions.Cancel) {
+
+    override fun updateState(e: AnActionEvent) {
+        val entry = e.getData(StackDataKeys.LOCAL_STACK)
+        e.presentation.isVisible = entry != null && !entry.isStale
+        // Con un rebase parado a medias no, como en la barra: las ramas estan a medio reescribir.
+        val rebasing = e.project?.getServiceIfCreated(StackService::class.java)?.state?.value?.repo?.stackRebaseInProgress == true
+        e.presentation.isEnabled = e.presentation.isVisible && entry != null && !busy(e.project) && !rebasing &&
+            StackFlows.closeFromListTarget(entry, currentBranch(e)) != null
+    }
+
+    override fun help(e: AnActionEvent): Help {
+        val entry = e.getData(StackDataKeys.LOCAL_STACK) ?: return super.help(e)
+        val current = currentBranch(e)
+        val target = StackFlows.closeFromListTarget(entry, current)
+        return when {
+            target == null && entry.remoteOnlyBranches.any { it !in entry.sharedBranches } -> Help(message("help.close.local.remote"))
+            target == null -> Help(message("help.close.local.blocked"))
+            target == current -> Help(message("help.close.local.here", target), closeCommands(entry))
+            else -> Help(message("help.close.local", target), listOf(Help.checkout(target)) + closeCommands(entry))
+        }
+    }
+
+    /**
+     * Lo que propone despues el dialogo de cerrar, con lo que se sabe sin abrir la pila: sus PRs y
+     * en que remoto estan sus ramas se leen al abrirla. Las capas que son base de otra pila no se borran.
+     */
+    private fun closeCommands(entry: LocalStackEntry): List<String> {
+        val deletable = entry.stack.branches.filter { it !in entry.sharedBranches }
+        val local = deletable.filter { it in entry.localBranches }
+        return listOf(
+            Help.gh(GhCommands.unstack()),
+            Help.gh(GhCommands.closePr("PR", null)),
+            Help.git(GitCommands.deleteRemoteBranches("REMOTE", deletable)),
+        ) + if (local.isEmpty()) emptyList() else listOf(
+            Help.git(GitCommands.switch(entry.stack.trunk)),
+            Help.git(GitCommands.deleteBranches(local)),
+        )
+    }
+
+    /** La rama actual del repositorio que ensena la ventana. */
+    private fun currentBranch(e: AnActionEvent): String? {
+        val service = e.project?.getServiceIfCreated(StackService::class.java) ?: return null
+        return (service.state.value.repo?.let(service::repositoryFor) ?: service.repository())?.currentBranchName
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val project = e.project ?: return
+        StackFlows.closeFromList(project, e.getData(StackDataKeys.LOCAL_STACK)?.takeUnless { it.isStale } ?: return)
+    }
 }
 
 // ---------------------------------------------------------------------- un PR (Stacks y Pull Requests)

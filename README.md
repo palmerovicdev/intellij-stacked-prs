@@ -143,7 +143,8 @@ is approved, why did the rebase stop.
 - **Close Stack…**: unstack it, close its open pull requests with an optional comment, and
   delete its remote and local branches, one checkbox each, in an order that never leaves a
   stack without branches. Local branches that differ from the remote are flagged and kept by
-  default.
+  default. A stack in the list of stacks has it too, in its right-click menu: it first checks
+  out a layer only that stack has, so two stacks on the same base can be closed one by one.
 
 ### Every option says what it runs
 
@@ -182,8 +183,9 @@ is approved, why did the rebase stop.
 - **Back to Stacks**, the arrow in the toolbar, lists every local stack without changing
   branch; double-click yours to see its layers again. On the trunk, that list is what you see
   first, even with a single stack.
-- **A branch in several stacks** (a layer of one and the base of another): it says so and
-  lists them all.
+- **A branch in several stacks** (a layer of one and the base of another, or the base of
+  several): it says so and lists them all. Right-click one and **Close Stack…** to close just
+  that one.
 - **Several remotes**: it asks once which one to use and remembers it per project.
 - **The Pull Requests tool window** gets a **Stack** menu in its list and details: ready /
   draft, labels, final-layer label and **Check Out Stack Locally**
@@ -238,6 +240,7 @@ It needs:
 | Merge Stack… | `gh stack merge <pr> --yes --squash` (or `--merge`, `--rebase`; no method with a merge queue) |
 | Sync and Prune | `gh stack sync --prune` |
 | Close Stack… | `gh stack unstack`, then `gh pr close <url>`, `git push origin --delete …` and `git branch -D …` |
+| Close Stack… on a stack in the list | `git checkout <a layer only that stack has>`, then the same as Close Stack… |
 | Restore Branch | `git branch <branch> <last commit>` or `git branch --track <branch> origin/<branch>` |
 | Check | `gh --version`, `gh auth status --json hosts`, `gh stack --version` and `gh api repos/OWNER/REPO/stacks?per_page=1` (read only) |
 | Log In… | `gh auth login --web --hostname <host>` |

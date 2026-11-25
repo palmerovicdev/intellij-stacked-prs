@@ -64,7 +64,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Path
 
@@ -79,6 +81,10 @@ internal object StackFlows {
 
     // Lo que se ensena del ultimo commit comun en el titulo del diff de una capa.
     private const val SHORT_HASH = 10
+
+    // Lo que se espera, tras el checkout, a que gh-stack abra la pila a cerrar desde la lista:
+    // `gh stack view` y la consulta de sus PRs, que salen a la red.
+    private const val OPEN_STACK_TIMEOUT_MS = 60_000L
 
     // ------------------------------------------------------------------ pila
 
@@ -259,6 +265,70 @@ internal object StackFlows {
                 )
             )
         }
+    }
+
+    /**
+     * La capa desde la que se cierra [entry] desde su fila de la lista: [current] si es una capa
+     * local solo de esta pila; si no, su [LocalStackEntry.checkoutTarget] si lo es. null si no
+     * tiene ninguna: desde una rama que tambien es base de otra pila gh-stack no sabe cual
+     * cerrar, y una que solo esta en el remoto no se saca con un checkout.
+     */
+    fun closeFromListTarget(entry: LocalStackEntry, current: String?): String? {
+        fun own(branch: String?): String? = branch?.takeIf { it in entry.localBranches && it !in entry.sharedBranches }
+        return own(current) ?: own(entry.checkoutTarget)
+    }
+
+    /**
+     * *Close Stack…* en la fila de una pila de la lista. gh-stack deshace la pila de la rama
+     * actual, y en la base de varias (dos pilas sobre `main`) no hay ninguna: primero el checkout
+     * de una capa solo suya ([closeFromListTarget]), despues se espera a que la ventana la tenga
+     * cargada y se sigue con [closeStack], con su dialogo. Si se cancela, HEAD se queda en esa
+     * capa. Si no hay capa a la que ir o el checkout no se hace, solo se avisa.
+     */
+    fun closeFromList(project: Project, entry: LocalStackEntry) {
+        val service = StackService.getInstance(project)
+        val repository = service.state.value.repo?.let(service::repositoryFor) ?: service.repository() ?: return
+        val name = describe(entry)
+        val target = closeFromListTarget(entry, repository.currentBranchName)
+        if (target == null) {
+            Notifier.warning(project, message("close.title"), message("close.local.no.target", name))
+            return
+        }
+        val close = Runnable {
+            if (repository.currentBranchName != target) {
+                Notifier.warning(project, message("close.title"), message("close.local.switch.failed", target, name))
+                return@Runnable
+            }
+            service.launch {
+                val loaded = withBackgroundProgress(project, message("close.local.opening", name)) { awaitStackOn(service, target) }
+                if (loaded == null || loaded.snapshot.trunk != entry.stack.trunk || loaded.snapshot.layers.none { it.branch == target }) {
+                    Notifier.warning(project, message("close.title"), message("close.local.not.opened", name, target), showLog(project))
+                    return@launch
+                }
+                withContext(Dispatchers.EDT) { closeStack(project) }
+            }
+        }
+        if (repository.currentBranchName == target) close.run() else service.checkout(repository, target, close)
+    }
+
+    /**
+     * Pide un refresco y espera a que la ventana ensene lo que hay en [branch]: la pila de esa
+     * rama con los datos de sus PRs ya leidos, que es lo que [closeStack] cierra. null si lo que
+     * llega no es una pila o no llega a tiempo.
+     */
+    private suspend fun awaitStackOn(service: StackService, branch: String): StackState.Loaded? {
+        service.requestRefresh()
+        val state = withTimeoutOrNull(OPEN_STACK_TIMEOUT_MS) { service.state.first { it.settledOn(branch) } }
+        return state as? StackState.Loaded
+    }
+
+    /** El estado ya es el de [branch]. Los que no dicen la rama (un fallo) valen: ya no hay pila que esperar. */
+    private fun StackState.settledOn(branch: String): Boolean = when (this) {
+        is StackState.Loaded -> snapshot.currentBranch == branch && !detailsLoading
+        is StackState.NotInStack -> this.branch == branch
+        is StackState.InSeveralStacks -> this.branch == branch
+        StackState.Loading -> false
+        else -> true
     }
 
     /**
