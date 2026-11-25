@@ -82,7 +82,12 @@ internal open class WrappingText(
 
     private val area = object : JBTextArea(text) {
         // Sin ancho propio: la altura es la de las lineas que salen en el ancho que le dan.
-        override fun getPreferredSize(): Dimension = super.getPreferredSize().apply { width = JBUI.scale(MIN_WIDTH) }
+        // Sin ancho todavia (<= 0, antes del primer reparto; con icono, negativo), partido daria una
+        // linea por letra y el dialogo pediria miles de pixeles, que la plataforma corrige subiendolo
+        // a lo alto de la pantalla. Una fila por linea del texto; el ancho real lo hace crecer despues.
+        override fun getPreferredSize(): Dimension =
+            if (width <= 0) Dimension(JBUI.scale(MIN_WIDTH), lineCount * rowHeight + insets.top + insets.bottom)
+            else super.getPreferredSize().apply { width = JBUI.scale(MIN_WIDTH) }
 
         override fun getMinimumSize(): Dimension = preferredSize
     }

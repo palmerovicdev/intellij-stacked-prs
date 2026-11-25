@@ -3,6 +3,13 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.10 — Add Layer ya no salta a lo alto de la pantalla
+
+- Al escribir en *Add Layer…* una rama que ya existe, el aviso que aparece hacía que el diálogo
+  parpadeara y saltara a lo alto de la pantalla: antes de repartir el ancho, el texto se medía
+  con ancho negativo y pedía miles de píxeles de alto. Ahora pide una línea y el diálogo crece
+  hacia abajo, sin moverse.
+
 ## 0.15.9 — La label de capa final, a tu gusto, y antes de Merge Stack si quieres
 
 - **La label en Settings.** *Settings | Version Control | Upstack* tiene un grupo *Final-layer

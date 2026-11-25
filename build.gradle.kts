@@ -97,6 +97,13 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.10 &mdash; Add Layer no longer jumps to the top of the screen</h3>
+            <ul>
+              <li>Typing a branch that already exists in <b>Add Layer…</b> made the dialog flicker
+                and jump to the top of the screen when its note appeared: before the width was laid
+                out, the note was measured at a negative width and asked for thousands of pixels.
+                It now asks for one line and the dialog grows downward, in place.</li>
+            </ul>
             <h3>0.15.9 &mdash; The final-layer label your way, and before Merge Stack if you want</h3>
             <ul>
               <li><b>The label in Settings.</b> <i>Settings | Version Control | Upstack</i> has a
