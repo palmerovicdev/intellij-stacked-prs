@@ -97,6 +97,20 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.6 &mdash; Banners up to date, never two that contradict each other</h3>
+            <ul>
+              <li><b>After a rebase, the Push Stack banner arrives as the needs-rebase banner
+                goes.</b> It used to show as soon as the rebase finished, next to the rebase banner
+                of the previous read, which took a moment to go. Now both change with the same read
+                of the rebased stack. The notification with Push Stack still shows right away.</li>
+              <li><b>The stopped-rebase banner goes as soon as Continue or Abort finish.</b> It used
+                to stay until the next read and, meanwhile, turn yellow (unknown conflicts). And when
+                a rebase stops, the earlier needs-rebase banner steps aside until the stopped-rebase
+                banner shows.</li>
+              <li><b>Git changes in the middle of an operation no longer re-read the stack</b>: it is
+                read when the operation ends. A rebase or a push could show banners from an
+                intermediate step.</li>
+            </ul>
             <h3>0.15.5 &mdash; Close a stack from the list of stacks</h3>
             <ul>
               <li><b>Two stacks on the same base can be closed one by one.</b> On a branch that is

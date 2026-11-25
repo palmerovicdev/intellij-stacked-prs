@@ -67,6 +67,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.annotations.Nls
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -123,6 +124,13 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
      * La ventana ofrece *Push Stack* mientras alguna siga distinta de su rama remota.
      */
     val pushPending: StateFlow<Map<VirtualFile, Set<String>>> = _pushPending.asStateFlow()
+
+    /**
+     * Las capas recien rebasadas, por raiz, hasta que un refresco lee la pila ya rebasada: con
+     * esa lectura pasan a [pushPending]. Antes no: la ventana aun ensena la pila de antes del
+     * rebase, y la banda de subir saldria junto a la de rebasar.
+     */
+    private val rebasedLayers = ConcurrentHashMap<VirtualFile, Set<String>>()
 
     private val _conflicts = MutableStateFlow<Int?>(null)
 
@@ -215,6 +223,10 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
 
     internal fun onRepositoryChanged(repository: GitRepository) {
         if (repository.root != repository()?.root) return
+        // Durante una escritura no: lo que git deja entre un paso y otro no es la pila, y leerlo
+        // pinta bandas de un momento que ya paso. La que queda la lee el refresco con el que
+        // termina [execute].
+        if (_running.value != null) return
         // Git4Idea avisa tambien de cambios que no mueven la pila (config, indice...): solo
         // se refresca si cambio la rama, un commit o alguna ref.
         if (fingerprint(repository) != lastFingerprint) requestRefresh()
@@ -241,6 +253,8 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         }
         lastFingerprint = fingerprint(repository)
         val ref = repoRef(repository)
+        // Antes de leer: si ya estaba, el rebase termino antes que esta lectura, que lo vera hecho.
+        val rebased = rebasedLayers[ref.root]
         try {
             val result = GhCli.run(ref.root.toNioPath(), GhCommands.view())
             if (!result.isMissingExtension) checkStackVersionOnce(ref.root.toNioPath())
@@ -248,7 +262,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
             when {
                 result.ok -> StackJson.parseView(result.stdout).let {
-                    showSnapshot(ref, it, missingBranches(repository, it), localStacks(repository))
+                    showSnapshot(ref, it, missingBranches(repository, it), localStacks(repository), rebased)
                 }
                 // Con el rebase parado HEAD esta suelto y gh-stack no sabe en que rama esta (lee
                 // `git symbolic-ref HEAD`): `view` sale con 2. La pila de antes sigue siendo esa.
@@ -271,7 +285,14 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         }
     }
 
-    private suspend fun showSnapshot(ref: RepoRef, snapshot: StackSnapshot, missing: List<MissingBranch>, localStacks: List<LocalStackEntry>) {
+    /** [rebased]: lo que habia en [rebasedLayers] al empezar la lectura de [snapshot]. */
+    private suspend fun showSnapshot(
+        ref: RepoRef,
+        snapshot: StackSnapshot,
+        missing: List<MissingBranch>,
+        localStacks: List<LocalStackEntry>,
+        rebased: Set<String>?,
+    ) {
         val numbers = snapshot.layers.mapNotNull { it.pr?.number }.toSet()
         // Mientras llegan los datos nuevos se ensenan los anteriores: sin parpadeo.
         val previous = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == ref.root }
@@ -287,6 +308,9 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             localStacks = localStacks,
         ).let { it.copy(listShown = listShown && it.hasStackList) }
         _state.value = loaded
+        // Con la pila rebasada ya en pantalla, y no antes: la banda de rebasar se va y la de subir
+        // llega en este mismo refresco. Si entretanto se subio, ya no queda nada que apuntar.
+        if (rebased != null && rebasedLayers.remove(ref.root, rebased)) _pushPending.update { it + (ref.root to rebased) }
         if (numbers.isEmpty()) return
 
         val github = snapshot.layers.firstNotNullOfOrNull { layer -> layer.pr?.url?.let(GitHubRepo::fromPullRequestUrl) }
@@ -466,6 +490,7 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             if (failure == null) {
                 if (repository != null && operation.calls.any { it.tool == Tool.GH && GhCommands.pushesStack(it.args) }) {
                     _pushPending.update { it - repository.root }
+                    rebasedLayers.remove(repository.root)
                 }
                 operation.successMessage?.let { Notifier.info(project, it) }
                 operation.onSuccess?.invoke()
@@ -779,11 +804,14 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
         )
     )
 
-    /** Tras un rebase, las ramas solo cambiaron en local: lo siguiente es subirlas. */
+    /**
+     * Tras un rebase, las ramas solo cambiaron en local: lo siguiente es subirlas. La ventana lo
+     * ofrece con el refresco que lee la pila rebasada (ver [rebasedLayers]); el aviso, ya.
+     */
     private fun rebased(repository: GitRepository) {
         val layers = (_state.value as? StackState.Loaded)?.takeIf { it.repo.root == repository.root }
             ?.snapshot?.layers?.filter { !it.isMerged }?.map { it.branch }.orEmpty()
-        if (layers.isNotEmpty()) _pushPending.update { it + (repository.root to layers.toSet()) }
+        if (layers.isNotEmpty()) rebasedLayers[repository.root] = layers.toSet()
         Notifier.info(project, message("op.rebase.done"), Notifier.action(message("action.push.stack")) { push(repository) })
     }
 

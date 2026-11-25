@@ -43,7 +43,9 @@ import com.upstack.stack.LocalStackEntry
 import com.upstack.stack.RebaseStop
 import com.upstack.stack.StackService
 import com.upstack.stack.StackState
+import com.upstack.stack.rebaseStopShown
 import com.upstack.stack.repo
+import com.upstack.stack.stackBannersWait
 import git4idea.repo.GitRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +167,9 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             service.running.collect {
                 running = it
                 renderSummary()
+                // Al acabar una escritura se vuelven a mirar: un rebase pudo dejar de estar parado
+                // sin que cambie nada mas de lo que se escucha.
+                renderBanners()
             }
         }
     }
@@ -297,8 +302,11 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     private fun renderBanners() {
         banners.removeAll()
         val current = state
-        val repo = current.repo
-        repo?.rebase?.let(::renderRebaseStop)
+        // Si el rebase de la pila sigue parado lo dice el disco antes que el refresco: un *Continue*
+        // que termina se lleva su banda ya, y uno que se para aparta las demas hasta que se lea.
+        val stillStopped = current.repo?.let { service.repositoryFor(it) }?.let { service.stackRebaseInProgress(it) } == true
+        val waiting = current.stackBannersWait(stillStopped)
+        current.rebaseStopShown(stillStopped)?.let(::renderRebaseStop)
         // Con la lista de pilas delante, lo de una pila no: hay que abrirla.
         if (current is StackState.Loaded && !current.listShown) {
             current.detailsError?.let { error ->
@@ -311,7 +319,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                         .withAction(message("action.retry"), Helps.refresh()) { service.requestRefresh() }
                 )
             }
-            if (!current.repo.stackRebaseInProgress) {
+            if (!waiting) {
                 renderMissing(current)
                 renderMerged(current)
                 renderNeedsRebase(current)
@@ -319,7 +327,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
                 renderPushPending(current)
             }
         }
-        if (current !is StackState.Loaded || current.listShown || current.snapshot.upstackStart == null || current.repo.stackRebaseInProgress) {
+        if (current !is StackState.Loaded || current.listShown || current.snapshot.upstackStart == null || waiting) {
             hideUpstackTip()
         }
         banners.isVisible = banners.componentCount > 0

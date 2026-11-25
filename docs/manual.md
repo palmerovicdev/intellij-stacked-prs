@@ -46,13 +46,15 @@ cualquier momento.
   ajustes) y en la banda *needs rebase*, que distingue una capa atrasada (upstack) de la
   capa de abajo atrás del trunk (rebase de toda la pila).
 - Al terminar un rebase, una banda ofrece **Push Stack** hasta que las ramas se suben (desde
-  el plugin o desde la terminal). El primer rebase de cada repositorio pregunta si
+  el plugin o desde la terminal). Llega con la lectura de la pila rebasada, la misma que quita
+  la banda *needs rebase*: nunca salen las dos a la vez. El primer rebase de cada repositorio pregunta si
   activar **git rerere**, como gh-stack en la terminal, y guarda la respuesta en las mismas
   claves.
 - **Conflictos guiados**: cuando un rebase se para, el diálogo de conflictos del IDE se abre
   solo. La banda dice en qué capa y en qué commit se paró y cuántos ficheros siguen en
   conflicto; cuando el IDE ya no ve ninguno, se vuelve azul con **Continuar**. *Abortar*
-  pide confirmación: deshace también las capas ya rebasadas.
+  pide confirmación: deshace también las capas ya rebasadas. La banda se va en cuanto
+  *Continuar* o *Abortar* terminan, sin esperar a que se vuelva a leer la pila.
 - **Pilas locales sin ramas** (se cerró el PR y se borró la rama a mano): se marcan
   *Branches deleted* y se pueden **olvidar** o **recrear sobre otra base**, recuperando el
   último commit de cada rama. Se pueden elegir varias en la lista (Mayúsculas o Cmd/Ctrl +

@@ -191,7 +191,10 @@ class StackServiceFlowTest : FlowTestCase() {
 
         service.rebase(RebaseScope.STACK, repository)
         val done = awaitNotificationWith(msg("op.rebase.done"))
-        assertEquals(setOf("feat/a", "feat/b"), service.pushPending.value[state.repo.root])
+        // Quedan pendientes con el refresco que lee la pila rebasada, no con el aviso (ver BannerTimingFlowTest).
+        waitUntil({ "push pending, got ${service.pushPending.value}" }) {
+            service.pushPending.value[state.repo.root] == setOf("feat/a", "feat/b")
+        }
 
         // El aviso sale antes de soltar la escritura (ver C13): se pulsa cuando ya ha terminado.
         awaitIdle()

@@ -3,7 +3,19 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
-## 0.15.5 — Cerrar una pila desde la lista de pilas
+## 0.15.6 — Bandas al día, nunca dos que se contradicen
+
+- **Tras un rebase, la banda de *Push Stack* llega a la vez que se va la de *needs rebase*.**
+  Antes salía en cuanto terminaba el rebase, junto a la de rebasar de la lectura anterior,
+  que tardaba un momento en irse. Ahora las dos cambian con la misma lectura de la pila
+  rebasada. El aviso con *Push Stack* sigue saliendo al terminar, como siempre.
+- **La banda del rebase parado se va en cuanto *Continue* o *Abort* terminan.** Antes se
+  quedaba hasta la siguiente lectura y, entretanto, se volvía amarilla («no se sabe cuántos
+  conflictos quedan»). Y cuando un rebase se para, la banda de rebasar de antes se aparta
+  hasta que sale la del rebase parado.
+- **Los cambios de git a mitad de una operación ya no relean la pila**: se lee al terminar.
+  Antes, un rebase o un push podían enseñar bandas de un paso intermedio.
+
 
 - **Dos pilas sobre la misma base se pueden cerrar una a una.** En una rama que es la base de
   las dos (las dos sobre `main`), gh-stack no sabe cuál enseñar ni cuál cerrar, y nada

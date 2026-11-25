@@ -105,3 +105,18 @@ val StackState.repo: RepoRef?
         is StackState.Failed -> repo
         else -> null
     }
+
+/**
+ * El `gh stack rebase` parado que ensena su banda: el del ultimo refresco, mientras siga parado
+ * ahora. [stillStopped]: el fichero de gh-stack sigue en disco (ver
+ * [StackService.stackRebaseInProgress]). Un *Continue* o un *Abort* que terminan lo borran antes
+ * de que llegue el refresco: la banda se va con ellos, sin esperarlo.
+ */
+fun StackState.rebaseStopShown(stillStopped: Boolean): RebaseStop? = repo?.rebase?.takeIf { stillStopped }
+
+/**
+ * Las demas bandas de la pila (rebasar, subir, ramas que faltan...) esperan mientras haya un
+ * rebase de pila a medias, segun el ultimo refresco o segun el disco: lo que cuenta esa lectura es
+ * de antes de que el rebase empezara o terminara, y lo de ahora llega con el refresco siguiente.
+ */
+fun StackState.stackBannersWait(stillStopped: Boolean): Boolean = repo?.stackRebaseInProgress == true || stillStopped
