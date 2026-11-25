@@ -717,6 +717,21 @@ internal class OpenPrAction : PrAction(AllIcons.General.Web) {
     override fun perform(project: Project, target: PrTarget) = BrowserUtil.browse(target.url)
 }
 
+/**
+ * La ventana con los checks del PR: por que fallo cada uno, volver a lanzarlo (solo GitHub
+ * Actions) y su pagina (ver ChecksDialog). Abrirla solo lee: no espera a la escritura en curso.
+ */
+internal class ChecksAction : PrAction(AllIcons.Nodes.Test) {
+    override val needsIdle: Boolean get() = false
+
+    /** Sin ningun check en el ultimo commit no hay nada que ensenar; sin datos de GitHub aun, se ofrece. */
+    override fun isVisible(target: PrTarget): Boolean = target.details?.let { it.checks != null } ?: true
+
+    override fun commands(target: PrTarget): List<String> = listOf(Help.gh(StackFlows.checksCommand(target)))
+
+    override fun perform(project: Project, target: PrTarget) = StackFlows.showChecks(project, target)
+}
+
 internal class CopyPrLinkAction : PrAction(AllIcons.Actions.Copy) {
     override val needsIdle: Boolean get() = false
     override fun perform(project: Project, target: PrTarget) = CopyPasteManager.getInstance().setContents(StringSelection(target.url))

@@ -53,6 +53,13 @@ is approved, why did the rebase stop.
   pull requests GitHub can't merge as they are (**Conflicts**, **Behind**).
 - Hover a layer for its position in the stack, review, CI, files changed, labels and link.
   On top, a summary: `5 layers on main · 1 draft · 1 not published`.
+- Click a layer's **Checks** badge (or right-click it → **Checks…**) to see every check of
+  its pull request: failed, running or passed, and whether GitHub Actions or another app
+  runs it. On a failed one, **Why it failed** shows the last lines of the log of the failed
+  steps right there (`gh run view <run> --log-failed`), **Re-run** runs the failed jobs again
+  (`gh run rerun <run> --failed`) and **Open on GitHub** opens its page. Only GitHub Actions
+  checks can be re-run from here: other apps (Vercel, CircleCI…) re-run their own checks, and
+  the window says so instead of offering the button.
 - The data of every pull request in the stack comes in one GraphQL call, and it refreshes
   when git changes: branch, commits or refs.
 
@@ -233,6 +240,9 @@ It needs:
 | Show Layer Changes | the IDE diff, same as `git diff <layer below>...<layer>` |
 | Labels…, final layer | `gh pr edit <url> --add-label … --remove-label …` |
 | Edit Title… | `gh pr edit <url> --title …` |
+| Checks… (or the Checks badge) | `gh pr checks <pr> --repo OWNER/REPO --json name,state,bucket,link,workflow,description` (read only) |
+| Why it failed | `gh run view <run> --repo OWNER/REPO --log-failed` (read only; GitHub Actions) |
+| Re-run | `gh run rerun <run> --failed --repo OWNER/REPO` (GitHub Actions only) |
 | Sync / Rebase | `gh stack sync` / `gh stack rebase` (`--continue`, `--abort`) |
 | Rebase Upstack | `gh stack rebase --upstack --no-trunk` |
 | Other rebases | `gh stack rebase --downstack` and `gh stack rebase --no-trunk` |

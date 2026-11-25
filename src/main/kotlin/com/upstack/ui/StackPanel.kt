@@ -76,7 +76,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.EDT)
 
     private val model = CollectionListModel<StackRow>()
-    private val list = StackList(model)
+    private val list = StackList(model, ::openChecks, ::checksHelp)
 
     private val repositories = ComboBox<GitRepository>()
     private var fillingRepositories = false
@@ -139,8 +139,9 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         ListSpeedSearch.installOn(list) { it.searchText }
         object : DoubleClickListener() {
             override fun onDoubleClick(event: MouseEvent): Boolean {
-                // Dos clics seguidos sobre el chevron son desplegar, no un checkout.
-                if (list.toggleAt(event.point) != null) return false
+                // Dos clics seguidos sobre el chevron son desplegar, no un checkout; sobre la
+                // pastilla de checks, abrir los checks.
+                if (list.toggleAt(event.point) != null || list.checksAt(event.point) != null) return false
                 activateSelection()
                 return true
             }
@@ -176,6 +177,25 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 
     override fun dispose() {
         scope.cancel()
+    }
+
+    /**
+     * La pastilla de checks de [row] se pulso: lo mismo que *Checks…* en el menu de la capa, con la
+     * capa seleccionada como contexto.
+     */
+    private fun openChecks(row: StackRow.Layer, event: MouseEvent) {
+        list.setSelectedValue(row, false)
+        val actions = ActionManager.getInstance()
+        val action = actions.getAction(CHECKS_ACTION) ?: return
+        actions.tryToExecute(action, event, list, POPUP_PLACE, true)
+    }
+
+    /** El tooltip de la pastilla de checks: que abre y el comando que lee. */
+    private fun checksHelp(row: StackRow.Layer): String? {
+        val loaded = state as? StackState.Loaded ?: return null
+        val number = row.layer.pr?.number ?: return null
+        val command = StackFlows.checksCommand(LayerSelection(loaded, row.layer)) ?: return null
+        return Help(message("help.checks.chip", number), listOf(Help.gh(command))).html
     }
 
     override fun uiDataSnapshot(sink: DataSink) {
@@ -581,6 +601,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
         const val LAYER_POPUP_GROUP = "Upstack.Layer.Popup"
         const val STACK_POPUP_GROUP = "Upstack.Stack.Popup"
         const val POPUP_PLACE = "UpstackLayerPopup"
+        const val CHECKS_ACTION = "Upstack.Checks"
         const val UPSTACK_TIP_ID = "upstack.rebase.upstack"
     }
 }
@@ -588,9 +609,16 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 /**
  * La lista de la pila. Sigue el ancho del viewport, sin barra horizontal: el renderer envuelve
  * cada fila a ese ancho, y cada vez que cambia se vuelven a medir las alturas. Tambien lleva
- * que filas estan desplegadas y atiende el chevron que las despliega ([ExpandToggle]).
+ * que filas estan desplegadas y atiende el chevron que las despliega ([ExpandToggle]) y la
+ * pastilla de checks de cada capa ([Chip.CHECKS]), que abre sus checks.
  */
-private class StackList(private val rows: CollectionListModel<StackRow>) : JBList<StackRow>(rows) {
+private class StackList(
+    private val rows: CollectionListModel<StackRow>,
+    /** Se pulso la pastilla de checks de esta capa. */
+    private val openChecks: (StackRow.Layer, MouseEvent) -> Unit,
+    /** El tooltip de esa pastilla, o null si no hay que ensenar ninguno. */
+    private val checksHelp: (StackRow.Layer) -> String?,
+) : JBList<StackRow>(rows) {
 
     /** Las filas desplegadas, por [StackRow.key]. */
     private val expanded = HashSet<String>()
@@ -607,6 +635,11 @@ private class StackList(private val rows: CollectionListModel<StackRow>) : JBLis
         val mouse = object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 if (e.clickCount != 1 || !SwingUtilities.isLeftMouseButton(e)) return
+                checksAt(e.point)?.let { layer ->
+                    e.consume()
+                    openChecks(layer, e)
+                    return
+                }
                 val row = toggleAt(e.point) ?: return
                 if (!expanded.remove(row.key)) expanded += row.key
                 rows.allContentsChanged()
@@ -614,7 +647,8 @@ private class StackList(private val rows: CollectionListModel<StackRow>) : JBLis
             }
 
             override fun mouseMoved(e: MouseEvent) {
-                val hand = toggleAt(e.point) != null
+                val under = hit(e.point)?.second
+                val hand = under is ExpandToggle || (under != null && Chip.isChecks(under))
                 if (hand != (cursor.type == Cursor.HAND_CURSOR)) {
                     cursor = if (hand) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) else null
                 }
@@ -653,16 +687,24 @@ private class StackList(private val rows: CollectionListModel<StackRow>) : JBLis
 
     override fun getToolTipText(event: MouseEvent): String? {
         toggleAt(event.point)?.let { return message(if (it.key in expanded) "tooltip.collapse" else "tooltip.expand") }
+        checksAt(event.point)?.let { layer -> checksHelp(layer)?.let { return it } }
         val index = locationToIndex(event.point)
         if (index < 0 || getCellBounds(index, index)?.contains(event.point) != true) return null
         return model.getElementAt(index).tooltip()
     }
 
+    /** La fila cuyo chevron esta bajo [point], o null. */
+    fun toggleAt(point: Point): StackRow? = hit(point)?.takeIf { it.second is ExpandToggle }?.first
+
+    /** La capa cuya pastilla de checks esta bajo [point], o null. */
+    fun checksAt(point: Point): StackRow.Layer? =
+        hit(point)?.takeIf { (_, under) -> under != null && Chip.isChecks(under) }?.first as? StackRow.Layer
+
     /**
-     * La fila cuyo chevron esta bajo [point], o null. Se prepara la fila como se pinta, se coloca
-     * en su celda y se busca el componente que queda debajo.
+     * La fila bajo [point] y el componente de su dibujo que queda debajo. Se prepara la fila como
+     * se pinta, se coloca en su celda y se busca el componente; null fuera de las filas.
      */
-    fun toggleAt(point: Point): StackRow? {
+    private fun hit(point: Point): Pair<StackRow, Component?>? {
         val index = locationToIndex(point)
         if (index < 0) return null
         val bounds = getCellBounds(index, index)?.takeIf { it.contains(point) } ?: return null
@@ -670,7 +712,7 @@ private class StackList(private val rows: CollectionListModel<StackRow>) : JBLis
         val cell = cellRenderer.getListCellRendererComponent(this, row, index, isSelectedIndex(index), false)
         cell.setBounds(0, 0, bounds.width, bounds.height)
         layOut(cell)
-        return row.takeIf { SwingUtilities.getDeepestComponentAt(cell, point.x - bounds.x, point.y - bounds.y) is ExpandToggle }
+        return row to SwingUtilities.getDeepestComponentAt(cell, point.x - bounds.x, point.y - bounds.y)
     }
 
     private fun layOut(component: Component) {

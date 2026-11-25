@@ -48,4 +48,28 @@ object Samples {
 
     /** [DETAILS_TWO_LAYERS] con #11 listo para review: las dos capas se pueden fusionar. */
     val DETAILS_READY = DETAILS_TWO_LAYERS.replace(""""isDraft":true""", """"isDraft":false""")
+
+    /** [DETAILS_TWO_LAYERS] con los checks de #12 fallando. */
+    val DETAILS_FAILING_CHECKS = DETAILS_TWO_LAYERS.replace(""""statusCheckRollup":{"state":"SUCCESS"}""", """"statusCheckRollup":{"state":"FAILURE"}""")
+
+    /**
+     * `gh pr checks 12 --json name,state,bucket,link,workflow,description`: un job de GitHub Actions
+     * que falla (ejecucion 7001), un check de Vercel que falla, uno en marcha y uno que pasa.
+     */
+    val CHECKS_FAILING = """
+        [
+          {"bucket":"pass","description":"","link":"https://github.com/acme/shop/actions/runs/7001/job/9003","name":"lint","state":"SUCCESS","workflow":"build"},
+          {"bucket":"pending","description":"","link":"https://github.com/acme/shop/actions/runs/7002/job/9002","name":"deploy-preview","state":"IN_PROGRESS","workflow":"preview"},
+          {"bucket":"fail","description":"Deployment has failed","link":"https://vercel.com/acme/shop/AbC123","name":"Vercel","state":"FAILURE","workflow":""},
+          {"bucket":"fail","description":"","link":"https://github.com/acme/shop/actions/runs/7001/job/9001","name":"test","state":"FAILURE","workflow":"build"}
+        ]
+    """.trimIndent()
+
+    /** `gh run view 7001 --log-failed`: el job `test` y otro job de la misma ejecucion. */
+    val FAILED_LOG = listOf(
+        "test\tRun tests\t2026-11-24T10:01:01.1234567Z FAIL src/cart.test.ts",
+        "test\tRun tests\t2026-11-24T10:01:01.2234567Z   expected 3 items, got 2",
+        "test\tRun tests\t2026-11-24T10:01:01.3234567Z ##[error]Process completed with exit code 1.",
+        "e2e\tRun e2e\t2026-11-24T10:01:00.2234567Z timeout waiting for the server",
+    ).joinToString("\n", postfix = "\n")
 }

@@ -3,6 +3,24 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.7 — Los checks de un PR: por qué fallaron, relanzarlos, abrirlos en GitHub
+
+- **Ventana de checks.** Pulsar la pastilla *Checks* de una capa (o clic derecho sobre la capa
+  → *Checks…*) abre una ventana con todos los checks de su PR y su estado (✗ falló, ● en
+  marcha, ✓ pasó), quién los lanza (GitHub Actions u otra app) y un resumen arriba. Se leen al
+  abrirla (`gh pr checks <n> --json …`), no en cada refresco; *Refresh* los vuelve a leer.
+- **En cada check que falla**: *Why it failed* enseña dentro de la ventana las últimas líneas
+  del log de los pasos que fallaron (`gh run view <run> --log-failed`), sin horas ni colores y
+  solo las del job de ese check; *Re-run* vuelve a lanzar los jobs que fallaron de esa
+  ejecución (`gh run rerun <run> --failed`) y relee la ventana y la pila; *Open on GitHub*
+  abre la página del check.
+- **Solo los checks de GitHub Actions se pueden relanzar desde aquí.** Los de otras apps
+  (Vercel, CircleCI…) solo los relanza la app que los creó: la ventana no ofrece *Re-run* y lo
+  dice («Only Vercel can re-run it»); *Why it failed* enseña lo que esa app publica, y el
+  detalle completo está en su página. Si GitHub rechaza el relanzamiento (sin permiso de
+  escritura en el repositorio), la ventana enseña el error de gh.
+- Una ventana por PR, que no bloquea el IDE; la línea de abajo enseña el último comando.
+
 ## 0.15.6 — Bandas al día, nunca dos que se contradicen
 
 - **Tras un rebase, la banda de *Push Stack* llega a la vez que se va la de *needs rebase*.**

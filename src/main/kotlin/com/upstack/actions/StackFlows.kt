@@ -24,6 +24,8 @@ import com.upstack.gh.GhResult
 import com.upstack.gh.GitCommands
 import com.upstack.gh.Tool
 import com.upstack.settings.UpstackSettings
+import com.upstack.stack.ActionsRun
+import com.upstack.stack.ChecksRead
 import com.upstack.stack.ClosePlans
 import com.upstack.stack.CloseTargets
 import com.upstack.stack.GhCall
@@ -37,7 +39,9 @@ import com.upstack.stack.MissingBranch
 import com.upstack.stack.Operation
 import com.upstack.stack.Plan
 import com.upstack.stack.Position
+import com.upstack.stack.PrCheck
 import com.upstack.stack.PublishPlans
+import com.upstack.stack.RerunOutcome
 import com.upstack.stack.StackJson
 import com.upstack.stack.StackLayer
 import com.upstack.stack.StackPlans
@@ -46,6 +50,7 @@ import com.upstack.stack.StackSnapshot
 import com.upstack.stack.StackState
 import com.upstack.stack.repo
 import com.upstack.ui.AddLayerDialog
+import com.upstack.ui.ChecksDialog
 import com.upstack.ui.CloseStackDialog
 import com.upstack.ui.DeleteLayerDialog
 import com.upstack.ui.EditTitleDialog
@@ -69,6 +74,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Lo que hace cada accion, separado de las clases AnAction para poder lanzarlo tambien
@@ -992,6 +998,80 @@ internal object StackFlows {
             } ?: parent
             withContext(Dispatchers.EDT) { GitBrancher.getInstance(project).showDiff(base, branch, listOf(repository)) }
         }
+    }
+
+    // ------------------------------------------------------------------ checks
+
+    /**
+     * *Checks…* (y la pastilla de checks de la capa): la ventana con cada check del PR (ver
+     * ChecksDialog), una por PR. Los lee al abrirse, no en cada refresco de la pila.
+     */
+    fun showChecks(project: Project, target: PrTarget) = ChecksDialog.show(project, target)
+
+    /** `gh pr checks` del PR de [target]. */
+    fun checksCommand(target: PrTarget): List<String> = checksCommand(target.number, target.url, target.github)
+
+    /** El de la capa de [selection], como lo resuelve PrTarget.from; null si no tiene PR. */
+    fun checksCommand(selection: LayerSelection): List<String>? {
+        val pr = selection.layer.pr ?: return null
+        val github = GitHubRepo.fromPullRequestUrl(pr.url) ?: selection.state.repo.github ?: return null
+        return checksCommand(pr.number, urlOf(selection.layer, github), github)
+    }
+
+    // Con un alias de `~/.ssh/config` no se sabe el host para `--repo`: entonces, con la URL del PR.
+    private fun checksCommand(number: Int, url: String, github: GitHubRepo): List<String> =
+        if (github.isSshAlias) GhCommands.prChecks(url, null) else GhCommands.prChecks(number.toString(), github)
+
+    /** Los checks del PR. Solo lee: no pasa por [StackService.execute], que es para escrituras. */
+    suspend fun readChecks(project: Project, target: PrTarget): ChecksRead {
+        val result = try {
+            GhCli.run(workDirFor(StackService.getInstance(project), target), checksCommand(target))
+        } catch (_: GhNotFoundException) {
+            return ChecksRead.Failed(message("state.gh.missing"))
+        }
+        // gh sale con 1 si alguno falla y con 8 si alguno sigue en marcha: vale lo que imprimio.
+        StackJson.parsePrChecks(result.stdout)?.let { return ChecksRead.Loaded(it) }
+        // Sin ningun check gh tambien sale con 1, y lo dice por stderr: no es un error.
+        if (result.errorText.contains("no checks reported", ignoreCase = true)) return ChecksRead.Loaded(emptyList())
+        return ChecksRead.Failed(result.errorText.ifEmpty { "exit code ${result.exitCode}" })
+    }
+
+    /**
+     * El log de los pasos que fallaron en [run]. Solo lee.
+     *
+     * @throws GhNotFoundException si no hay gh.
+     */
+    suspend fun readFailedLog(project: Project, target: PrTarget, run: ActionsRun): GhResult =
+        GhCli.run(workDirFor(StackService.getInstance(project), target), GhCommands.failedLog(run))
+
+    /**
+     * *Re-run*: los jobs que fallaron de la ejecucion de GitHub Actions de [check], como cualquier
+     * escritura (progreso, pestana Log y refresco de la pila al terminar). [done] se llama una vez,
+     * desde cualquier hilo. Si gh lo rechaza (sin permiso de escritura), lo dice la ventana, donde
+     * se pulso; sin sesion, el aviso de siempre, que ofrece entrar.
+     */
+    fun rerunFailed(project: Project, target: PrTarget, check: PrCheck, done: (RerunOutcome) -> Unit) {
+        val run = check.run ?: return done(RerunOutcome.NotRun)
+        val service = StackService.getInstance(project)
+        val workflow = check.workflow.ifEmpty { check.name }
+        val reported = AtomicBoolean(false)
+        val report = { outcome: RerunOutcome -> if (reported.compareAndSet(false, true)) done(outcome) }
+        val job = service.execute(
+            Operation(
+                title = message("op.rerun", workflow),
+                calls = listOf(GhCall(GhCommands.rerunFailed(run))),
+                repository = target.selection?.state?.repo?.let(service::repositoryFor) ?: service.repositoryFor(target.github),
+                workDir = workDirFor(service, target),
+                successMessage = message("op.rerun.done", workflow, target.number),
+                onSuccess = { report(RerunOutcome.Requested) },
+                onFailure = { result ->
+                    report(RerunOutcome.Refused(result.errorText.ifEmpty { "exit code ${result.exitCode}" }))
+                    !result.needsLogin
+                },
+            )
+        )
+        // Otra escritura en marcha, o sin gh: no se ejecuto nada y el aviso ya dice por que.
+        job.invokeOnCompletion { report(RerunOutcome.NotRun) }
     }
 
     private fun executeOnPr(

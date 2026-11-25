@@ -84,6 +84,24 @@ object StackJson {
         }.associateBy { it.number }
     }
 
+    /**
+     * `gh pr checks --json name,state,bucket,link,workflow,description`. null si no es una
+     * lista JSON (gh fallo, o no hay checks y lo dijo por stderr).
+     */
+    fun parsePrChecks(text: String): List<PrCheck>? =
+        (parse(text) as? JsonArray)?.mapNotNull { element ->
+            val check = element as? JsonObject ?: return@mapNotNull null
+            val link = check.string("link").orEmpty()
+            PrCheck(
+                name = check.string("name") ?: return@mapNotNull null,
+                status = CheckStatus.of(check.string("bucket"), check.string("state")),
+                workflow = check.string("workflow").orEmpty(),
+                link = link,
+                description = check.string("description").orEmpty(),
+                run = ActionsRun.fromLink(link),
+            )
+        }
+
     /** `gh label list --json name,color,description`. */
     fun parseRepoLabels(text: String): List<RepoLabel> =
         (parse(text) as? JsonArray).orEmpty().mapNotNull { element ->

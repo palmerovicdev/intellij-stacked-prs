@@ -1,5 +1,6 @@
 package com.upstack.gh
 
+import com.upstack.stack.ActionsRun
 import com.upstack.stack.GitHubRepo
 
 /** Como se prepara el commit opcional de `gh stack add`. */
@@ -222,6 +223,27 @@ object GhCommands {
         listOf("label", "list", "--repo", repo.cliName, "--json", "name,color,description", "--limit", "1000")
 
     fun prLabels(prUrl: String): List<String> = listOf("pr", "view", prUrl, "--json", "labels")
+
+    /**
+     * Los checks del ultimo commit del PR, uno por uno: estado, workflow y enlace. Solo lee. [pr]
+     * como en [markReady]. Ver StackJson.parsePrChecks.
+     */
+    fun prChecks(pr: String, repo: GitHubRepo?): List<String> = listOf("pr", "checks") + prSelector(pr, repo) + listOf("--json", CHECK_FIELDS)
+
+    /**
+     * El log de los pasos que fallaron en la ejecucion de GitHub Actions [run]. Solo lee. Con
+     * `--repo` el del enlace del check: gh no tiene que adivinarlo entre varios remotos.
+     */
+    fun failedLog(run: ActionsRun): List<String> = listOf("run", "view", run.id.toString(), "--repo", run.repo.cliName, "--log-failed")
+
+    /**
+     * Vuelve a lanzar los jobs que fallaron (y los cancelados) de la ejecucion [run], no la
+     * ejecucion entera. Necesita permiso de escritura en el repositorio.
+     */
+    fun rerunFailed(run: ActionsRun): List<String> = listOf("run", "rerun", run.id.toString(), "--failed", "--repo", run.repo.cliName)
+
+    /** Los campos de `gh pr checks --json` que usa la ventana de checks. */
+    const val CHECK_FIELDS = "name,state,bucket,link,workflow,description"
 
     /** Una sola llamada GraphQL para todos los PRs de la pila, en vez de un `gh pr view` por capa. */
     fun prDetails(repo: GitHubRepo, numbers: Collection<Int>): List<String> = listOf(

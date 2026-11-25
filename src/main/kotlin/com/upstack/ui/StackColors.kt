@@ -1,5 +1,6 @@
 package com.upstack.ui
 
+import com.intellij.openapi.util.Key
 import com.intellij.ui.ColorUtil
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.GraphicsUtil
@@ -12,8 +13,10 @@ import com.upstack.stack.PrState
 import com.upstack.stack.ReviewDecision
 import com.upstack.stack.StackLayer
 import java.awt.Color
+import java.awt.Component
 import java.awt.Graphics
 import java.awt.Graphics2D
+import javax.swing.JComponent
 import javax.swing.JLabel
 
 /** Los colores de estado de GitHub, en sus variantes clara y oscura. */
@@ -104,7 +107,10 @@ internal class Chip(text: String, fg: Color, private val fill: Color, private va
             },
         )
 
-        /** El CI del ultimo commit. */
+        /**
+         * El CI del ultimo commit. Lleva [CHECKS]: en la ventana Stacks, pulsarla abre los checks
+         * del PR (ver `StackList`).
+         */
         fun checks(checks: ChecksState): Chip = status(
             checksText(checks),
             when (checks) {
@@ -112,7 +118,12 @@ internal class Chip(text: String, fg: Color, private val fill: Color, private va
                 ChecksState.FAILURE -> StackColors.CLOSED
                 ChecksState.PENDING -> StackColors.QUEUED
             },
-        )
+        ).apply { putClientProperty(CHECKS, true) }
+
+        /** Marca la pastilla de checks, que la lista de la pila encuentra bajo el raton. */
+        val CHECKS: Key<Boolean> = Key.create("upstack.checks.chip")
+
+        fun isChecks(component: Component?): Boolean = (component as? JComponent)?.getClientProperty(CHECKS) == true
 
         /** Una label de GitHub con su color, pintada como la pinta GitHub. Ver [LabelStyle]. */
         fun label(name: String, hex: String): Chip {

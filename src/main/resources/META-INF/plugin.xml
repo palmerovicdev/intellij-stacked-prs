@@ -33,6 +33,10 @@
             <li><b>Show Layer Changes</b>: the IDE diff with what a layer adds on top of the one
                 below, the same changes its pull request shows. A pull request whose base on GitHub is
                 not the layer below is marked <i>Wrong base</i>, and one click points it back.</li>
+            <li><b>Checks</b>: click a layer's Checks badge to see every check of its pull request.
+                On a failed one, <b>why it failed</b> (the last lines of the log of the failed steps),
+                <b>re-run</b> it (GitHub Actions only, <code>gh run rerun --failed</code>; other apps
+                re-run their own checks) or open it on GitHub.</li>
             <li><b>Merge a stack</b>, whole or up to a layer, with GitHub's atomic stack merge
                 (<code>gh stack merge</code>): the dialog shows which pull requests go in, their
                 review and CI, and the merge method the repository allows (the last one used is
@@ -148,6 +152,8 @@
             <action id="Upstack.CheckoutLayer" class="com.upstack.actions.CheckoutLayerAction"/>
             <action id="Upstack.ShowLayerChanges" class="com.upstack.actions.ShowLayerChangesAction"/>
             <action id="Upstack.OpenPr" class="com.upstack.actions.OpenPrAction"/>
+            <!-- Lo mismo que pulsar la pastilla de checks de la capa: la ventana con cada check del PR. -->
+            <action id="Upstack.Checks" class="com.upstack.actions.ChecksAction"/>
             <!-- Solo en una capa sin PR: publicarla a ella, no la pila (eso es Publish Stack…, fuera de las filas). -->
             <action id="Upstack.PublishLayerDraft" class="com.upstack.actions.PublishLayerDraftAction"/>
             <action id="Upstack.PublishLayerReady" class="com.upstack.actions.PublishLayerReadyAction"/>

@@ -97,6 +97,26 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.7 &mdash; The checks of a pull request: why they failed, re-run them, open them on GitHub</h3>
+            <ul>
+              <li><b>Checks window.</b> Click the <i>Checks</i> badge of a layer (or right-click the
+                layer &rarr; <b>Checks&hellip;</b>) to see every check of its pull request with its
+                state, who runs it (GitHub Actions or another app) and a summary. They are read when
+                the window opens (<code>gh pr checks &lt;n&gt; --json &hellip;</code>), not on every
+                refresh; <b>Refresh</b> reads them again.</li>
+              <li><b>On each failed check</b>: <b>Why it failed</b> shows in the window the last lines
+                of the log of the failed steps (<code>gh run view &lt;run&gt; --log-failed</code>),
+                without timestamps or colours and only for that check's job; <b>Re-run</b> runs the
+                failed jobs of that run again (<code>gh run rerun &lt;run&gt; --failed</code>) and
+                reads the window and the stack again; <b>Open on GitHub</b> opens the check's page.</li>
+              <li><b>Only GitHub Actions checks can be re-run from here.</b> Checks of other apps
+                (Vercel, CircleCI&hellip;) can only be re-run by the app that created them: the window
+                offers no Re-run and says so; Why it failed shows what that app publishes, and the full
+                detail is on its page. If GitHub refuses the re-run (no write access to the
+                repository), the window shows gh's error.</li>
+              <li>One window per pull request, which does not block the IDE; the line at the bottom
+                shows the last command.</li>
+            </ul>
             <h3>0.15.6 &mdash; Banners up to date, never two that contradict each other</h3>
             <ul>
               <li><b>After a rebase, the Push Stack banner arrives as the needs-rebase banner

@@ -32,10 +32,27 @@ cualquier momento.
   el menú de cada pila: cerrarla (*Close Stack…*) o, si ya no tiene ramas, olvidarla o
   recrearla. Checkout, **ver los
   cambios de la capa** (el diff del IDE contra la de debajo, lo mismo que enseña su PR),
-  abrir o copiar el PR, **rebase upstack desde aquí**, **fusionar hasta aquí**, **cambiar la base del PR** a la capa
+  abrir o copiar el PR, **ver sus checks** (*Checks…*), **rebase upstack desde aquí**, **fusionar hasta aquí**, **cambiar la base del PR** a la capa
   de debajo cuando no coincide, **marcar listo / volver a draft**,
   **labels…** y **marcar como capa final** (`stack-final`). Clic derecho fuera de las filas
   o sobre la base: lo de toda la pila (añadir capa, publicar, fusionar y cerrar).
+- **Checks de un PR**: pulsar la pastilla *Checks* de una capa (o *Checks…* en su menú) abre
+  una ventana con todos los checks de su PR: su estado (✗ falló, ● en marcha, ✓ pasó), quién
+  los lanza (GitHub Actions u otra app) y un resumen arriba. Se leen al abrirla
+  (`gh pr checks`), no en cada refresco; *Refresh* los vuelve a leer. En cada uno que falla:
+  - *Why it failed*: las últimas líneas del log de los pasos que fallaron, dentro de la
+    ventana, sin horas ni colores y solo las del job de ese check
+    (`gh run view <run> --log-failed`). En un check de otra app, lo que esa app publica; el
+    detalle completo está en su página.
+  - *Re-run*: vuelve a lanzar los jobs que fallaron (y los cancelados) de esa ejecución, no
+    los que pasaron (`gh run rerun <run> --failed`), y relee la ventana y la pila. **Solo
+    los checks de GitHub Actions se pueden relanzar desde aquí**: los de otras apps (Vercel,
+    CircleCI…) solo los relanza la app que los creó, y la ventana lo dice en vez del botón
+    («Only Vercel can re-run it»). Necesita permiso de escritura en el repositorio; si GitHub
+    lo rechaza, la ventana enseña el error de gh.
+  - *Open on GitHub*: la página del check en el navegador.
+
+  Es una ventana por PR y no bloquea el IDE; la línea de abajo enseña el último comando.
 - **Cada opción explica lo que hace y el comando que ejecuta** al pasar el ratón: barra,
   menús, botones de las bandas y opciones de los diálogos. Los comandos llevan los datos
   reales (rama, URL del PR), cada uno en su bloque con fondo, y las URLs en azul; los
@@ -129,6 +146,9 @@ labels, `stack-final` y *Check Out Stack Locally* (`gh stack checkout <url>`).
 | Borrar la capa de arriba sin PR | `git switch <capa de debajo>` si estás en ella, `gh stack unstack --local`, `gh stack init --base <trunk> <demás capas>`, `git branch -D <rama>` (y `git push origin --delete <rama>`) |
 | Renombrar la rama de una capa sin PR | `gh stack unstack --local`, `gh api --method POST repos/OWNER/REPO/branches/<rama>/rename -f new_name=<nueva>` si está en GitHub, `git branch -m`, `gh stack init` con el nombre nuevo |
 | Título de un PR | `gh pr edit <url> --title …` |
+| Checks de un PR | `gh pr checks <pr> --repo OWNER/REPO --json name,state,bucket,link,workflow,description` (solo lee) |
+| Por qué falló un check | `gh run view <run> --repo OWNER/REPO --log-failed` (solo lee; GitHub Actions) |
+| Relanzar un check | `gh run rerun <run> --failed --repo OWNER/REPO` (solo GitHub Actions) |
 | Publicar una capa | `gh stack submit --auto`, `gh pr edit <rama> --title … --body …` y, si es lista, `gh pr ready <rama>`. Con capas sin PR encima, antes `gh stack unstack --local` y `gh stack init --base <trunk> <capas hasta ella>`, y después otra vez con todas |
 | Pregunta de rerere | `git config rerere.enabled true` y `git config rerere.autoupdate true`, o `git config gh-stack.rerere-declined true` |
 | Comprobar el entorno | `gh --version`, `gh auth status --json hosts`, `gh stack --version` y `gh api repos/OWNER/REPO/stacks?per_page=1` (solo leen) |
