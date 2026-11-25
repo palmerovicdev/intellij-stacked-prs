@@ -3,6 +3,15 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.11 — La ventana se refresca sola, cada el tiempo que elijas
+
+- Mientras la pestaña *Stack* de la ventana *Stacks* está en pantalla, la pila se vuelve a leer
+  sola cada 60 segundos (`gh stack view --json` y el estado de los PRs con `gh api graphql`):
+  así llegan las revisiones, los checks que terminan y lo hecho fuera del IDE sin pulsar
+  *Refresh*. Nunca mientras corre un comando, y cuenta desde la última lectura.
+- El intervalo se elige en *Settings → Version Control → Upstack → Refresh the stack every*:
+  0 lo apaga; si no, como mínimo 10 segundos.
+
 ## 0.15.10 — Add Layer ya no salta a lo alto de la pantalla
 
 - Al escribir en *Add Layer…* una rama que ya existe, el aviso que aparece hacía que el diálogo

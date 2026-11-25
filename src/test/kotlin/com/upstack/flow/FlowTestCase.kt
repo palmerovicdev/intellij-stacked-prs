@@ -52,6 +52,7 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         UpstackSettings.DEFAULT_FINAL_LABEL, UpstackSettings.DEFAULT_FINAL_LABEL_COLOR, UpstackSettings.DEFAULT_FINAL_LABEL_DESCRIPTION,
     )
     private var previousFinalLabelBeforeMerge = false
+    private var previousRefreshInterval = UpstackSettings.DEFAULT_REFRESH_INTERVAL
 
     /** Lo que contesta `gh stack --version`: la de referencia, para que nadie avise de la version. */
     protected open fun stackVersion(): String = StackExtension.REFERENCE
@@ -81,6 +82,9 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         previousFinalLabelBeforeMerge = settings.finalLabelBeforeMerge
         setFinalLabel(FinalLabel(UpstackSettings.DEFAULT_FINAL_LABEL, UpstackSettings.DEFAULT_FINAL_LABEL_COLOR, UpstackSettings.DEFAULT_FINAL_LABEL_DESCRIPTION))
         settings.finalLabelBeforeMerge = false
+        // Sin refresco periodico: cada test cuenta exactamente las lecturas que provoca.
+        previousRefreshInterval = settings.refreshIntervalSeconds
+        settings.refreshIntervalSeconds = 0
         beforeFirstRefresh()
 
         project.messageBus.connect(testRootDisposable).subscribe(
@@ -117,6 +121,7 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
             UpstackSettings.getInstance().warnedStackVersion = previousWarnedVersion
             setFinalLabel(previousFinalLabel)
             UpstackSettings.getInstance().finalLabelBeforeMerge = previousFinalLabelBeforeMerge
+            UpstackSettings.getInstance().refreshIntervalSeconds = previousRefreshInterval
         } catch (e: Throwable) {
             addSuppressedException(e)
         } finally {

@@ -28,6 +28,13 @@ cualquier momento.
   (desplegable: upstack desde la capa actual, pila entera, downstack y capas entre sí) y
   ajustes. Fusionar y cerrar van justo tras refrescar para que no se pierdan en el desborde
   (›) cuando la ventana es estrecha.
+- **Refresco**: la pila se relee cuando git cambia (rama, commits o refs), al volver a la
+  ventana, al terminar cada comando y con *Refresh*. Además, mientras la pestaña *Stack* está
+  en pantalla, se relee sola cada 60 segundos (`gh stack view --json` y el estado de los PRs
+  con `gh api graphql`), para que lleguen las revisiones, los checks que terminan y lo hecho
+  fuera del IDE. Nunca mientras corre un comando, y cuenta desde la última lectura. El
+  intervalo se cambia en *Settings | Version Control | Upstack*, *Refresh the stack every*: 0
+  lo apaga; si no, como mínimo 10 segundos.
 - Menú de cada capa (clic derecho sobre ella): solo lo de esa capa. En la lista de pilas,
   el menú de cada pila: cerrarla (*Close Stack…*) o, si ya no tiene ramas, olvidarla o
   recrearla. Checkout, **ver los

@@ -29,7 +29,7 @@ the terminal gets old fast: which layer am I on, which ones need a rebase, which
 is approved, why did the rebase stop.
 
 - **The whole stack in one place**, with the state of every pull request, refreshed when git
-  changes.
+  changes and, while the window is on screen, every 60 seconds (or as often as you set).
 - **The terminal, with buttons.** Every action maps to a `gh stack`, `gh pr` or `git`
   command. Dialogs show it before running it, hovering shows it, and the Log tab keeps it
   with its output. Switch to the terminal at any point.
@@ -61,7 +61,11 @@ is approved, why did the rebase stop.
   checks can be re-run from here: other apps (Vercel, CircleCI…) re-run their own checks, and
   the window says so instead of offering the button.
 - The data of every pull request in the stack comes in one GraphQL call, and it refreshes
-  when git changes: branch, commits or refs.
+  when git changes: branch, commits or refs. While the **Stack** tab is on screen it also
+  refreshes on its own every 60 seconds (`gh stack view --json` and that GraphQL call), so
+  reviews, finished checks and changes made outside the IDE show up without pressing
+  **Refresh**; never while a command runs. Set the interval in *Settings → Version Control →
+  Upstack → Refresh the stack every*: 0 turns it off, otherwise at least 10 seconds.
 
 ### Start a stack, add layers
 
@@ -270,7 +274,7 @@ The full table, with *Delete Layer…* and *Rename Branch…*, is in the
 
 | Where | What | In version control |
 |---|---|---|
-| `upstack.xml`, in the IDE settings | The path to `gh`, the final-layer label (name, color, description, and whether Merge Stack adds it first) and what to do after a commit on a lower layer | No |
+| `upstack.xml`, in the IDE settings | The path to `gh`, the final-layer label (name, color, description, and whether Merge Stack adds it first), what to do after a commit on a lower layer and how often the window refreshes | No |
 | The project's `workspace.xml` | The repository and remote to use, and the last merge method | No |
 | The repository's git config | Your `git rerere` answer, in the same keys `gh stack` uses | No |
 

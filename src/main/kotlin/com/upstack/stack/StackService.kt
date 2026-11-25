@@ -68,6 +68,7 @@ import org.jetbrains.annotations.Nls
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -102,7 +103,8 @@ class Operation(
  * El estado de la pila del proyecto y todas las escrituras.
  *
  * La lectura es `gh stack view --json` (mas una consulta GraphQL para draft, labels, review
- * y CI) y se repite cuando git cambia de verdad: rama, commits o refs. Las escrituras son
+ * y CI) y se repite cuando git cambia de verdad (rama, commits o refs) y, mientras la ventana la
+ * ensena, cada tanto segun Settings. Las escrituras son
  * los mismos comandos `gh` que se usarian en la terminal, de una en una, con progreso,
  * registro en la pestana Log y refresco del IDE al terminar.
  */
@@ -161,18 +163,63 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
 
     private val stackVersionChecked = AtomicBoolean()
 
+    /** La pestana Stack esta en pantalla (ver [setStackShown]): solo entonces hay refresco periodico. */
+    @Volatile
+    private var stackShown = false
+
+    /** Cuando se pidio o termino la ultima lectura ([System.nanoTime]): el refresco periodico cuenta desde ahi. */
+    @Volatile
+    private var lastRead = System.nanoTime()
+
+    /** Una lectura esta en marcha, ya pasada la pausa: el refresco periodico no la corta con otra. */
+    @Volatile
+    private var reading = false
+
+    /** Lo que dura un segundo del refresco periodico. Los tests lo acortan: el minimo son 10 s. */
+    internal var periodicSecondMs = 1_000L
+
     init {
         cs.launch {
             refreshRequests.receiveAsFlow().collectLatest {
                 delay(REFRESH_DEBOUNCE_MS)
-                refreshNow()
+                reading = true
+                try {
+                    refreshNow()
+                } finally {
+                    reading = false
+                    lastRead = System.nanoTime()
+                }
             }
         }
+        cs.launch { refreshPeriodically() }
         requestRefresh()
     }
 
     fun requestRefresh() {
+        lastRead = System.nanoTime()
         refreshRequests.trySend(Unit)
+    }
+
+    /** La ventana avisa cuando su pestana Stack entra o sale de la pantalla. */
+    fun setStackShown(shown: Boolean) {
+        stackShown = shown
+    }
+
+    /**
+     * El refresco periodico de Settings: lo de fuera del IDE (PRs revisados, checks que acaban,
+     * `gh stack` en la terminal sin mover refs) no avisa. Cada segundo mira si toca: intervalo
+     * encendido, pestana Stack en pantalla, ninguna escritura en marcha (la que acaba ya relee) ni
+     * lectura a medias, y el intervalo cumplido desde la ultima lectura, la pidiera quien la pidiera.
+     * El ajuste se lee en cada vuelta: Apply vale sin reiniciar. Termina con el servicio.
+     */
+    private suspend fun refreshPeriodically() {
+        while (true) {
+            delay(periodicSecondMs)
+            val seconds = UpstackSettings.getInstance().refreshIntervalSeconds
+            if (seconds <= 0 || !stackShown || reading || _running.value != null) continue
+            val interval = TimeUnit.MILLISECONDS.toNanos(seconds * periodicSecondMs)
+            if (System.nanoTime() - lastRead >= interval) requestRefresh()
+        }
     }
 
     fun launch(block: suspend CoroutineScope.() -> Unit): Job = cs.launch(block = block)

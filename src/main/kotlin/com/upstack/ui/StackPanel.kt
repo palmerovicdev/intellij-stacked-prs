@@ -155,9 +155,13 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
             }
         })
         // Al volver a la ventana se relee: gh stack pudo usarse en la terminal sin mover
-        // ninguna ref (un init que adopta ramas existentes, por ejemplo).
+        // ninguna ref (un init que adopta ramas existentes, por ejemplo). Mientras se ve, el
+        // servicio la relee ademas cada tanto (Settings); oculta (otra pestana, ventana cerrada), no.
         addHierarchyListener { event ->
-            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L && isShowing) service.requestRefresh()
+            if (event.changeFlags and HierarchyEvent.SHOWING_CHANGED.toLong() != 0L) {
+                service.setStackShown(isShowing)
+                if (isShowing) service.requestRefresh()
+            }
         }
 
         scope.launch { service.state.collect(::render) }
@@ -177,6 +181,7 @@ internal class StackPanel(private val project: Project) : SimpleToolWindowPanel(
 
     override fun dispose() {
         scope.cancel()
+        service.setStackShown(false)
     }
 
     /**

@@ -9,6 +9,8 @@ import com.intellij.ui.ColorPanel
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.MutableProperty
+import com.intellij.ui.dsl.builder.RightGap
+import com.intellij.ui.dsl.builder.bindIntValue
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
@@ -99,6 +101,19 @@ class UpstackConfigurable(private val project: Project) : BoundConfigurable(mess
                     .bindItem(settings::restackAfterCommit.toNullableProperty())
                     .comment(message("settings.restack.comment"))
             }
+            row(message("settings.refresh")) {
+                // De 10 en 10 con las flechas; lo que se escriba entre 1 y 9 no se acepta (0 apaga).
+                spinner(0..UpstackSettings.MAX_REFRESH_INTERVAL, UpstackSettings.MIN_REFRESH_INTERVAL)
+                    .bindIntValue(settings::refreshIntervalSeconds)
+                    .validationOnInput { spinner ->
+                        if (spinner.number in 1 until UpstackSettings.MIN_REFRESH_INTERVAL) {
+                            error(message("settings.refresh.short", UpstackSettings.MIN_REFRESH_INTERVAL))
+                        } else null
+                    }
+                    .applyToComponent { showHelp(Help(message("help.refresh.interval"), Helps.refresh().commands)) }
+                    .gap(RightGap.SMALL)
+                label(message("settings.refresh.seconds"))
+            }.rowComment(message("settings.refresh.comment"))
             group(message("settings.environment")) {
                 row {
                     button(message("settings.environment.check")) { environment.check() }

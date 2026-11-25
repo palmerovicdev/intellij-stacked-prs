@@ -97,6 +97,16 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.11 &mdash; The window refreshes on its own, as often as you choose</h3>
+            <ul>
+              <li>While the <b>Stack</b> tab of the <b>Stacks</b> window is on screen, the stack is read
+                again every 60 seconds (<code>gh stack view --json</code> and the state of its pull
+                requests with <code>gh api graphql</code>), so reviews, finished checks and changes made
+                outside the IDE show up without pressing <b>Refresh</b>. Never while a command runs; it
+                counts from the last read.</li>
+              <li>Set the interval in <b>Settings | Version Control | Upstack | Refresh the stack every</b>:
+                0 turns it off; otherwise at least 10 seconds.</li>
+            </ul>
             <h3>0.15.10 &mdash; Add Layer no longer jumps to the top of the screen</h3>
             <ul>
               <li>Typing a branch that already exists in <b>Add Layer…</b> made the dialog flicker
