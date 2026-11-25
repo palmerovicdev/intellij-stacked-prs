@@ -638,7 +638,7 @@ internal class CloseLocalStackAction : UpstackAction(AllIcons.Actions.Cancel) {
             target == null && entry.remoteOnlyBranches.any { it !in entry.sharedBranches } -> Help(message("help.close.local.remote"))
             target == null -> Help(message("help.close.local.blocked"))
             target == current -> Help(message("help.close.local.here", target), closeCommands(entry))
-            else -> Help(message("help.close.local", target), listOf(Help.checkout(target)) + closeCommands(entry))
+            else -> Help(message("help.close.local.switch", target), listOf(Help.checkout(target)) + closeCommands(entry))
         }
     }
 

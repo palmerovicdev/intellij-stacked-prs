@@ -489,8 +489,9 @@ class StackService(private val project: Project, private val cs: CoroutineScope)
             }
             if (failure == null) {
                 if (repository != null && operation.calls.any { it.tool == Tool.GH && GhCommands.pushesStack(it.args) }) {
-                    _pushPending.update { it - repository.root }
+                    // Primero lo registrado: una lectura que llegue entre las dos no lo vuelve a publicar.
                     rebasedLayers.remove(repository.root)
+                    _pushPending.update { it - repository.root }
                 }
                 operation.successMessage?.let { Notifier.info(project, it) }
                 operation.onSuccess?.invoke()

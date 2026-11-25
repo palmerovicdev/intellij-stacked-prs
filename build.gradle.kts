@@ -97,6 +97,14 @@ intellijPlatform {
 
         changeNotes = provider {
             """
+            <h3>0.15.8 &mdash; The help of Close Stack… in the stack list</h3>
+            <ul>
+              <li>The help of <b>Close Stack…</b> on a row of the stack list showed the help of the
+                Close dialog's <i>local</i> checkbox (both used the same text). It now says that it
+                first checks out a layer only that stack has, then opens the usual dialog.</li>
+              <li>After Push Stack, a stack read landing at the same moment can no longer mark the
+                layers as waiting to be pushed again.</li>
+            </ul>
             <h3>0.15.7 &mdash; The checks of a pull request: why they failed, re-run them, open them on GitHub</h3>
             <ul>
               <li><b>Checks window.</b> Click the <i>Checks</i> badge of a layer (or right-click the

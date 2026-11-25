@@ -3,6 +3,14 @@
 Cada versión, con lo que trae. La regla de versiones está en
 [docs/roadmap.md](docs/roadmap.md#versiones).
 
+## 0.15.8 — La ayuda de Close Stack… en la lista de pilas
+
+- La ayuda de *Close Stack…* en una fila de la lista de pilas mostraba la de la casilla
+  *local* del diálogo de cierre (las dos usaban el mismo texto). Ahora explica que primero cambia
+  a una capa que solo tiene esa pila y después abre el diálogo de siempre.
+- Tras *Push Stack*, una lectura de la pila que llegue justo a la vez ya no puede volver a
+  marcar las capas como pendientes de subir.
+
 ## 0.15.7 — Los checks de un PR: por qué fallaron, relanzarlos, abrirlos en GitHub
 
 - **Ventana de checks.** Pulsar la pastilla *Checks* de una capa (o clic derecho sobre la capa

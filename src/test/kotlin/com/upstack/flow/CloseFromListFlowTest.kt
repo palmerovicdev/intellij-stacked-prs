@@ -133,7 +133,11 @@ class CloseFromListFlowTest : FlowTestCase() {
             "git switch main",
             "git branch -D feat/a",
         )
-        assertEquals(msg("help.close.local", "feat/a") + " (" + commands.joinToString(", ") + ")", event.presentation.description)
+        // El texto literal, no msg(misma clave): una clave repetida en el bundle mostraba otra ayuda.
+        val help = "Close this stack. gh stack only knows which stack to close from one of its branches, so it first checks out " +
+            "feat/a, a layer only this stack has; then the usual Close Stack… dialog lists every pull request and branch it " +
+            "touches and lets you choose. If you cancel the dialog, you stay on feat/a"
+        assertEquals(help + " (" + commands.joinToString(", ") + ")", event.presentation.description)
 
         gh.respond(listOf("api", "graphql"), prefix = true, stdout = Samples.DETAILS_TWO_LAYERS)
         // Retenido: mientras corre, gh-stack deja de seguir la pila (aqui lo hace el test).
@@ -219,6 +223,10 @@ class CloseFromListFlowTest : FlowTestCase() {
         onEdt { action.update(onLayer) }
         assertFalse(onLayer.presentation.isVisible)
         awaitQuiet()
+    }
+
+    fun `test the close dialog keeps its own help for the local checkbox`() {
+        assertEquals("gh stack stops tracking the stack here. Always done: it is what closes the stack", msg("help.close.local"))
     }
 
     fun `test a stack without a branch of its own cannot be closed from its row and says why`() {
