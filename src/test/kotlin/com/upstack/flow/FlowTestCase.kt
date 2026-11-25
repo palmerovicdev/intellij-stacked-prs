@@ -18,6 +18,7 @@ import com.upstack.gh.StackExtension
 import com.upstack.settings.FinalLabel
 import com.upstack.settings.UpstackProjectSettings
 import com.upstack.settings.UpstackSettings
+import com.upstack.stack.PrTemplate
 import com.upstack.stack.StackService
 import com.upstack.stack.StackState
 import git4idea.repo.GitRepository
@@ -53,6 +54,8 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
     )
     private var previousFinalLabelBeforeMerge = false
     private var previousRefreshInterval = UpstackSettings.DEFAULT_REFRESH_INTERVAL
+    private var previousTemplates = emptyList<PrTemplate>()
+    private var previousTextInFile = false
 
     /** Lo que contesta `gh stack --version`: la de referencia, para que nadie avise de la version. */
     protected open fun stackVersion(): String = StackExtension.REFERENCE
@@ -85,6 +88,11 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
         // Sin refresco periodico: cada test cuenta exactamente las lecturas que provoca.
         previousRefreshInterval = settings.refreshIntervalSeconds
         settings.refreshIntervalSeconds = 0
+        // Sin plantillas y editando en los campos, como al empezar.
+        previousTemplates = settings.prTemplates
+        previousTextInFile = settings.prTextInFile
+        settings.prTemplates = emptyList()
+        settings.prTextInFile = false
         beforeFirstRefresh()
 
         project.messageBus.connect(testRootDisposable).subscribe(
@@ -122,6 +130,8 @@ abstract class FlowTestCase : HeavyPlatformTestCase() {
             setFinalLabel(previousFinalLabel)
             UpstackSettings.getInstance().finalLabelBeforeMerge = previousFinalLabelBeforeMerge
             UpstackSettings.getInstance().refreshIntervalSeconds = previousRefreshInterval
+            UpstackSettings.getInstance().prTemplates = previousTemplates
+            UpstackSettings.getInstance().prTextInFile = previousTextInFile
         } catch (e: Throwable) {
             addSuppressedException(e)
         } finally {

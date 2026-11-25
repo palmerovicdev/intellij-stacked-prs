@@ -34,6 +34,7 @@ class UpstackConfigurable(private val project: Project) : BoundConfigurable(mess
 
     override fun createPanel(): DialogPanel {
         val settings = UpstackSettings.getInstance()
+        val templates = PrTemplatesPanel()
         val detected = GhCli.locate()?.toString()
         lateinit var ghPath: Cell<TextFieldWithBrowseButton>
         val environment = EnvironmentPanel(
@@ -88,6 +89,16 @@ class UpstackConfigurable(private val project: Project) : BoundConfigurable(mess
                         .bindSelected(settings::finalLabelBeforeMerge)
                         .applyToComponent { showHelp(beforeMergeHelp()) }
                         .comment(message("settings.final.before.merge.comment"))
+                }
+            }
+            group(message("settings.templates.group")) {
+                row { comment(message("settings.templates.comment")) }
+                row {
+                    cell(templates)
+                        .align(AlignX.FILL)
+                        .onReset { templates.templates = settings.prTemplates }
+                        .onIsModified { templates.isModified(settings.prTemplates) }
+                        .onApply { settings.prTemplates = templates.templates }
                 }
             }
             row(message("settings.restack")) {

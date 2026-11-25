@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import com.upstack.gh.GhCommands
 import com.upstack.gh.MergeMethod
 import com.upstack.stack.GitHubRepo
+import com.upstack.stack.PrTemplate
 
 /**
  * La label de capa final como la define Settings: nombre, color (hex de 6 cifras sin `#`, como
@@ -34,6 +35,13 @@ enum class RestackMode { ASK, ALWAYS, NEVER }
 @State(name = "Upstack", storages = [Storage("upstack.xml")])
 class UpstackSettings : SimplePersistentStateComponent<UpstackSettings.Options>(Options()) {
 
+    /** Una plantilla de PR tal y como se guarda. */
+    class TemplateState : BaseState() {
+        var name by string("")
+        var title by string("")
+        var body by string("")
+    }
+
     class Options : BaseState() {
         var ghPath by string("")
         var finalLabel by string(DEFAULT_FINAL_LABEL)
@@ -44,7 +52,28 @@ class UpstackSettings : SimplePersistentStateComponent<UpstackSettings.Options>(
         var restackAfterCommit by string(RestackMode.ASK.name)
         var warnedStackVersion by string()
         var refreshIntervalSeconds by property(DEFAULT_REFRESH_INTERVAL)
+        var prTemplates by list<TemplateState>()
+        var prTextInFile by property(false)
     }
+
+    /** Las plantillas de titulo y descripcion de PR, en el orden de Settings. Las que no tienen nombre no se guardan. */
+    var prTemplates: List<PrTemplate>
+        get() = state.prTemplates.mapNotNull { saved ->
+            saved.name.orEmpty().trim().takeIf { it.isNotEmpty() }?.let { PrTemplate(it, saved.title.orEmpty(), saved.body.orEmpty()) }
+        }
+        set(value) {
+            state.prTemplates.clear()
+            value.filter { it.name.isNotBlank() }.forEach { template ->
+                state.prTemplates.add(TemplateState().apply { name = template.name.trim(); title = template.title; body = template.body })
+            }
+        }
+
+    /** Donde se edita el texto de un PR: en el md de la capa (true) o en los campos del dialogo. Lo ultimo que se eligio. */
+    var prTextInFile: Boolean
+        get() = state.prTextInFile
+        set(value) {
+            state.prTextInFile = value
+        }
 
     /**
      * Cada cuantos segundos se vuelve a leer la pila mientras la ventana la ensena (ver
