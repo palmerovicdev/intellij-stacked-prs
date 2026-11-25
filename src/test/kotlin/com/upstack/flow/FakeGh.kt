@@ -106,7 +106,8 @@ class FakeGh(private val dir: Path) {
     fun writes(): List<List<String>> = calls().filter { !isRead(it) }
 
     private fun isRead(args: List<String>) =
-        args == listOf("stack", "view", "--json") || args == listOf("stack", "--version") || args.firstOrNull() == "api"
+        args == listOf("stack", "view", "--json") || args == listOf("stack", "--version") || args.firstOrNull() == "api" ||
+            (args.take(2) == listOf("pr", "view") && args.last() == "body")
 
     private fun key(args: List<String>) = args.joinToString("") { it + UNIT }
 

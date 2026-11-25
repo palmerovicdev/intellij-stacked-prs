@@ -102,6 +102,9 @@ object StackJson {
             )
         }
 
+    /** `gh pr view --json body`: la descripcion, o null si no es la salida esperada. */
+    fun parsePrBody(text: String): String? = runCatching { (parse(text) as? JsonObject)?.string("body") }.getOrNull()
+
     /** `gh label list --json name,color,description`. */
     fun parseRepoLabels(text: String): List<RepoLabel> =
         (parse(text) as? JsonArray).orEmpty().mapNotNull { element ->

@@ -10,7 +10,7 @@ import com.upstack.actions.StackFlows
 import com.upstack.settings.UpstackSettings
 import com.upstack.stack.GitHubRepo
 import com.upstack.stack.StackState
-import com.upstack.ui.EditTitleDialog
+import com.upstack.ui.EditPrDialog
 
 /**
  * Los flujos que escriben en GitHub, de la accion al comando: que se ejecuta exactamente, en
@@ -92,12 +92,50 @@ class GitHubWritesFlowTest : FlowTestCase() {
     fun `test editing the title starts from the current one and changes only that`() {
         val state = loadStack()
         val edit = listOf("pr", "edit", Samples.URL_B, "--title", "Payment API")
+        gh.respond(listOf("pr", "view", Samples.URL_B, "--json", "body"), stdout = "{\"body\":\"\"}")
         gh.respond(edit)
-        UiInterceptors.register(object : UiInterceptors.UiInterceptor<EditTitleDialog>(EditTitleDialog::class.java) {
-            override fun doIntercept(component: EditTitleDialog) {
+        UiInterceptors.register(object : UiInterceptors.UiInterceptor<EditPrDialog>(EditPrDialog::class.java) {
+            override fun doIntercept(component: EditPrDialog) {
                 assertEquals("API", component.newTitle)
                 component.enterTitle("Payment API")
                 assertNull(component.doValidate())
+                component.close(DialogWrapper.OK_EXIT_CODE)
+            }
+        })
+
+        onEdt { StackFlows.editTitle(project, fromStacks(state, "feat/b")) }
+        awaitNotificationWith(msg("op.title.done", 12, "Payment API"))
+        assertEquals(listOf(edit), gh.writes())
+    }
+
+    fun `test editing the description sends it with the title`() {
+        val state = loadStack()
+        gh.respond(listOf("pr", "view", Samples.URL_B, "--json", "body"), stdout = "{\"body\":\"Old text\"}")
+        val edit = listOf("pr", "edit", Samples.URL_B, "--title", "API", "--body", "New text")
+        gh.respond(edit)
+        UiInterceptors.register(object : UiInterceptors.UiInterceptor<EditPrDialog>(EditPrDialog::class.java) {
+            override fun doIntercept(component: EditPrDialog) {
+                assertEquals("Old text", component.editor.bodyArea.text)
+                assertNull(component.newBody)
+                component.editor.bodyArea.text = "New text"
+                component.close(DialogWrapper.OK_EXIT_CODE)
+            }
+        })
+
+        onEdt { StackFlows.editTitle(project, fromStacks(state, "feat/b")) }
+        awaitNotificationWith(msg("op.title.done", 12, "API"))
+        assertEquals(listOf(edit), gh.writes())
+    }
+
+    fun `test an unreadable description is left alone unless one is written`() {
+        val state = loadStack()
+        gh.respond(listOf("pr", "view", Samples.URL_B, "--json", "body"), exit = 1, stderr = "boom")
+        val edit = listOf("pr", "edit", Samples.URL_B, "--title", "Payment API")
+        gh.respond(edit)
+        UiInterceptors.register(object : UiInterceptors.UiInterceptor<EditPrDialog>(EditPrDialog::class.java) {
+            override fun doIntercept(component: EditPrDialog) {
+                component.enterTitle("Payment API")
+                assertNull(component.newBody)
                 component.close(DialogWrapper.OK_EXIT_CODE)
             }
         })

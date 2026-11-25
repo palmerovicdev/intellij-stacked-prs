@@ -5,16 +5,20 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.TopGap
 import com.intellij.ui.dsl.builder.panel
 import com.upstack.UpstackBundle.message
 import com.upstack.gh.GhCommands
 import com.upstack.stack.LayerPlans
+import com.upstack.stack.PrFile
+import com.upstack.stack.PrText
 import com.upstack.stack.Plan
 import com.upstack.stack.RemoteRename
 import com.upstack.stack.StackLayer
 import com.upstack.stack.StackSnapshot
+import java.nio.file.Path
 import javax.swing.JComponent
 
 /**
@@ -79,40 +83,72 @@ internal class RenameBranchDialog(
     }
 }
 
-/** *Edit Title…*: el titulo nuevo de un PR y el `gh pr edit` que lo cambia. */
-internal class EditTitleDialog(project: Project, private val number: Int, private val url: String, title: String) : DialogWrapper(project) {
+/**
+ * *Edit Title and Description…*: el titulo y la descripcion de un PR, en los campos o en el md de su
+ * capa (ver [PrTextEditor]), y el `gh pr edit` que los cambia.
+ *
+ * [body]: la descripcion de ahora, o null si no se pudo leer: entonces solo se manda si se escribe
+ * algo, para no borrar la que hay. [branch] y [root] son null desde Pull Requests: sin md.
+ */
+internal class EditPrDialog(
+    project: Project,
+    private val number: Int,
+    private val url: String,
+    title: String,
+    private val body: String?,
+    branch: String?,
+    root: Path?,
+) : DialogWrapper(project) {
 
-    private val titleField = JBTextField(title, 48)
+    internal val editor = PrTextEditor(
+        project, PrText(title, body.orEmpty()), branch.orEmpty(), "",
+        if (branch != null && root != null) PrFile.path(root, branch) else null, 6,
+        onOpen = { close(OPEN_EXIT_CODE) },
+    )
     private val preview = CommandPreview()
 
-    val newTitle: String get() = titleField.text.trim()
+    val newTitle: String get() = editor.text.title
+
+    /** La descripcion nueva, o null si no cambia (o no se sabia cual era y se dejo vacia). */
+    val newBody: String? get() = editor.text.body.takeIf { it != body.orEmpty().trim() }
+
+    /** Se cerro con *Open in Editor*: nada se cambia y el md se abre en el IDE (ver [openFile]). */
+    val openedFile: Boolean get() = exitCode == OPEN_EXIT_CODE
+
+    fun openFile() = editor.openInEditor()
 
     init {
         this.title = message("title.title", number)
         setOKButtonText(message("title.ok"))
-        titleField.selectAll()
-        titleField.onChange(::update)
+        editor.onChange(::update)
         init()
         update()
     }
 
     override fun createCenterPanel(): JComponent = panel {
-        row(message("title.field")) { cell(titleField).align(AlignX.FILL) }
+        row { cell(editor.component).align(Align.FILL) }.resizableRow()
         row { cell(preview).align(AlignX.FILL).resizableColumn() }.topGap(TopGap.SMALL)
     }
 
-    override fun getPreferredFocusedComponent(): JComponent = titleField
+    override fun getPreferredFocusedComponent(): JComponent = editor.focusTarget
 
     /** Como [RenameBranchDialog.enterName]. */
     internal fun enterTitle(title: String) {
-        titleField.text = title
+        editor.titleField.text = title
     }
 
     // Publica: los tests comprueban que el titulo que escriben vale.
-    public override fun doValidate(): ValidationInfo? =
-        if (newTitle.isEmpty()) ValidationInfo(message("title.empty"), titleField) else null
+    public override fun doValidate(): ValidationInfo? = editor.problem?.let { ValidationInfo(it, editor.focusTarget) }
 
     private fun update() {
-        preview.showLines(listOf(Help.gh(GhCommands.editTitle(url, newTitle.ifEmpty { "…" }))))
+        val text = editor.text
+        val shown = text.title.ifEmpty { "…" }
+        preview.showLines(
+            listOf(Help.gh(newBody?.let { GhCommands.editPr(url, null, shown, it) } ?: GhCommands.editTitle(url, shown)))
+        )
+    }
+
+    private companion object {
+        const val OPEN_EXIT_CODE = NEXT_USER_EXIT_CODE
     }
 }

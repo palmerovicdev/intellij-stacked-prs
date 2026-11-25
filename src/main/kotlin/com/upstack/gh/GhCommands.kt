@@ -175,6 +175,9 @@ object GhCommands {
     fun closePr(prUrl: String, comment: String?): List<String> =
         listOf("pr", "close", prUrl) + if (comment.isNullOrBlank()) emptyList() else listOf("--comment", comment)
 
+    /** La descripcion de un PR, para editarla. Solo lee. */
+    fun prBody(prUrl: String): List<String> = listOf("pr", "view", prUrl, "--json", "body")
+
     fun editTitle(prUrl: String, title: String): List<String> = listOf("pr", "edit", prUrl, "--title", title)
 
     /**

@@ -55,7 +55,7 @@ import com.upstack.ui.AddLayerDialog
 import com.upstack.ui.ChecksDialog
 import com.upstack.ui.CloseStackDialog
 import com.upstack.ui.DeleteLayerDialog
-import com.upstack.ui.EditTitleDialog
+import com.upstack.ui.EditPrDialog
 import com.upstack.ui.RenameBranchDialog
 import com.upstack.ui.Help
 import com.upstack.ui.Helps
@@ -567,8 +567,13 @@ internal object StackFlows {
                 emptyMap()
             }
             val layers = withContext(Dispatchers.EDT) {
-                val dialog = PublishDialog(project, state, proposals, github, focus)
-                if (dialog.showAndGet()) dialog.layers() else null
+                val dialog = PublishDialog(project, state, proposals, github, focus, repository.root.toNioPath())
+                dialog.show()
+                if (dialog.openedFile) {
+                    dialog.openFile()
+                    Notifier.info(project, message("pr.file.opened"))
+                }
+                if (dialog.isOK) dialog.layers() else null
             } ?: return@launch
             service.execute(
                 Operation(
@@ -604,9 +609,13 @@ internal object StackFlows {
                 PublishPlans.proposal(layer.branch, emptyList())
             }
             val text = withContext(Dispatchers.EDT) {
-                val dialog = PublishLayerDialog(project, snapshot, layer, proposal, ready, github, current)
+                val dialog = PublishLayerDialog(project, snapshot, layer, proposal, ready, github, current, repository.root.toNioPath())
                 // show() y no showAndGet(): lo mismo en un dialogo modal, y lo que interceptan los tests.
                 dialog.show()
+                if (dialog.openedFile) {
+                    dialog.openFile()
+                    Notifier.info(project, message("pr.file.opened"))
+                }
                 if (dialog.isOK) dialog.text else null
             } ?: return@launch
             val plan = PublishPlans.layerPlan(snapshot, layer, text, ready, github, current)
@@ -865,17 +874,43 @@ internal object StackFlows {
         )
     }
 
-    /** El titulo del PR, con `gh pr edit --title`. Desde Pull Requests no se sabe el actual: el campo sale vacio. */
+    /**
+     * El titulo y la descripcion del PR, con `gh pr edit --title` (y `--body` si la descripcion
+     * cambia). La descripcion se lee antes con `gh pr view --json body`; si no se puede, se deja
+     * sin tocar salvo que se escriba una. Desde Pull Requests no se sabe el titulo actual: el campo sale vacio.
+     */
     fun editTitle(project: Project, target: PrTarget) {
-        val dialog = EditTitleDialog(project, target.number, target.url, target.details?.title.orEmpty())
-        dialog.show()
-        if (!dialog.isOK) return
-        executeOnPr(
-            project, target,
-            title = message("op.title", target.number),
-            calls = listOf(GhCall(GhCommands.editTitle(target.url, dialog.newTitle))),
-            success = message("op.title.done", target.number, dialog.newTitle),
-        )
+        val service = StackService.getInstance(project)
+        val repository = target.selection?.state?.repo?.let(service::repositoryFor) ?: service.repositoryFor(target.github)
+        service.launch {
+            val body = try {
+                withBackgroundProgress(project, message("title.reading", target.number)) {
+                    val result = GhCli.run(workDirFor(service, target), GhCommands.prBody(target.url))
+                    if (result.ok) StackJson.parsePrBody(result.stdout) else null
+                }
+            } catch (_: GhNotFoundException) {
+                null
+            }
+            val edit = withContext(Dispatchers.EDT) {
+                val dialog = EditPrDialog(
+                    project, target.number, target.url, target.details?.title.orEmpty(), body,
+                    target.selection?.layer?.branch, repository?.root?.toNioPath(),
+                )
+                dialog.show()
+                if (dialog.openedFile) {
+                    dialog.openFile()
+                    Notifier.info(project, message("pr.file.opened"))
+                }
+                if (dialog.isOK) dialog.newTitle to dialog.newBody else null
+            } ?: return@launch
+            val (newTitle, newBody) = edit
+            executeOnPr(
+                project, target,
+                title = message("op.title", target.number),
+                calls = listOf(GhCall(newBody?.let { GhCommands.editPr(target.url, null, newTitle, it) } ?: GhCommands.editTitle(target.url, newTitle))),
+                success = message("op.title.done", target.number, newTitle),
+            )
+        }
     }
 
     fun editLabels(project: Project, target: PrTarget) {

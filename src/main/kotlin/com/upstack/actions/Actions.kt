@@ -789,7 +789,7 @@ internal class ChangePrBaseAction : PrAction(AllIcons.Actions.Edit) {
 }
 
 internal class EditTitleAction : PrAction(AllIcons.Actions.Edit) {
-    override fun commands(target: PrTarget): List<String> = listOf(Help.gh(GhCommands.editTitle(target.url, "TITLE")))
+    override fun commands(target: PrTarget): List<String> = listOf(Help.gh(GhCommands.editTitle(target.url, "TITLE")), Help.gh(GhCommands.editPr(target.url, null, "TITLE", "BODY")))
     override fun perform(project: Project, target: PrTarget) = StackFlows.editTitle(project, target)
 }
 

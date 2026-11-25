@@ -22,12 +22,14 @@ import com.upstack.UpstackBundle.message
 import com.upstack.gh.GhCommands
 import com.upstack.stack.GitHubRepo
 import com.upstack.stack.PrRef
+import com.upstack.stack.PrFile
 import com.upstack.stack.PrText
 import com.upstack.stack.PublishLayer
 import com.upstack.stack.PublishPlans
 import com.upstack.stack.StackLayer
 import com.upstack.stack.StackState
 import java.awt.BorderLayout
+import java.nio.file.Path
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
@@ -50,6 +52,8 @@ internal class PublishDialog(
     proposals: Map<String, PrText>,
     private val github: GitHubRepo?,
     focus: String?,
+    /** La raiz del repositorio, donde estan los md de las capas (`.upstack/<rama>.md`). */
+    root: Path? = null,
 ) : DialogWrapper(project) {
 
     private val snapshot = state.snapshot
@@ -57,7 +61,10 @@ internal class PublishDialog(
     /** De abajo arriba, en el orden de gh-stack: es el orden de los comandos. */
     private val rows: List<LayerRow> = snapshot.layers.filter { !it.isMerged }.map { layer ->
         val details = state.detailsOf(layer)
-        LayerRow(layer, LayerStatus.of(layer, details), details?.title, layer.pr?.let(::urlOf), proposals[layer.branch])
+        LayerRow(
+            layer, LayerStatus.of(layer, details), details?.title, layer.pr?.let(::urlOf), proposals[layer.branch],
+            project, root, onOpen = { close(OPEN_EXIT_CODE) },
+        )
     }
     private val focused = rows.firstOrNull { it.layer.branch == focus }
     private val preview = CommandPreview()
@@ -70,6 +77,11 @@ internal class PublishDialog(
         init()
         update()
     }
+
+    /** Se cerro con *Open in Editor* en alguna capa: nada se publica y su md se abre en el IDE (ver [openFile]). */
+    val openedFile: Boolean get() = exitCode == OPEN_EXIT_CODE
+
+    fun openFile() = rows.firstNotNullOfOrNull { it.openRequested() }
 
     /** Lo elegido, de abajo arriba. */
     fun layers(): List<PublishLayer> = rows.map(LayerRow::choice)
@@ -95,8 +107,9 @@ internal class PublishDialog(
     override fun getPreferredFocusedComponent(): JComponent? =
         (focused ?: rows.lastOrNull { it.isNew } ?: rows.lastOrNull { it.choosable })?.focusTarget
 
-    override fun doValidateAll(): List<ValidationInfo> =
-        rows.mapNotNull { row -> row.titleField?.takeIf { it.text.isBlank() }?.let { ValidationInfo(message("publish.title.empty", row.layer.branch), it) } }
+    // Publica: los tests comprueban lo propuesto.
+    public override fun doValidateAll(): List<ValidationInfo> =
+        rows.mapNotNull { row -> row.editor?.problem?.let { ValidationInfo(message("publish.title.problem", row.layer.branch, it), row.editor.focusTarget) } }
 
     // gh-stack no siempre guarda la URL: se reconstruye, o el numero si no se sabe el repositorio.
     private fun urlOf(pr: PrRef): String =
@@ -128,6 +141,9 @@ internal class PublishDialog(
         private val prTitle: String?,
         val prUrl: String?,
         proposal: PrText?,
+        project: Project,
+        root: Path?,
+        onOpen: () -> Unit,
     ) {
 
         val isNew: Boolean = layer.pr == null
@@ -135,11 +151,18 @@ internal class PublishDialog(
 
         /** Nuevas: draft, como las crea `--auto`. Las demas, como estan. */
         val readyBox = JBCheckBox(message("publish.ready"), status == LayerStatus.READY)
-        val titleField: JBTextField? = if (isNew) JBTextField(proposal?.title ?: layer.branch, 40) else null
-        private val bodyArea: JBTextArea? = if (isNew) JBTextArea(proposal?.body.orEmpty(), 4, 40).apply { lineWrap = true; wrapStyleWord = true } else null
+        val editor: PrTextEditor? = if (isNew) {
+            PrTextEditor(
+                project, PrText(proposal?.title ?: layer.branch, proposal?.body.orEmpty()), layer.branch, proposal?.body.orEmpty(),
+                root?.let { PrFile.path(it, layer.branch) }, 4, onOpen,
+            )
+        } else null
         private val change = JBLabel().apply { font = JBFont.small() }
 
-        val focusTarget: JComponent get() = titleField ?: readyBox
+        val focusTarget: JComponent get() = editor?.focusTarget ?: readyBox
+
+        /** El md de esta capa, si fue ella la que cerro el dialogo con *Open in Editor*: lo abre. */
+        fun openRequested(): Unit? = editor?.takeIf { it.inFileMode && it.openClicked }?.openInEditor()
 
         fun choice() = PublishLayer(
             branch = layer.branch,
@@ -150,16 +173,12 @@ internal class PublishDialog(
                 else -> null
             },
             ready = if (choosable) readyBox.isSelected else null,
-            text = titleField?.let { PrText(it.text.trim(), bodyArea?.text?.trim().orEmpty()) },
+            text = editor?.text,
         )
 
         fun onChange(listener: () -> Unit) {
             readyBox.addItemListener { listener() }
-            listOfNotNull<JTextComponent>(titleField, bodyArea).forEach {
-                it.document.addDocumentListener(object : DocumentAdapter() {
-                    override fun textChanged(e: DocumentEvent) = listener()
-                })
-            }
+            editor?.onChange(listener)
         }
 
         /** «→ Ready» o «→ Draft» junto al estado, solo si cambia. */
@@ -191,13 +210,8 @@ internal class PublishDialog(
 
         /** Nuevas: titulo y descripcion. Las demas: el titulo que ya tienen en GitHub. */
         private fun details(): JComponent? {
-            val title = titleField
-            val body = bodyArea
-            if (title == null || body == null) return prTitle?.takeIf { it.isNotBlank() }?.let { secondary(it).apply { font = JBFont.small() } }
-            return panel {
-                row(message("publish.pr.title")) { cell(title).align(AlignX.FILL) }
-                row(message("publish.pr.body")) { scrollCell(body).align(AlignX.FILL) }
-            }.apply { isOpaque = false }
+            val editor = editor ?: return prTitle?.takeIf { it.isNotBlank() }?.let { secondary(it).apply { font = JBFont.small() } }
+            return panel { row { cell(editor.component).align(AlignX.FILL) } }.apply { isOpaque = false }
         }
 
         private fun unchangedKey(): String = when (status) {
@@ -211,6 +225,7 @@ internal class PublishDialog(
     }
 
     private companion object {
+        const val OPEN_EXIT_CODE = NEXT_USER_EXIT_CODE
         const val BODY_PREVIEW = 40
 
         /** En la vista previa, una descripcion larga se abrevia: el Log la ensena entera. */

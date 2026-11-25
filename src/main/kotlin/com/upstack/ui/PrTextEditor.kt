@@ -15,7 +15,9 @@ import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
+import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBFont
+import com.intellij.util.ui.JBUI
 import com.upstack.UpstackBundle.message
 import com.upstack.gh.GhCommands
 import com.upstack.settings.UpstackSettings
@@ -70,10 +72,16 @@ internal class PrTextEditor(
     private val previewTitle = JBLabel().apply { font = JBFont.label().asBold() }
     private val previewBody = JBTextArea(4, 40).apply { lineWrap = true; wrapStyleWord = true; isEditable = false }
     private val status = JBLabel().apply { font = JBFont.small() }
+    // Fuera del DSL, que pide `buttonsGroup` para los radios.
+    private val modes = JPanel(HorizontalLayout(JBUI.scale(12))).apply { add(inDialog); add(inFile) }
     private val cards = JPanel(CardLayout())
     private val listeners = mutableListOf<() -> Unit>()
 
     /** El md es la fuente del texto. */
+    internal fun selectFile(inFile: Boolean) {
+        (if (inFile) this.inFile else inDialog).doClick()
+    }
+
     val inFileMode: Boolean get() = file != null && inFile.isSelected
 
     /** Titulo y descripcion que van a GitHub: los campos, o el md tal como esta ahora. */
@@ -113,7 +121,7 @@ internal class PrTextEditor(
     }
 
     val component: JComponent = panel {
-        if (file != null) row { cell(inDialog); cell(inFile) }
+        if (file != null) row { cell(modes) }
         row(message("pr.template.label")) {
             cell(templateBox)
             cell(applyButton)
@@ -147,8 +155,13 @@ internal class PrTextEditor(
         }
     }
 
+    /** Se pulso *Open in Editor*: el dialogo se cierra por esto y no por Publish ni por Cancel. */
+    var openClicked = false
+        private set
+
     private fun open() {
         if (!ensureFile()) return
+        openClicked = true
         onOpen()
     }
 
@@ -163,6 +176,12 @@ internal class PrTextEditor(
     private fun ensureFile(): Boolean {
         if (readFile() != null) return true
         return write(PrText(titleField.text.trim(), bodyArea.text.trim()))
+    }
+
+    /** Elige la plantilla de nombre [name] (o la vacia si es null) y la aplica: lo que hace el boton. Publica para los tests. */
+    internal fun applyTemplate(name: String?) {
+        templateBox.selectedItem = choices.first { it.template?.name == name }
+        applyTemplate()
     }
 
     private fun applyTemplate() {
