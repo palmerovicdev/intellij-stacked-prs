@@ -21,6 +21,7 @@ import com.upstack.UpstackBundle.message
 import com.upstack.gh.GhCli
 import com.upstack.gh.GhCommands
 import com.upstack.stack.GitHubRepo
+import com.upstack.stack.PullRequestState
 import com.upstack.ui.EnvironmentPanel
 import com.upstack.ui.Help
 import com.upstack.ui.Helps
@@ -125,6 +126,11 @@ class UpstackConfigurable(private val project: Project) : BoundConfigurable(mess
                     .gap(RightGap.SMALL)
                 label(message("settings.refresh.seconds"))
             }.rowComment(message("settings.refresh.comment"))
+            row(message("settings.page.size")) {
+                spinner(1..UpstackSettings.MAX_PAGE_SIZE, 5)
+                    .bindIntValue(settings::pullRequestsPageSize)
+                    .applyToComponent { showHelp(pageSizeHelp()) }
+            }.rowComment(message("settings.page.size.comment", UpstackSettings.MAX_PAGE_SIZE))
             group(message("settings.environment")) {
                 row {
                     button(message("settings.environment.check")) { environment.check() }
@@ -134,6 +140,14 @@ class UpstackConfigurable(private val project: Project) : BoundConfigurable(mess
             }
         }
     }
+
+    /** The query behind each page of the Pull Requests tab, with example names in capitals. */
+    private fun pageSizeHelp(): Help = Help(
+        message("help.page.size"),
+        listOf(
+            Help.gh(GhCommands.pullRequestsPage(GitHubRepo("github.com", "OWNER", "REPO"), setOf(PullRequestState.OPEN), null, UpstackSettings.DEFAULT_PAGE_SIZE)),
+        ),
+    )
 
     /** Lo que ejecuta Merge Stack con la opcion encendida, con los nombres de ejemplo en mayusculas. */
     private fun beforeMergeHelp(): Help {

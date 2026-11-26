@@ -10,6 +10,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.NamedColorUtil
 import com.upstack.UpstackBundle.message
 import com.upstack.stack.OpenPullRequest
+import com.upstack.stack.PullRequestState
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Container
@@ -78,7 +79,11 @@ internal class PullRequestRowRenderer : ListCellRenderer<OpenPullRequest> {
         val width = (list.width - list.insets.left - list.insets.right - JBUI.scale(20)).coerceAtLeast(1)
         val primary = RenderingUtil.getForeground(list, isSelected)
         val secondary = if (isSelected) primary else NamedColorUtil.getInactiveTextColor()
-        val status = Chip.status(message(if (value.draft) "status.draft" else "status.open"), if (value.draft) StackColors.DRAFT else StackColors.READY)
+        val status = when (value.state) {
+            PullRequestState.MERGED -> Chip.status(message("status.merged"), StackColors.MERGED)
+            PullRequestState.CLOSED -> Chip.status(message("status.closed"), StackColors.CLOSED)
+            PullRequestState.OPEN -> Chip.status(message(if (value.draft) "status.draft" else "status.open"), if (value.draft) StackColors.DRAFT else StackColors.READY)
+        }
         val title = JLabel().apply {
             font = JBFont.label().asBold()
             foreground = primary

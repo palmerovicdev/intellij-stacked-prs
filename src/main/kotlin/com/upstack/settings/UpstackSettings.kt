@@ -54,6 +54,7 @@ class UpstackSettings : SimplePersistentStateComponent<UpstackSettings.Options>(
         var refreshIntervalSeconds by property(DEFAULT_REFRESH_INTERVAL)
         var prTemplates by list<TemplateState>()
         var prTextInFile by property(false)
+        var pullRequestsPageSize by property(DEFAULT_PAGE_SIZE)
     }
 
     /** Las plantillas de titulo y descripcion de PR, en el orden de Settings. Las que no tienen nombre no se guardan. */
@@ -84,6 +85,13 @@ class UpstackSettings : SimplePersistentStateComponent<UpstackSettings.Options>(
         get() = refreshInterval(state.refreshIntervalSeconds)
         set(value) {
             state.refreshIntervalSeconds = refreshInterval(value)
+        }
+
+    /** Cuantos PRs lee de golpe la pestana Pull Requests (y cada "Load more"): entre 1 y [MAX_PAGE_SIZE], el limite de GraphQL. */
+    var pullRequestsPageSize: Int
+        get() = pageSize(state.pullRequestsPageSize)
+        set(value) {
+            state.pullRequestsPageSize = pageSize(value)
         }
 
     var restackAfterCommit: RestackMode
@@ -149,6 +157,11 @@ class UpstackSettings : SimplePersistentStateComponent<UpstackSettings.Options>(
         /** GitHub no admite nombres de label mas largos, ni descripciones. */
         const val MAX_LABEL_NAME = 50
         const val MAX_LABEL_DESCRIPTION = 100
+
+        const val DEFAULT_PAGE_SIZE = 20
+        const val MAX_PAGE_SIZE = 100
+
+        fun pageSize(count: Int): Int = if (count <= 0) DEFAULT_PAGE_SIZE else count.coerceAtMost(MAX_PAGE_SIZE)
 
         const val DEFAULT_REFRESH_INTERVAL = 60
         const val MIN_REFRESH_INTERVAL = 10

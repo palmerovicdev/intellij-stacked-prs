@@ -5,6 +5,7 @@ import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
@@ -37,6 +38,7 @@ import java.awt.Container
 import java.awt.Dimension
 import java.awt.Font
 import java.awt.Rectangle
+import java.awt.datatransfer.StringSelection
 import java.awt.event.ActionEvent
 import javax.swing.Action
 import javax.swing.Icon
@@ -68,6 +70,7 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
     private val statusIcon = JLabel().apply { verticalAlignment = SwingConstants.TOP }
     private val statusText = WrappingText(textFont = JBFont.small(), textColor = NamedColorUtil.getInactiveTextColor())
     private val column = Column()
+    private var scroller: JBScrollPane? = null
     private val preview = CommandPreview()
 
     /** The checks last read, failed first; null until the first read succeeds. */
@@ -77,6 +80,9 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
 
     /** What each check shows under it after *Why it failed*, by [keyOf]. */
     private val reasons = HashMap<String, Reason>()
+
+    /** The failed checks whose reason was just copied, by [keyOf]: their link reads "Copied" for a moment. */
+    private val copied = HashSet<String>()
 
     /** The re-runs asked from this window, by run: every failed job of a run goes again at once. */
     private val reruns = HashMap<Long, Rerun>()
@@ -137,7 +143,7 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
         val scroll = JBScrollPane(column).apply {
             horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER
             preferredSize = JBUI.size(WIDTH, HEIGHT)
-        }
+        }.also { scroller = it }
         return JPanel(BorderLayout(0, JBUI.scale(8))).apply {
             add(top, BorderLayout.NORTH)
             add(scroll, BorderLayout.CENTER)
@@ -191,13 +197,14 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
 
     // ---------------------------------------------------------------- what each link does
 
-    private fun why(check: PrCheck) {
+    private fun why(check: PrCheck, copyWhenRead: Boolean = false) {
         val key = keyOf(check)
         when (reasons[key]) {
             null -> Unit
             Reason.Reading -> return
-            // Shown: the same link hides it.
             else -> {
+                // Copying a reason already shown leaves it shown; otherwise the same link hides it.
+                if (copyWhenRead) return copyToClipboard(check)
                 reasons.remove(key)
                 return rebuild()
             }
@@ -205,7 +212,9 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
         val run = check.run
         if (run == null) {
             reasons[key] = Reason.App
-            return rebuild()
+            rebuild()
+            if (copyWhenRead) copyToClipboard(check)
+            return
         }
         reasons[key] = Reason.Reading
         preview.show(listOf(GhCommands.failedLog(run)))
@@ -221,8 +230,32 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
             onEdt {
                 reasons[key] = reason
                 rebuild()
+                if (copyWhenRead) copyToClipboard(check)
             }
         }
+    }
+
+    /** What the window shows of why [check] failed: the log of its failed steps, or what its app published. */
+    private fun failureText(check: PrCheck): String? = when (val reason = reasons[keyOf(check)]) {
+        is Reason.Log -> reason.log.text.takeIf { it.isNotBlank() }
+        Reason.App -> listOf(check.title, check.description, check.link).filter { it.isNotBlank() }.joinToString("\n")
+        else -> null
+    }
+
+    /** Copies the failure; when it has not been read yet, reads it first (it then stays shown). */
+    private fun copy(check: PrCheck) {
+        if (reasons[keyOf(check)] == null) why(check, copyWhenRead = true) else copyToClipboard(check)
+    }
+
+    private fun copyToClipboard(check: PrCheck) {
+        val text = failureText(check) ?: return
+        CopyPasteManager.getInstance().setContents(StringSelection(text))
+        copied += keyOf(check)
+        rebuild()
+        // The link says "Copied" for a moment.
+        javax.swing.Timer(COPIED_MILLIS) {
+            if (copied.remove(keyOf(check))) onEdt { rebuild() }
+        }.apply { isRepeats = false; start() }
     }
 
     private fun rerun(check: PrCheck) {
@@ -248,13 +281,27 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
 
     // ---------------------------------------------------------------- rows
 
+    /**
+     * Rebuilds every row. The window stays where it was: rebuilding drops the link that was clicked, so
+     * the focus moves on and the view used to follow it to the end of the list.
+     */
     private fun rebuild() {
+        val viewport = scroller?.viewport
+        val position = viewport?.viewPosition
         val built = checks.orEmpty().map { it.title to row(it) }
         column.removeAll()
         built.forEach { column.add(it.second) }
         rows = built
         column.revalidate()
         column.repaint()
+        if (viewport != null && position != null) {
+            fun restore() {
+                val most = (viewport.view?.height ?: 0) - viewport.height
+                viewport.viewPosition = java.awt.Point(position.x, position.y.coerceIn(0, maxOf(0, most)))
+            }
+            // Once laid out, and again after whatever the focus change scrolls.
+            onEdt { restore(); onEdt { restore() } }
+        }
     }
 
     /** The state as a coloured mark, the name, who reported it and, if it failed, what can be done. */
@@ -287,6 +334,14 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
                 showHelp(
                     if (run != null) Help(message("help.checks.why", check.name), listOf(Help.gh(GhCommands.failedLog(run))))
                     else Help(message("help.checks.why.app", appOf(check)))
+                )
+            }
+        )
+        add(
+            ActionLink(message(if (keyOf(check) in copied) "checks.copied" else "checks.copy")) { copy(check) }.apply {
+                showHelp(
+                    if (run != null) Help(message("help.checks.copy", check.name), listOf(Help.gh(GhCommands.failedLog(run))))
+                    else Help(message("help.checks.copy.app", appOf(check)))
                 )
             }
         )
@@ -447,5 +502,6 @@ internal class ChecksDialog(private val project: Project, private val target: Pr
         private const val LOG_HEIGHT = 220
         private const val LOG_MIN_WIDTH = 80
         private const val LINK_GAP = 12
+        private const val COPIED_MILLIS = 1500
     }
 }

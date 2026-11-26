@@ -2,6 +2,7 @@ package com.upstack.gh
 
 import com.upstack.stack.ActionsRun
 import com.upstack.stack.GitHubRepo
+import com.upstack.stack.PullRequestState
 import com.upstack.stack.ReviewDiff
 
 /** Como se prepara el commit opcional de `gh stack add`. */
@@ -252,10 +253,31 @@ object GhCommands {
     /** Los campos de `gh pr checks --json` que usa la ventana de checks. */
     const val CHECK_FIELDS = "name,state,bucket,link,workflow,description"
 
-    fun openPullRequests(repo: GitHubRepo): List<String> = buildList {
+    fun openPullRequests(repo: GitHubRepo, states: Set<PullRequestState> = setOf(PullRequestState.OPEN)): List<String> = buildList {
+        require(states.isNotEmpty())
         addAll(listOf("api", "graphql", "--paginate", "--slurp"))
         if (!repo.isSshAlias) addAll(listOf("--hostname", repo.host))
-        addAll(listOf("-f", "owner=${repo.owner}", "-f", "name=${repo.name}", "-f", "query=$OPEN_PULL_REQUESTS_QUERY"))
+        addAll(listOf("-f", "owner=${repo.owner}", "-f", "name=${repo.name}", "-f", "query=${pullRequestsQuery(states)}"))
+    }
+
+    /** The Pull Requests list reads [pageSize] pull requests at a time, newest first, from the cursor of the previous page. */
+    fun pullRequestsPage(repo: GitHubRepo, states: Set<PullRequestState>, after: String?, pageSize: Int): List<String> = buildList {
+        require(states.isNotEmpty() && pageSize in 1..100)
+        addAll(listOf("api", "graphql"))
+        if (!repo.isSshAlias) addAll(listOf("--hostname", repo.host))
+        addAll(listOf("-f", "owner=${repo.owner}", "-f", "name=${repo.name}"))
+        if (after != null) addAll(listOf("-f", "endCursor=$after"))
+        val query = pullRequestsQuery(states).replace(
+            "first: 100, after:", "first: $pageSize, orderBy: {field: CREATED_AT, direction: DESC}, after:",
+        )
+        addAll(listOf("-f", "query=$query"))
+    }
+
+    /** A single state keeps the scalar form (`states: OPEN`); several become a list. */
+    private fun pullRequestsQuery(states: Set<PullRequestState>): String {
+        val ordered = PullRequestState.entries.filter { it in states }
+        val argument = ordered.singleOrNull()?.name ?: ordered.joinToString(", ", "[", "]")
+        return OPEN_PULL_REQUESTS_QUERY.replace("states: OPEN", "states: $argument")
     }
 
     private const val OPEN_PULL_REQUESTS_QUERY =
@@ -263,9 +285,36 @@ object GhCommands {
             "repository(owner: \$owner, name: \$name) { pullRequests(states: OPEN, first: 100, after: \$endCursor) { " +
             "nodes { number title url state headRefName baseRefName isDraft author { login } createdAt " +
             "reviewDecision additions deletions changedFiles mergeable mergeStateStatus " +
-            "labels(first: 30) { nodes { name color } } " +
+            "labels(first: 100) { nodes { name color } labelPageInfo: pageInfo { hasNextPage endCursor } } " +
+            "assignees(first: 100) { nodes { login } assigneePageInfo: pageInfo { hasNextPage endCursor } } " +
             "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } " +
             "pageInfo { hasNextPage endCursor } } } }"
+
+    fun pullRequestLabels(repo: GitHubRepo, number: Int): List<String> {
+        require(number > 0)
+        return listOf(
+            "api", "graphql", "--hostname", repo.host, "--paginate", "--slurp",
+            "-f", "owner=${repo.owner}", "-f", "name=${repo.name}", "-F", "number=$number", "-f", "query=$PULL_REQUEST_LABELS_QUERY",
+        )
+    }
+
+    private const val PULL_REQUEST_LABELS_QUERY =
+        "query(\$owner: String!, \$name: String!, \$number: Int!, \$endCursor: String) { " +
+            "repository(owner: \$owner, name: \$name) { pullRequest(number: \$number) { number " +
+            "labels(first: 100, after: \$endCursor) { nodes { name color } pageInfo { hasNextPage endCursor } } } } }"
+
+    fun pullRequestAssignees(repo: GitHubRepo, number: Int): List<String> {
+        require(number > 0)
+        return listOf(
+            "api", "graphql", "--hostname", repo.host, "--paginate", "--slurp",
+            "-f", "owner=${repo.owner}", "-f", "name=${repo.name}", "-F", "number=$number", "-f", "query=$PULL_REQUEST_ASSIGNEES_QUERY",
+        )
+    }
+
+    private const val PULL_REQUEST_ASSIGNEES_QUERY =
+        "query(\$owner: String!, \$name: String!, \$number: Int!, \$endCursor: String) { " +
+            "repository(owner: \$owner, name: \$name) { pullRequest(number: \$number) { number " +
+            "assignees(first: 100, after: \$endCursor) { nodes { login } pageInfo { hasNextPage endCursor } } } } }"
 
     fun reviewThreads(repo: GitHubRepo, number: Int): List<String> = listOf(
         "api", "graphql", "--hostname", repo.host, "--paginate", "--slurp",

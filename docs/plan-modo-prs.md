@@ -1,123 +1,85 @@
-# Plan: modo de pull requests abiertos
+# Plan: modo de pull requests
 
-## Objetivo
+## Objetivo y alcance
 
-Incorporar a Upstack un modo para listar y gestionar los pull requests abiertos, pertenezcan o no a un stack. El usuario podrá revisar el listado y decidir qué capacidades se implementan y en qué orden.
+Incorporar a Upstack una vista propia para crear, listar, revisar y gestionar pull requests, pertenezcan o no a un stack, siguiendo los flujos y las referencias visuales de IntelliJ aportados por el usuario. Las funciones actuales de stacks deben mantenerse.
 
-Este documento es un plan, no una autorización para implementar todas las opciones enumeradas. Los comentarios de revisión en el visualizador de cambios son un requisito destacado por el usuario.
+Los requisitos priorizados el 25 de noviembre de 2026 están integrados en las secciones siguientes. Este documento organiza el alcance; no afirma que cada elemento esté terminado ni establece por sí solo el orden de implementación. El estado y las comprobaciones realizadas se registran en [`odd/tasks/open-pull-requests.md`](../odd/tasks/open-pull-requests.md).
 
-## Punto de partida
+## 1. Lista de pull requests
 
-- La ventana de stacks ya muestra información y acciones de PR que pueden servir de base.
-- El menú **Stack** de la ventana nativa **Pull Requests** de IntelliJ ya ofrece algunas acciones, pero no constituye una lista propia de Upstack.
-- Al editar un PR desde esa ventana, actualmente se lee su descripción, pero el título no se precarga.
-- **Show Layer Changes** abre un diff entre referencias Git; no le proporciona el contexto del PR ni de sus conversaciones de revisión.
+- [ ] Mostrar los PR del repositorio seleccionado, pertenezcan o no a un stack, con paginación y sin limitar los resultados a la primera página.
+- [ ] Mantener disponible la lista al cerrar y volver a abrir la tool window, evitando mostrarla vacía mientras se actualiza.
+- [ ] Incorporar búsqueda y filtros como en IntelliJ: estado, autor, label, assignee, review y orden.
+- [ ] Mostrar número, título, ramas de origen y base, draft/ready, etiquetas, revisión, checks y tamaño del cambio cuando estén disponibles. Señalar conflictos, rama atrasada, checks fallidos y cambios solicitados.
+- [ ] Adaptar a los PR el detalle emergente y el resumen superior de stacks. Ofrecer refresco manual y automático, con estados diferenciados de carga, lista vacía y error.
+- [ ] Abrir el detalle dedicado del PR al hacer doble clic en una fila.
 
-## Funcionalidades candidatas
+## 2. Crear y abrir un pull request
 
-### 1. Lista y estados
+Reproducir el flujo **New Pull Request** de IntelliJ, con vista previa de cambios y posibilidad de cancelar y volver a la lista:
 
-- [ ] Añadir un modo para listar todos los PR abiertos del repositorio seleccionado, sean o no parte de un stack.
-- [ ] Contemplar la paginación para no limitar la lista a la primera página.
-- [ ] Mostrar número, título, ramas de origen y base, draft/ready, etiquetas, revisión, checks y tamaño del cambio cuando estén disponibles.
-- [ ] Señalar conflictos, rama atrasada respecto a su base, checks fallidos y cambios solicitados.
-- [ ] Adaptar el detalle emergente y el resumen superior de stacks a una lista de PR.
-- [ ] Ofrecer refresco manual y automático y contemplar carga, lista vacía y errores.
+- [ ] Elegir cualquier rama local o remota como base y seleccionar la rama de origen que se integrará en ella.
+- [ ] Seleccionar reviewers, labels, assignees y tags mediante campos con búsqueda/autocompletado y listas seleccionables.
+- [ ] Escribir título y descripción con soporte Markdown, incluidas imágenes.
+- [ ] Mostrar arriba los archivos cambiados y abrir el diff del IDE al hacer doble clic en uno.
+- [ ] Contemplar la creación como draft o ready y reutilizar, cuando corresponda, el editor y las plantillas existentes. La publicación actual usa `gh stack submit` y requiere una adaptación para PR individuales.
 
-### 2. Revisión de cambios y comentarios
+## 3. Detalle y revisión del PR
 
-- [ ] Abrir los cambios de un PR y mostrar los comentarios de revisión en el archivo y las líneas correspondientes, con sus respuestas y su estado resuelto o pendiente.
-- [ ] Investigar primero si es viable reutilizar el visualizador de revisión de PR de IntelliJ. Si no lo es, evaluar cómo integrar los comentarios en un diff sin dar por hecha ninguna solución.
-- [ ] Contemplar comentarios sobre versiones anteriores del diff y comentarios cuya línea ya no pueda situarse; no descartarlos silenciosamente.
-- [ ] Adaptar la visualización de cambios y el checkout para PR sin rama local y PR procedentes de forks.
+Al abrir un PR desde la lista, mostrar una vista dedicada siguiendo la referencia de IntelliJ:
 
-### 3. Acciones individuales
+- [ ] Mostrar el título con edición en el mismo lugar mediante un botón, sin abrir un diálogo aparte.
+- [ ] Mostrar `base <- rama de origen` en lugar de «View Timeline»; permitir cambiar la base y copiar el nombre de la rama.
+- [ ] Mostrar los archivos cambiados. Solo los que tengan comentarios llevan un icono de conversación y su número; el doble clic abre el diff de ese archivo.
+- [ ] Mostrar en el diff los comentarios de revisión en el archivo y las líneas correspondientes, con sus respuestas y su estado resuelto o pendiente. Investigar primero la reutilización del visor de revisión de IntelliJ; si no es viable, evaluar una alternativa que conserve los comentarios.
+- [ ] Conservar los comentarios sobre versiones anteriores y los que no puedan situarse en una línea; no descartarlos silenciosamente.
+- [ ] Adaptar la visualización de cambios y el checkout a PR sin rama local y a PR procedentes de forks.
+- [ ] Retirar el visor independiente **Changes and Review Comments** actualmente agregado: la revisión debe ocurrir desde la vista del PR.
 
-- [ ] Editar título y descripción reutilizando el diálogo existente y precargando ambos valores actuales.
-- [ ] Evaluar el uso de las plantillas y de la edición mediante Markdown cuando no exista una rama local.
-- [ ] Cambiar entre draft y ready.
-- [ ] Ver y editar etiquetas.
-- [ ] Abrir el PR en GitHub y copiar su enlace.
-- [ ] Ver los checks, sus detalles y logs; ofrecer la repetición de fallidos cuando sean de GitHub Actions.
-- [ ] Permitir elegir una nueva rama base, en lugar de deducirla de la capa inferior de un stack.
-- [ ] Cerrar un PR con confirmación; decidir si se incluyen comentario y eliminación de ramas como opciones.
-- [ ] Estudiar un flujo de merge individual con los métodos y restricciones aplicables. El merge de stacks existente es atómico para la pila y no debe reutilizarse como si fuera un merge individual.
+## 4. Acciones desde la lista y el detalle
 
-### 4. Creación de PR
+Las siguientes acciones deben estar disponibles desde ambas vistas:
 
-- [ ] Evaluar la creación de un PR sencillo con título, descripción, rama de origen, base y estado draft/ready.
-- [ ] Reutilizar, donde corresponda, el editor y las plantillas de publicación. La creación actual utiliza `gh stack submit` y requiere una adaptación para PR individuales.
+- [ ] Hacer merge individual y cerrar el PR con confirmación; decidir si el cierre incluye comentario y eliminación de ramas como opciones.
+- [ ] Cambiar entre draft y ready y elegir una nueva rama base, sin deducirla de la capa inferior de un stack.
+- [ ] Solicitar revisión y asignar personas.
+- [ ] Consultar el estado de los checks y abrir sus detalles cuando fallen. Contemplar logs y la repetición de checks fallidos cuando sean de GitHub Actions.
 
-## Límites y decisiones pendientes
+Además, conservar o adaptar las acciones individuales aplicables:
 
-- Acordar qué funcionalidades candidatas se incorporan y su orden; la lista, la edición de título y descripción y la revisión de comentarios son posibles puntos iniciales, no una secuencia cerrada.
-- Precisar el alcance del repositorio y de los remotos que mostrará el modo.
+- [ ] Editar título y descripción con sus valores actuales; en el detalle, la edición del título debe ser en el mismo lugar. Evaluar plantillas y edición mediante Markdown cuando no exista rama local.
+- [ ] Ver y editar labels, abrir el PR en GitHub y copiar su enlace.
+
+El merge de stacks existente es una operación de pila: no debe reutilizarse como si fuera un merge individual. Rebase upstack/downstack, merge hasta una capa, sincronización de pilas y etiqueta de capa final tampoco deben trasladarse sin una decisión específica sobre su equivalente para PR individuales.
+
+## Decisiones y cuestiones pendientes
+
+- Precisar el alcance de repositorios y remotos, y cómo se relaciona la lista inicialmente centrada en PR abiertos con el filtro por estado.
+- Aclarar qué son los **tags** solicitados en el formulario y cómo se diferencian de los labels.
 - Decidir si los comentarios serán solo de lectura o si también se podrán escribir, responder y resolver desde el IDE.
-- Confirmar qué debe ocurrir si el plugin GitHub de IntelliJ no está disponible o si no se puede integrar su visualizador.
-- No copiar sin adaptar operaciones propias de stacks: rebase upstack/downstack, merge hasta una capa, sincronización de pilas y etiqueta de capa final. Sus posibles equivalentes para PR individuales requieren una decisión específica.
+- Confirmar qué debe ocurrir si el plugin GitHub de IntelliJ no está disponible o no se puede integrar su visualizador.
+- Definir los métodos y restricciones aplicables al merge individual y las opciones de cierre indicadas arriba.
+- Acordar el orden de implementación y revisar el estado real de cada capacidad antes de marcarla como completada.
 
-## Comprobaciones para la implementación
+## Comprobaciones
 
-- [ ] Cubrir con pruebas el listado completo, la paginación, los estados y la actualización.
-- [ ] Comprobar que las acciones actúan sobre el PR y repositorio correctos, incluidos forks y PR sin rama local.
-- [ ] Verificar en el IDE el recorrido real de cambios y comentarios: posición, conversaciones, estados y comentarios desactualizados.
+- [ ] Cubrir listado completo, paginación, búsqueda, filtros, estados, actualización y conservación de la lista al reabrir.
+- [ ] Comprobar que creación y acciones actúan sobre el PR y repositorio correctos, incluidos forks y PR sin rama local.
+- [ ] Verificar en el IDE los recorridos de creación, lista, detalle, archivos y conversaciones: posición, respuestas, estado y comentarios desactualizados o sin ubicación.
 - [ ] Probar errores de red, permisos y datos no disponibles sin ocultar información ni presentar acciones engañosas.
-- [ ] Mantener los flujos existentes de stacks y distinguir las verificaciones automatizadas de las pruebas visuales en el IDE.
+- [ ] Mantener los flujos existentes de stacks y distinguir las pruebas automatizadas de la comprobación visual y funcional en el IDE.
 
 ## Referencias
+
+Las capturas aportadas por el usuario son la referencia para los flujos y su presentación; el documento las identifica por número y no contiene copias locales:
+
+- **New Pull Request y archivos cambiados:** `Image #1`, `Image #5`.
+- **Labels, reviewers y assignees:** `Image #2`, `Image #3`, `Image #4`.
+- **Detalle, título editable, ramas, diff y acciones:** `Image #6`–`Image #12`.
+- **Lista, búsqueda, filtros, orden y selección:** `Image #13`–`Image #20`.
 
 - [`StackFlows.kt`](../src/main/kotlin/com/upstack/actions/StackFlows.kt): edición de PR y diff de capas.
 - [`PrTarget.kt`](../src/main/kotlin/com/upstack/actions/PrTarget.kt): selección de PR desde stacks o la ventana nativa.
 - [`upstack-github.xml`](../src/main/resources/META-INF/upstack-github.xml): acciones integradas en la ventana nativa.
-- [`README.md`](../README.md): capacidades actuales de stacks.
-
----
-
-## Requisitos nuevos del usuario — 25 de noviembre de 2026
-
-Este bloque registra el alcance que el usuario prioriza ahora. Mañana se revisará nuevamente antes de convertirlo en tareas de implementación. Las capturas se conservan como referencias visuales; no implican que las funcionalidades estén implementadas.
-
-### Crear y abrir un pull request
-
-Reproducir el flujo de **New Pull Request** de IntelliJ, con vista previa de cambios y posibilidad de cancelar y volver a la lista de PRs. El formulario debe permitir:
-
-- Elegir cualquier rama local o remota como base.
-- Elegir la rama de origen que se integrará en la base.
-- Seleccionar reviewers, labels, assignees y tags mediante campos con búsqueda/autocompletado y listas seleccionables.
-- Escribir el título y un body con soporte Markdown, incluidas imágenes.
-- Ver arriba los archivos cambiados y abrir el diff del IDE al hacer doble clic.
-
-### Gestionar PRs desde lista y detalle
-
-Desde ambas vistas se debe poder:
-
-- Hacer merge, cerrar, cambiar entre draft y ready, y cambiar la rama base.
-- Pedir revisión y asignar personas.
-- Consultar el estado de los checks y abrir detalles cuando fallen.
-
-### Vista de detalle del PR
-
-Al hacer doble clic en un PR de la lista, abrir una vista dedicada, siguiendo la referencia de IntelliJ:
-
-- Mostrar el título con edición en el mismo lugar mediante un botón de edición; no abrir un diálogo aparte.
-- Mostrar la relación `base <- rama de origen` en lugar de «View Timeline». Permitir cambiar la base y copiar el nombre de la rama.
-- Mostrar los archivos cambiados. Solo los archivos con comentarios llevan un icono de conversación y su número; el doble clic abre el diff de ese archivo.
-- Reutilizar primero el diff del IDE para mostrar las conversaciones inline; si no es viable, evaluar una alternativa que conserve los comentarios.
-- Ofrecer merge, cierre, draft/ready, solicitud de review y asignación, además del estado y detalle de checks.
-
-### Lista de pull requests
-
-- Mantener la lista disponible al cerrar y volver a abrir la tool window, evitando mostrarla vacía mientras se vuelve a cargar.
-- Incorporar búsqueda y filtros como en IntelliJ: estado, autor, label, assignee, review y orden.
-- Retirar el visor independiente **Changes and Review Comments** actualmente agregado; la revisión debe ocurrir desde la vista del PR.
-
-### Referencias visuales del usuario
-
-Las capturas adjuntas a la conversación son las referencias para reproducir el flujo y su presentación. En particular:
-
-- **New Pull Request y archivos cambiados:** `Image #1`, `Image #5`.
-- **Selección de labels, reviewers y assignees:** `Image #2`, `Image #3`, `Image #4`.
-- **Detalle, título editable, ramas, diff y acciones:** `Image #6`–`Image #12`.
-- **Lista, búsqueda, filtros, orden y selección:** `Image #13`–`Image #20`.
-
-> Las imágenes siguen adjuntas a esta conversación; este documento las referencia por número, no contiene copias locales de los archivos de imagen.
+- [`README.md`](../README.md): capacidades de stacks.

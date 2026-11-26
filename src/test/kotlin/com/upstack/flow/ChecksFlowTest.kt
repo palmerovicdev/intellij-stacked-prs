@@ -109,7 +109,7 @@ class ChecksFlowTest : FlowTestCase() {
         val dialog = openChecks()
 
         assertEquals(listOf(actions, vercel, "preview / deploy-preview", "build / lint"), onEdt { dialog.shownChecks() })
-        assertEquals(listOf(msg("checks.why"), msg("checks.rerun"), msg("checks.open")), links(dialog, actions))
+        assertEquals(listOf(msg("checks.why"), msg("checks.copy"), msg("checks.rerun"), msg("checks.open")), links(dialog, actions))
         assertTrue(texts(dialog, "preview / deploy-preview"), texts(dialog, "preview / deploy-preview").contains(msg("checks.status.pending")))
         // Read once, when the window opens, and nothing written.
         assertEquals(1, gh.calls().count { it == checks })
@@ -150,7 +150,7 @@ class ChecksFlowTest : FlowTestCase() {
         gh.respond(checks, stdout = Samples.CHECKS_FAILING)
         val dialog = openChecks()
 
-        assertEquals(listOf(msg("checks.why"), msg("checks.open")), links(dialog, vercel))
+        assertEquals(listOf(msg("checks.why"), msg("checks.copy"), msg("checks.open")), links(dialog, vercel))
         assertTrue(texts(dialog, vercel), texts(dialog, vercel).contains(msg("checks.rerun.other", "Vercel")))
 
         // Why it failed: what the app published, without asking gh for a log it does not have.
@@ -177,6 +177,35 @@ class ChecksFlowTest : FlowTestCase() {
         assertEquals(1, gh.calls().count { it == failedLog })
         assertEquals(emptyList<List<String>>(), writes())
     }
+
+    fun `test copy reads the failed steps when they are not shown yet and puts them on the clipboard`() {
+        gh.respond(checks, stdout = Samples.CHECKS_FAILING)
+        gh.respond(failedLog, stdout = Samples.FAILED_LOG)
+        val dialog = openChecks()
+
+        click(dialog, actions, msg("checks.copy"))
+        waitUntil({ "the log is copied: ${onEdt { clipboard() }}" }) { onEdt { clipboard() }.contains("expected 3 items, got 2") }
+
+        assertEquals("▶ test › Run tests\nFAIL src/cart.test.ts\n  expected 3 items, got 2\n##[error]Process completed with exit code 1.", onEdt { clipboard() })
+        // Reading it also shows it, and the link says so for a moment.
+        assertTrue(texts(dialog, actions), texts(dialog, actions).contains("expected 3 items, got 2"))
+        assertTrue(links(dialog, actions).toString(), msg("checks.copied") in links(dialog, actions))
+        assertEquals(1, gh.calls().count { it == failedLog })
+        assertEquals(emptyList<List<String>>(), writes())
+    }
+
+    fun `test copy on a check of another app copies what the app published`() {
+        gh.respond(checks, stdout = Samples.CHECKS_FAILING)
+        val dialog = openChecks()
+
+        click(dialog, vercel, msg("checks.copy"))
+        waitUntil({ "the summary is copied: ${onEdt { clipboard() }}" }) { onEdt { clipboard().startsWith(vercel) } }
+
+        assertTrue(onEdt { clipboard() }.contains("https://"))
+    }
+
+    private fun clipboard(): String =
+        com.intellij.openapi.ide.CopyPasteManager.getInstance().getContents<String>(java.awt.datatransfer.DataFlavor.stringFlavor).orEmpty()
 
     fun `test a refused re-run shows the error of gh in the window`() {
         gh.respond(checks, stdout = Samples.CHECKS_FAILING)

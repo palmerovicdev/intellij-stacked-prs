@@ -40,6 +40,15 @@ class OpenPullRequestsTest {
         assertEquals(listOf("stack", "view", "--json"), GhCommands.view())
     }
     @Test
+    fun `listing asks only for the requested states`() {
+        val repo = GitHubRepo("github.com", "acme", "shop")
+        fun query(states: Set<PullRequestState>) = GhCommands.openPullRequests(repo, states).single { it.startsWith("query=") }
+        assertTrue(query(setOf(PullRequestState.CLOSED)).contains("states: CLOSED,"))
+        assertTrue(query(setOf(PullRequestState.MERGED)).contains("states: MERGED,"))
+        assertTrue(query(PullRequestState.entries.toSet()).contains("states: [OPEN, CLOSED, MERGED],"))
+        assertEquals(GhCommands.openPullRequests(repo), GhCommands.openPullRequests(repo, setOf(PullRequestState.OPEN)))
+    }
+    @Test
     fun `reads every page of open pull requests`() {
         val pages = """[
           {"data":{"repository":{"pullRequests":{"nodes":[
