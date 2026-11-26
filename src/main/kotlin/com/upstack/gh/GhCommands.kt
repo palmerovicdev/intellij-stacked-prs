@@ -2,6 +2,7 @@ package com.upstack.gh
 
 import com.upstack.stack.ActionsRun
 import com.upstack.stack.GitHubRepo
+import com.upstack.stack.ReviewDiff
 
 /** Como se prepara el commit opcional de `gh stack add`. */
 enum class Staging(val flag: String?) {
@@ -250,6 +251,69 @@ object GhCommands {
 
     /** Los campos de `gh pr checks --json` que usa la ventana de checks. */
     const val CHECK_FIELDS = "name,state,bucket,link,workflow,description"
+
+    fun openPullRequests(repo: GitHubRepo): List<String> = buildList {
+        addAll(listOf("api", "graphql", "--paginate", "--slurp"))
+        if (!repo.isSshAlias) addAll(listOf("--hostname", repo.host))
+        addAll(listOf("-f", "owner=${repo.owner}", "-f", "name=${repo.name}", "-f", "query=$OPEN_PULL_REQUESTS_QUERY"))
+    }
+
+    private const val OPEN_PULL_REQUESTS_QUERY =
+        "query(\$owner: String!, \$name: String!, \$endCursor: String) { " +
+            "repository(owner: \$owner, name: \$name) { pullRequests(states: OPEN, first: 100, after: \$endCursor) { " +
+            "nodes { number title url state headRefName baseRefName isDraft author { login } createdAt " +
+            "reviewDecision additions deletions changedFiles mergeable mergeStateStatus " +
+            "labels(first: 30) { nodes { name color } } " +
+            "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } " +
+            "pageInfo { hasNextPage endCursor } } } }"
+
+    fun reviewThreads(repo: GitHubRepo, number: Int): List<String> = listOf(
+        "api", "graphql", "--hostname", repo.host, "--paginate", "--slurp",
+        "-f", "owner=${repo.owner}", "-f", "name=${repo.name}", "-F", "number=$number", "-f", "query=$REVIEW_THREADS_QUERY",
+    )
+
+    fun reviewThreadComments(repo: GitHubRepo, threadId: String): List<String> = listOf(
+        "api", "graphql", "--hostname", repo.host, "--paginate", "--slurp",
+        "-f", "threadId=$threadId", "-f", "query=$REVIEW_COMMENTS_QUERY",
+    )
+
+    private const val REVIEW_THREADS_QUERY =
+        "query(\$owner: String!, \$name: String!, \$number: Int!, \$endCursor: String) { " +
+            "repository(owner: \$owner, name: \$name) { pullRequest(number: \$number) { " +
+            "reviewThreads(first: 100, after: \$endCursor) { " +
+            "nodes { id path line startLine originalLine originalStartLine diffSide startDiffSide isOutdated isResolved " +
+            "comments(first: 100) { totalCount nodes { id body url author { login } } } } " +
+            "pageInfo { hasNextPage endCursor } } } } }"
+
+    private const val REVIEW_COMMENTS_QUERY =
+        "query(\$threadId: ID!, \$endCursor: String) { node(id: \$threadId) { ... on PullRequestReviewThread { " +
+            "id comments(first: 100, after: \$endCursor) { nodes { id body url author { login } } " +
+            "pageInfo { hasNextPage endCursor } } } } }"
+
+    fun prRevisions(url: String): List<String> = listOf("pr", "view", url, "--json", "baseRefOid,headRefOid,changedFiles")
+
+    fun prMergeBase(repo: GitHubRepo, base: String, head: String): List<String> {
+        require(ReviewDiff.isCommitId(base) && ReviewDiff.isCommitId(head))
+        return listOf("api", "repos/${repo.owner}/${repo.name}/compare/$base...$head?per_page=1", "--hostname", repo.host)
+    }
+
+    fun prFiles(repo: GitHubRepo, number: Int): List<String> {
+        require(number > 0)
+        return listOf("api", "repos/${repo.owner}/${repo.name}/pulls/$number/files?per_page=100", "--hostname", repo.host, "--paginate", "--slurp")
+    }
+
+    fun prFileContent(repo: GitHubRepo, path: String, commit: String): List<String> {
+        require(ReviewDiff.isSafePath(path) && ReviewDiff.isCommitId(commit))
+        return listOf(
+            "api", "graphql", "--hostname", repo.host, "-f", "owner=${repo.owner}", "-f", "name=${repo.name}",
+            "-f", "expression=$commit:$path", "-f", "query=$REVIEW_BLOB_QUERY",
+        )
+    }
+
+    private const val REVIEW_BLOB_QUERY =
+        "query(\$owner: String!, \$name: String!, \$expression: String!) { " +
+            "repository(owner: \$owner, name: \$name) { object(expression: \$expression) { " +
+            "__typename ... on Blob { isBinary isTruncated text } } } }"
 
     /** Una sola llamada GraphQL para todos los PRs de la pila, en vez de un `gh pr view` por capa. */
     fun prDetails(repo: GitHubRepo, numbers: Collection<Int>): List<String> = listOf(

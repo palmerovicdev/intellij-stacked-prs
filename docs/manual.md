@@ -60,6 +60,13 @@ cualquier momento.
   - *Open on GitHub*: la página del check en el navegador.
 
   Es una ventana por PR y no bloquea el IDE; la línea de abajo enseña el último comando.
+- **Review Changes and Comments…** abre un diff del PR en modo de solo lectura, tanto desde
+  una capa con PR como desde la pestaña propia *Pull Requests*. Los hilos actuales se muestran
+  junto a sus líneas en el diff de dos paneles; debajo se listan todas las conversaciones,
+  incluidas las desactualizadas o las que no se pueden situar en una línea. Si el formato de
+  diff no admite comentarios en línea, la lista sigue disponible. Se leen revisiones, archivos,
+  blobs e hilos de GitHub con `gh`; esta ventana no modifica el repositorio ni publica una
+  revisión.
 - **Cada opción explica lo que hace y el comando que ejecuta** al pasar el ratón: barra,
   menús, botones de las bandas y opciones de los diálogos. Los comandos llevan los datos
   reales (rama, URL del PR), cada uno en su bloque con fondo, y las URLs en azul; los

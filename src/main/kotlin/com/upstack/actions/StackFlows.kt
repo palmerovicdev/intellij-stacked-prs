@@ -53,6 +53,7 @@ import com.upstack.stack.StackState
 import com.upstack.stack.repo
 import com.upstack.ui.AddLayerDialog
 import com.upstack.ui.ChecksDialog
+import com.upstack.ui.ReviewChangesDialog
 import com.upstack.ui.CloseStackDialog
 import com.upstack.ui.DeleteLayerDialog
 import com.upstack.ui.EditPrDialog
@@ -894,7 +895,7 @@ internal object StackFlows {
             val edit = withContext(Dispatchers.EDT) {
                 val dialog = EditPrDialog(
                     project, target.number, target.url, target.details?.title.orEmpty(), body,
-                    target.selection?.layer?.branch, repository?.root?.toNioPath(),
+                    target.selection?.layer?.branch ?: target.listBranch, repository?.root?.toNioPath(),
                 )
                 dialog.show()
                 if (dialog.openedFile) {
@@ -1058,6 +1059,8 @@ internal object StackFlows {
      */
     fun showChecks(project: Project, target: PrTarget) = ChecksDialog.show(project, target)
 
+    fun showReviewChanges(project: Project, target: PrTarget) = ReviewChangesDialog.show(project, target)
+
     /** `gh pr checks` del PR de [target]. */
     fun checksCommand(target: PrTarget): List<String> = checksCommand(target.number, target.url, target.github)
 
@@ -1140,7 +1143,9 @@ internal object StackFlows {
                 calls = calls,
                 repository = target.selection?.state?.repo?.let(service::repositoryFor) ?: service.repositoryFor(target.github),
                 successMessage = success,
-                onSuccess = component?.let { { withContext(Dispatchers.EDT) { PullRequestsViews.reload(it) } } },
+                onSuccess = if (component != null || target.onListChanged != null) {
+                    { withContext(Dispatchers.EDT) { component?.let(PullRequestsViews::reload); target.onListChanged?.invoke() } }
+                } else null,
                 onFailure = onFailure,
             )
         )
@@ -1148,7 +1153,7 @@ internal object StackFlows {
 
     // `gh pr` y `gh label` con URL o --repo funcionan desde cualquier sitio; se prefiere el
     // repositorio del PR para que gh vea la misma configuracion que en la terminal.
-    private fun workDirFor(service: StackService, target: PrTarget): Path =
+    internal fun workDirFor(service: StackService, target: PrTarget): Path =
         (target.selection?.state?.repo?.root ?: service.repositoryFor(target.github)?.root ?: service.repository()?.root)
             ?.toNioPath() ?: Path.of(System.getProperty("user.home"))
 

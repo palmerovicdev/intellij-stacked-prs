@@ -54,34 +54,36 @@ object StackJson {
     fun parsePrDetails(text: String): Map<Int, PrDetails> {
         val root = parse(text) as? JsonObject ?: return emptyMap()
         val repository = (root["data"] as? JsonObject)?.get("repository") as? JsonObject ?: return emptyMap()
-        return repository.values.mapNotNull { element ->
-            val pr = element as? JsonObject ?: return@mapNotNull null
-            val number = pr.int("number") ?: return@mapNotNull null
-            val labels = ((pr["labels"] as? JsonObject)?.get("nodes") as? JsonArray).orEmpty().mapNotNull { node ->
-                val label = node as? JsonObject ?: return@mapNotNull null
-                PrLabel(label.string("name") ?: return@mapNotNull null, label.string("color").orEmpty())
-            }
-            val rollup = (((pr["commits"] as? JsonObject)?.get("nodes") as? JsonArray)
-                ?.firstOrNull() as? JsonObject)
-                ?.obj("commit")?.obj("statusCheckRollup")?.string("state")
-            val additions = pr.int("additions")
-            val deletions = pr.int("deletions")
-            PrDetails(
-                number = number,
-                title = pr.string("title").orEmpty(),
-                url = pr.string("url").orEmpty(),
-                state = PrState.parse(pr.string("state")),
-                isDraft = pr.bool("isDraft"),
-                review = ReviewDecision.parse(pr.string("reviewDecision")),
-                checks = ChecksState.parse(rollup),
-                labels = labels,
-                baseRef = pr.string("baseRefName").orEmpty(),
-                size = if (additions != null && deletions != null) PrSize(additions, deletions, pr.int("changedFiles") ?: 0) else null,
-                // GitHub calcula las dos cosas en segundo plano: mientras tanto dice UNKNOWN.
-                hasConflicts = pr.string("mergeable") == "CONFLICTING",
-                isBehind = pr.string("mergeStateStatus") == "BEHIND",
-            )
-        }.associateBy { it.number }
+        return repository.values.mapNotNull { element -> (element as? JsonObject)?.let(::parsePrDetailsNode) }
+            .associateBy { it.number }
+    }
+
+    internal fun parsePrDetailsNode(pr: JsonObject): PrDetails? {
+        val number = pr.int("number") ?: return null
+        val labels = ((pr["labels"] as? JsonObject)?.get("nodes") as? JsonArray).orEmpty().mapNotNull { node ->
+            val label = node as? JsonObject ?: return@mapNotNull null
+            PrLabel(label.string("name") ?: return@mapNotNull null, label.string("color").orEmpty())
+        }
+        val rollup = (((pr["commits"] as? JsonObject)?.get("nodes") as? JsonArray)
+            ?.firstOrNull() as? JsonObject)
+            ?.obj("commit")?.obj("statusCheckRollup")?.string("state")
+        val additions = pr.int("additions")
+        val deletions = pr.int("deletions")
+        return PrDetails(
+            number = number,
+            title = pr.string("title").orEmpty(),
+            url = pr.string("url").orEmpty(),
+            state = PrState.parse(pr.string("state")),
+            isDraft = pr.bool("isDraft"),
+            review = ReviewDecision.parse(pr.string("reviewDecision")),
+            checks = ChecksState.parse(rollup),
+            labels = labels,
+            baseRef = pr.string("baseRefName").orEmpty(),
+            size = if (additions != null && deletions != null) PrSize(additions, deletions, pr.int("changedFiles") ?: 0) else null,
+            // GitHub calcula las dos cosas en segundo plano: mientras tanto dice UNKNOWN.
+            hasConflicts = pr.string("mergeable") == "CONFLICTING",
+            isBehind = pr.string("mergeStateStatus") == "BEHIND",
+        )
     }
 
     /**

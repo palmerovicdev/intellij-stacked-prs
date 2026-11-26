@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
 import com.upstack.stack.GitHubRepo
 import com.upstack.stack.LocalStackEntry
 import com.upstack.stack.MissingBranch
+import com.upstack.stack.OpenPullRequest
 import com.upstack.stack.PrDetails
 import com.upstack.stack.StackLayer
 import com.upstack.stack.StackState
@@ -31,6 +32,10 @@ object StackDataKeys {
     val LOCAL_STACKS: DataKey<List<LocalStackEntry>> = DataKey.create("upstack.local.stacks")
 }
 
+internal object PullRequestDataKeys {
+    val TARGET: DataKey<PrTarget> = DataKey.create("upstack.pull.request")
+}
+
 /**
  * El PR sobre el que actua una accion: el de la capa seleccionada en Stacks o el
  * seleccionado en la ventana Pull Requests de IntelliJ (lista o detalle).
@@ -43,10 +48,22 @@ internal class PrTarget(
     val selection: LayerSelection?,
     /** Solo desde Pull Requests: su componente, para refrescar sus vistas al terminar. */
     val pullRequestsComponent: Component?,
+    private val listDetails: PrDetails? = null,
+    val listBranch: String? = null,
+    val onListChanged: (() -> Unit)? = null,
 ) {
-    val details: PrDetails? get() = selection?.details
+    constructor(url: String, number: Int, github: GitHubRepo, selection: LayerSelection?, pullRequestsComponent: Component?) :
+        this(url, number, github, selection, pullRequestsComponent, null, null, null)
+
+    val details: PrDetails? get() = selection?.details ?: listDetails
 
     companion object {
+        fun fromPullRequest(pr: OpenPullRequest, onChanged: () -> Unit): PrTarget? {
+            val github = GitHubRepo.fromPullRequestUrl(pr.url) ?: return null
+            if (GitHubRepo.pullRequestNumber(pr.url) != pr.number) return null
+            return PrTarget(pr.url, pr.number, github, null, null, pr.details, pr.head, onChanged)
+        }
+
         /**
          * La URL del PR seleccionado en Pull Requests.
          *
@@ -60,6 +77,7 @@ internal class PrTarget(
         private val PULL_REQUEST_URL: DataKey<String> = DataKey.create("org.jetbrains.plugins.github.pullrequest.url")
 
         fun from(e: AnActionEvent): PrTarget? {
+            e.getData(PullRequestDataKeys.TARGET)?.let { return it }
             e.getData(StackDataKeys.LAYER)?.let { selection ->
                 val pr = selection.layer.pr ?: return null
                 val github = GitHubRepo.fromPullRequestUrl(pr.url) ?: selection.state.repo.github ?: return null

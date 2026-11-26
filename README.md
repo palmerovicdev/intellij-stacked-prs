@@ -141,6 +141,12 @@ is approved, why did the rebase stop.
 - **Show Layer Changes** opens the IDE diff with what a layer adds on top of the one below:
   the same changes its pull request shows. If the layer below moved on, it compares from
   their common commit, so new work below doesn't look as if the layer removed it.
+- **Review Changes and Comments…** opens a read-only pull-request diff with review
+  conversations beside their lines. It is available from a layer with a pull request and from
+  the separate Pull Requests tab. All conversations are also listed below the diff, including
+  outdated or file-level threads that cannot be placed on a current line. If the selected diff
+  layout cannot display inline comments, the conversation list remains available. The viewer
+  reads GitHub data through `gh` and does not change the repository or publish a review.
 - **Change Pull Request Base** points a *Wrong base* pull request back to the layer below
   (`gh pr edit <url> --base <branch>`).
 
@@ -253,6 +259,7 @@ It needs:
 | Mark Ready / Convert to Draft | `gh pr ready <url>` / `gh pr ready <url> --undo` |
 | Change Pull Request Base | `gh pr edit <url> --base <layer below>` |
 | Show Layer Changes | the IDE diff, same as `git diff <layer below>...<layer>` |
+| Review Changes and Comments… | `gh pr view` for revisions, `gh api` for the merge base and changed files, and GraphQL reads for review conversations and exact Git blobs (read only) |
 | Labels…, final layer | `gh pr edit <url> --add-label … --remove-label …` |
 | Edit Title and Description… | `gh pr view <url> --json body` (read only), then `gh pr edit <url> --title …` (with `--body …` if the description changed) |
 | Checks… (or the Checks badge) | `gh pr checks <pr> --repo OWNER/REPO --json name,state,bucket,link,workflow,description` (read only) |

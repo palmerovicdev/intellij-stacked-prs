@@ -730,6 +730,16 @@ internal class OpenPrAction : PrAction(AllIcons.General.Web) {
     override fun perform(project: Project, target: PrTarget) = BrowserUtil.browse(target.url)
 }
 
+internal class ReviewChangesAction : PrAction(AllIcons.Actions.Diff) {
+    override val needsIdle: Boolean get() = false
+    override fun commands(target: PrTarget): List<String> = listOf(
+        Help.gh(GhCommands.prRevisions(target.url)),
+        Help.gh(GhCommands.prFiles(target.github, target.number)),
+        Help.gh(GhCommands.reviewThreads(target.github, target.number)),
+    )
+    override fun perform(project: Project, target: PrTarget) = StackFlows.showReviewChanges(project, target)
+}
+
 /**
  * La ventana con los checks del PR: por que fallo cada uno, volver a lanzarlo (solo GitHub
  * Actions) y su pagina (ver ChecksDialog). Abrirla solo lee: no espera a la escritura en curso.

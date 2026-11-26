@@ -105,8 +105,6 @@ internal class EditPrDialog(
         if (branch != null && root != null) PrFile.path(root, branch) else null, 6,
         onOpen = { close(OPEN_EXIT_CODE) },
     )
-    private val preview = CommandPreview()
-
     val newTitle: String get() = editor.text.title
 
     /** La descripcion nueva, o null si no cambia (o no se sabia cual era y se dejo vacia). */
@@ -120,14 +118,11 @@ internal class EditPrDialog(
     init {
         this.title = message("title.title", number)
         setOKButtonText(message("title.ok"))
-        editor.onChange(::update)
         init()
-        update()
     }
 
-    override fun createCenterPanel(): JComponent = panel {
+    public override fun createCenterPanel(): JComponent = panel {
         row { cell(editor.component).align(Align.FILL) }.resizableRow()
-        row { cell(preview).align(AlignX.FILL).resizableColumn() }.topGap(TopGap.SMALL)
     }
 
     override fun getPreferredFocusedComponent(): JComponent = editor.focusTarget
@@ -139,14 +134,6 @@ internal class EditPrDialog(
 
     // Publica: los tests comprueban que el titulo que escriben vale.
     public override fun doValidate(): ValidationInfo? = editor.problem?.let { ValidationInfo(it, editor.focusTarget) }
-
-    private fun update() {
-        val text = editor.text
-        val shown = text.title.ifEmpty { "…" }
-        preview.showLines(
-            listOf(Help.gh(newBody?.let { GhCommands.editPr(url, null, shown, it) } ?: GhCommands.editTitle(url, shown)))
-        )
-    }
 
     private companion object {
         const val OPEN_EXIT_CODE = NEXT_USER_EXIT_CODE

@@ -42,6 +42,12 @@ class StackToolWindowFactory : ToolWindowFactory, DumbAware {
         }
         service.log.attach(console)
         contents.addContent(log)
+
+        // Keep Log at index 1: showLog() uses that position.
+        val prsPanel = PullRequestsPanel(project)
+        val prs = factory.createContent(prsPanel, message("toolwindow.tab.prs"), false)
+        prs.setDisposer(prsPanel)
+        contents.addContent(prs)
     }
 
     private companion object {
